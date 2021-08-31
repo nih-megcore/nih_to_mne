@@ -20,6 +20,5 @@ setuptools.setup(
     ],
     python_requires='<3.9',
     install_requires=['mne', 'numpy', 'pytest', 'joblib'],
-    #scripts=['enigmeg/process_meg.py', 
-    #         'enigmeg/process_anatomical.py'],
+    scripts=['nih2mne/bstags.py',],
 )
