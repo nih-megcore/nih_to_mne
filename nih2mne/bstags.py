@@ -41,8 +41,8 @@ def txt_to_tag(txtname):
 def write_tagfile(tags, out_fname=None):
     ''''''
     
-    print("writing {}".format(tagname))
-    f = open(tagname, 'w')
+    print("writing {}".format(out_fname))
+    f = open(out_fname, 'w')
     for tag in fiducials0:
         print(tags[tag], file = f)
     f.close()    
