@@ -13,12 +13,63 @@ from mne.coreg import _fiducial_coords, fit_matched_points
 from mne.transforms import read_trans, write_trans, Transform
 from mne.io import read_raw_ctf
 
+from nih2mne.bstags import txt_to_tag
+
 #NASION='Nasion'
 #LEAR='Left Ear'
 #REAR='Right Ear'
 
-def write_mne_fiducials(subject=None, t1w_json_path=None, subjects_dir=None,
-                        output_fid_path=None):
+def coords_from_tagfile(tag_fname):
+    fid = open(tag_fname)
+    lines = fid.readlines()
+    lines = [lineval.replace('\n','') for lineval in lines]
+    fid.close()
+    coord = {}
+    for row in lines:
+        if 'Nasion' in row:
+            keyval, xyz = row.split(sep=' ', maxsplit=1)
+        if ('Left Ear' in row) | ('Right Ear' in row):
+            keyval_1, keyval_2, xyz = row.split(sep=' ', maxsplit=2)
+            keyval=keyval_1+' '+keyval_2
+        keyval = keyval.strip("'") #Remove extra quotes
+        xyz = [float(i) for i in xyz.split(' ')]
+        coord[keyval] = xyz
+    return coord
+
+def coords_from_bsight_txt(bsight_txt_fname):
+    '''Input the text file from the brainsight file.
+    This is exported to a text file using the brainsight software'''
+    tags = txt_to_tag(bsight_txt_fname)
+    lines = tags.values()
+    coord = {}
+    for row in lines:
+        if 'Nasion' in row:
+            keyval, xyz = row.split(sep=' ', maxsplit=1)
+        if ('Left Ear' in row) | ('Right Ear' in row):
+            keyval_1, keyval_2, xyz = row.split(sep=' ', maxsplit=2)
+            keyval=keyval_1+' '+keyval_2
+        keyval = keyval.strip("'") #Remove extra quotes
+        xyz = [float(i) for i in xyz.split(' ')]
+        coord[keyval] = xyz
+    return coord
+
+def correct_keys(input_dict):
+    '''Change the NIH MEG keys to BIDS formatted keys'''
+    if 'Nasion' in input_dict:
+        input_dict['NAS'] = input_dict.pop('Nasion')
+    if 'Left Ear' in input_dict:
+        input_dict['LPA'] = input_dict.pop('Left Ear')
+    if 'Right Ear' in input_dict:
+        input_dict['RPA'] = input_dict.pop('Right Ear')
+    return input_dict
+        
+
+
+
+
+def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None, 
+                        bsight_txt_fname=None, output_fid_path=None,
+                        t1w_json_path=None):
     '''Pull the LPA,RPA,NAS indices from the T1w json file and correct for the
     freesurfer alignment.  The output is the fiducial file written in .fif format
     written to the (default) freesurfer/bem/"name"-fiducials.fif file
@@ -35,9 +86,21 @@ def write_mne_fiducials(subject=None, t1w_json_path=None, subjects_dir=None,
             print('The suffix of the filename must be -fiducials.fif')
             sys.exit(1)
     
-    with open(t1w_json_path, 'r') as f:
-        t1w_json = json.load(f)
-    mri_coords_dict = t1w_json.get('AnatomicalLandmarkCoordinates', dict())
+
+    #Load an input for fiducial localizer
+    if tagfile!=None:
+        mri_coords_dict = coords_from_tagfile(tagfile)
+    elif bsight_txt_fname!=None:
+        mri_coords_dict = coords_from_bsight_txt(bsight_txt_fname)
+    elif t1w_json_path!=None:
+        with open(t1w_json_path, 'r') as f:
+            t1w_json = json.load(f)        
+            mri_coords_dict = t1w_json.get('AnatomicalLandmarkCoordinates', dict())
+    else:
+        raise(ValueError('Must assign tagfile, bsight_txt_fname, or t1w_json'))
+    
+    if subjects_dir == None:
+        subjects_dir=os.environ['SUBJECTS_DIR']
     Subjdir = subjects_dir
     
     name = op.join(Subjdir, subject)
@@ -54,7 +117,7 @@ def write_mne_fiducials(subject=None, t1w_json_path=None, subjects_dir=None,
         print('Could not find freesurfer mri_info.  If on biowulf - \
               load freesurfer module first')
         sys.exit(1)
-    offset_cmd = 'mri_info --cras {}'.format(os.path.join(os.environ['SUBJECTS_DIR'],
+    offset_cmd = 'mri_info --cras {}'.format(os.path.join(Subjdir,
                                                           subject, 'mri', 'orig','001.mgz'))
     offset = check_output(offset_cmd.split(' ')).decode()[:-1]
     offset = np.array(offset.split(' '), dtype=float)
@@ -69,6 +132,7 @@ def write_mne_fiducials(subject=None, t1w_json_path=None, subjects_dir=None,
         
         
     LEAR, NASION, REAR = 'LPA', 'NAS', 'RPA'  
+    mri_coords_dict = correct_keys(mri_coords_dict)
     
     # AFNI tag name to MNE tag ident
     ident = { NASION: FIFF.FIFFV_POINT_NASION,
