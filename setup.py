@@ -18,8 +18,8 @@ setuptools.setup(
         "License :: OSI Approved :: UNLICENSE",
         "Operating System :: Linux/Unix",
     ],
-    python_requires='<3.9',
+    python_requires='>=3.6',
     install_requires=['mne', 'numpy', 'pytest', 'joblib'],
     scripts=['nih2mne/bstags.py',
-        'nih2mne/bids_to_mnetrans.py'],
+        'nih2mne/bsight_to_mnetrans.py'],
 )
