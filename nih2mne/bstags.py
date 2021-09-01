@@ -54,18 +54,18 @@ if __name__=='__main__':
     if len(sys.argv) != 2:
         print("""usage: {} file.txt
           Where file.txt is the saved electrode location output from Brainsight.""".format(sys.argv[0]))
-    sys.exit(1)
+        sys.exit(1)
     
     # Generate the name for the tag file
-    txtname=sys.argv[1]    
+    txtname=sys.argv[1] 
     name, ext = os.path.splitext(txtname)
     if ext != ".txt":
         name = txtname
     tagname = "{}.tag".format(name)
     
-    print(f'Writing tagfile {tagname}')
     tags = txt_to_tag(txtname)
     write_tagfile(tags, tagname)
+    print('Finished tag export')
     
 
     
