@@ -20,5 +20,6 @@ setuptools.setup(
     ],
     python_requires='<3.9',
     install_requires=['mne', 'numpy', 'pytest', 'joblib'],
-    scripts=['nih2mne/bstags.py',],
+    scripts=['nih2mne/bstags.py',
+        'nih2mne/bids_to_mnetrans.py'],
 )
