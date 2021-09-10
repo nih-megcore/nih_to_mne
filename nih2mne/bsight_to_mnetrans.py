@@ -149,7 +149,8 @@ def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None,
             t1w_json = json.load(f)        
             mri_coords_dict = t1w_json.get('AnatomicalLandmarkCoordinates', dict())
     else:
-        raise(ValueError('Must assign tagfile, bsight_txt_fname, or t1w_json'))
+        raise(ValueError('''Must assign tagfile, bsight_txt_fname, or t1w_json,
+                         or afni_mri'''))
     
     if subjects_dir == None:
         subjects_dir=os.environ['SUBJECTS_DIR']
