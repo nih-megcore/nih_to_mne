@@ -120,7 +120,7 @@ def coords_from_afni(afni_fname):
         
 def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None, 
                         bsight_txt_fname=None, output_fid_path=None,
-                        afni_mri=None, t1w_json_path=None):
+                        afni_fname=None, t1w_json_path=None):
     '''Pull the LPA,RPA,NAS indices from the T1w json file and correct for the
     freesurfer alignment.  The output is the fiducial file written in .fif format
     written to the (default) freesurfer/bem/"name"-fiducials.fif file
@@ -142,8 +142,8 @@ def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None,
         mri_coords_dict = coords_from_tagfile(tagfile)
     elif bsight_txt_fname!=None:
         mri_coords_dict = coords_from_bsight_txt(bsight_txt_fname)
-    elif afni_mri!=None:
-        mri_coords_dict = coords_from_afni()
+    elif afni_fname!=None:
+        mri_coords_dict = coords_from_afni(afni_fname)
     elif t1w_json_path!=None:
         with open(t1w_json_path, 'r') as f:
             t1w_json = json.load(f)        
@@ -208,12 +208,13 @@ def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None,
     else:
         name = output_fid_path
     
+    if not op.exists(op.dirname(name)): os.mkdir(op.dirname(name))
     try:
         write_fiducials(name, pts, frame)
         print()
         print('Created {} fiducial file'.format(name))
-        print()
-        print('Run the pyctf/mne/mktrans.py file to create the trans file needed for MNE')
+        #print()
+        #print('Run the pyctf/mne/mktrans.py file to create the trans file needed for MNE')
         return name
     
     except:
@@ -295,11 +296,12 @@ if __name__=='__main__':
     t1w_json_path = args.anat_json
     tagfile = args.tagfile
     elec_txt = args.elec_txt
+    afni_fname = args.afni_mri
         
     #Write out the fiducials
     mne_fid_name = write_mne_fiducials(subject=subject, t1w_json_path=t1w_json_path, 
                                        subjects_dir=subjects_dir, tagfile=tagfile,
-                                       bsight_txt_fname=elec_txt)
+                                       bsight_txt_fname=elec_txt, afni_fname=afni_fname)
     
     if args.trans_output:
         output_path=args.trans_output
