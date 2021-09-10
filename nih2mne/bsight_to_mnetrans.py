@@ -62,6 +62,59 @@ def correct_keys(input_dict):
     if 'Right Ear' in input_dict:
         input_dict['RPA'] = input_dict.pop('Right Ear')
     return input_dict
+
+def coords_from_afni(afni_head_fname):
+    ## Process afni header  ## >>
+    with open(afni_head_fname) as w:
+        header_orig = w.readlines()
+    header_orig = [i.replace('\n','') for i in header_orig]
+    header = []
+    for i in header_orig:
+        if i!='' and i[0:4]!='type' and i[0:5]!='count':
+            header.append(i)
+
+    name_idxs=[]    
+    afni_dict={}
+    for idx,line in enumerate(header):
+        if 'name' == line[0:4]:
+            name_idxs.append(idx)
+    for i,idx in enumerate(name_idxs):
+        if i != len(name_idxs)-1:
+            afni_dict[header[idx][7:].replace(" ","")]=header[idx+1 : name_idxs[i+1]]
+        else: 
+            afni_dict[header[idx][7:].replace(" ","")]=header[idx+1 : ]
+     ## <<   
+     ## Done processing Afni header
+
+    if 'TAGSET_NUM' not in afni_dict:
+        print("{} has no tags".format(filename), file = sys.stderr)
+        sys.exit(1)
+
+    tmp_ = afni_dict['TAGSET_NUM'][0].split(' ')
+    afni_dict['TAGSET_NUM']= [int(i) for i in tmp_ if i!='']
+    ntags, pertag = afni_dict['TAGSET_NUM']
+    if ntags != 3 or pertag != 5:
+        print("improperly formatted tags", file = sys.stderr)
+        sys.exit(1)
+
+    f = afni_dict['TAGSET_FLOATS']
+    lab = afni_dict['TAGSET_LABELS'][0]
+    #Remove string garbage
+    if lab[0]=='"':
+        lab=lab.replace('"','')
+    elif lab[0]=="'":
+        lab=lab.replace("'","")
+    lab = lab.split('~')
+    lab = [i for i in lab if i!='']
+    
+    coords_str = [i.split() for i in f]
+    coord ={}
+    for label, row in zip(lab,coords_str):
+        tmp = row[0:3]
+        coord[label] = [float(i) for i in tmp]
+    
+    return coord
+
         
 def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None, 
                         bsight_txt_fname=None, output_fid_path=None,
