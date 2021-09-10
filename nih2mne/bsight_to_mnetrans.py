@@ -64,6 +64,8 @@ def correct_keys(input_dict):
     return input_dict
 
 def coords_from_afni(afni_head_fname):
+    if os.path.splitext(afni_head_fname)[1] == '.BRIK':
+        afni_head_fname = os.path.splitext(afni_head_fname)[0]+'.HEAD'
     ## Process afni header  ## >>
     with open(afni_head_fname) as w:
         header_orig = w.readlines()
