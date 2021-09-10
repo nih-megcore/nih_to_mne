@@ -63,11 +63,11 @@ def correct_keys(input_dict):
         input_dict['RPA'] = input_dict.pop('Right Ear')
     return input_dict
 
-def coords_from_afni(afni_head_fname):
-    if os.path.splitext(afni_head_fname)[1] == '.BRIK':
-        afni_head_fname = os.path.splitext(afni_head_fname)[0]+'.HEAD'
+def coords_from_afni(afni_fname):
+    if os.path.splitext(afni_fname)[1] == '.BRIK':
+        afni_fname = os.path.splitext(afni_fname)[0]+'.HEAD'
     ## Process afni header  ## >>
-    with open(afni_head_fname) as w:
+    with open(afni_fname) as w:
         header_orig = w.readlines()
     header_orig = [i.replace('\n','') for i in header_orig]
     header = []
@@ -120,7 +120,7 @@ def coords_from_afni(afni_head_fname):
         
 def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None, 
                         bsight_txt_fname=None, output_fid_path=None,
-                        t1w_json_path=None):
+                        afni_mri=None, t1w_json_path=None):
     '''Pull the LPA,RPA,NAS indices from the T1w json file and correct for the
     freesurfer alignment.  The output is the fiducial file written in .fif format
     written to the (default) freesurfer/bem/"name"-fiducials.fif file
@@ -142,6 +142,8 @@ def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None,
         mri_coords_dict = coords_from_tagfile(tagfile)
     elif bsight_txt_fname!=None:
         mri_coords_dict = coords_from_bsight_txt(bsight_txt_fname)
+    elif afni_mri!=None:
+        mri_coords_dict = coords_from_afni()
     elif t1w_json_path!=None:
         with open(t1w_json_path, 'r') as f:
             t1w_json = json.load(f)        
@@ -273,6 +275,8 @@ if __name__=='__main__':
     parser.add_argument('-subject', help='''The freesurfer subject id.  
                         This folder is expected to be in the freesurfer 
                         SUBJECTS_DIR''', required=True)
+    parser.add_argument('-afni_mri', help='''Provide a BRIK or HEAD file as input.
+                        Data must have the tags assigned to the header.''')
     parser.add_argument('-trans_output', help='''The output path for the mne
                         trans.fif file''')
     parser.add_argument('-dsname', help='''CTF dataset to create the transform''',
