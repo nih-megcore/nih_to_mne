@@ -1,2 +1,1 @@
-#Convert the NIH datasets to a transformation matrix used with MNE
-
+#Create MNE transformation matrix from NIMH MEG datasets
