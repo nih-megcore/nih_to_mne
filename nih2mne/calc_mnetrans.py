@@ -53,6 +53,20 @@ def coords_from_bsight_txt(bsight_txt_fname):
         coord[keyval] = xyz
     return coord
 
+def json_list_to_dict(tmp):
+    '''If json file has a list of values rather than dictionary of key:value\
+        pairs - convert to correct format'''
+    if type(tmp) is list:
+        tmp=dict(tmp)
+        if 'NAS:' in tmp.keys():
+            tmp['NAS']=tmp.pop('NAS:')
+        if 'LPA:' in tmp.keys():
+            tmp['LPA']=tmp.pop('LPA:')
+        if 'RPA:' in tmp.keys():
+            tmp['RPA']=tmp.pop('RPA:')
+    return tmp
+
+
 def correct_keys(input_dict):
     '''Change the NIH MEG keys to BIDS formatted keys'''
     if 'Nasion' in input_dict:
@@ -148,6 +162,8 @@ def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None,
         with open(t1w_json_path, 'r') as f:
             t1w_json = json.load(f)        
             mri_coords_dict = t1w_json.get('AnatomicalLandmarkCoordinates', dict())
+        if type(mri_coords_dict) is list:
+            mri_coords_dict = json_list_to_dict(mri_coords_dict)
     else:
         raise(ValueError('''Must assign tagfile, bsight_txt_fname, or t1w_json,
                          or afni_mri'''))
