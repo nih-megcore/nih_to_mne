@@ -136,7 +136,13 @@ def coords_from_afni(afni_fname):
     return coord
 
 def coords_from_oblique_afni(afni_fname):
-    
+    '''Correct for oblique cut afni fiducials:
+        The fiducial locations in the TAGSET_FLOATS are relative to a cardinal
+        plane and do not reflect the oblique angle.  This function projects the
+        data back to the image voxel and uses the IJK_TO_DICOM_REAL / image 
+        affine to get the real RAS value.  The output is then converted to 
+        LPS to conform to AFNI format.
+        The function returns a dictionary of the tag labels with LPS coords'''
     im = nb.load(afni_fname)
     fid_mat = np.array(im.header.info['TAGSET_FLOATS']).reshape(3,5)
 
@@ -149,14 +155,12 @@ def coords_from_oblique_afni(afni_fname):
     fid_mat_ijk = apply_trans(to_ijk, fid_mat[:3,:3])
     fid_mat_ras = apply_trans(im.affine, fid_mat_ijk)
     fid_mat_lps = copy.copy(fid_mat_ras)
-    fid_mat_lps[:,0:2]*=-1  #Convert to AFNI orientation
+    fid_mat_lps[:,0:2]*=-1  #Convert to AFNI orientation LPS - assumed downstream
     tag_labels = im.header.info['TAGSET_LABELS'].split('~')
     coord={}
     for idx, label in enumerate(tag_labels):
         coord[label]=list(fid_mat_lps[idx, :])
     return coord
-        
-    
 
         
 def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None, 
@@ -184,7 +188,7 @@ def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None,
     elif bsight_txt_fname!=None:
         mri_coords_dict = coords_from_bsight_txt(bsight_txt_fname)
     elif afni_fname!=None:
-        mri_coords_dict = coords_from_afni(afni_fname)
+        mri_coords_dict = coords_from_oblique_afni(afni_fname)
     elif t1w_json_path!=None:
         with open(t1w_json_path, 'r') as f:
             t1w_json = json.load(f)        
