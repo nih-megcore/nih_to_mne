@@ -1,17 +1,21 @@
 #! /usr/bin/env python
 
+import copy
 import sys, os
 import os.path as op
 import numpy as np
+import nibabel as nb
 import mne
 from mne.io.constants import FIFF
 from mne.io.meas_info import read_fiducials, write_fiducials
 import json
 from mne.coreg import _fiducial_coords, fit_matched_points
 from mne.transforms import read_trans, write_trans, Transform
+from mne.transforms import apply_trans, invert_transform
 from mne.io import read_raw_ctf
 
 from nih2mne.bstags import txt_to_tag
+
 
 # =============================================================================
 # This code is a modification of Tom Holroyd's pyctf/bids code
@@ -130,6 +134,29 @@ def coords_from_afni(afni_fname):
         coord[label] = [float(i) for i in tmp]
     
     return coord
+
+def coords_from_oblique_afni(afni_fname):
+    
+    im = nb.load(afni_fname)
+    fid_mat = np.array(im.header.info['TAGSET_FLOATS']).reshape(3,5)
+
+    # =============================================================================
+    # Correct oblique transform
+    # =============================================================================
+    tmp_ = mne.transforms.Transform('mri','head')
+    tmp_['trans'][0:3,:] = np.array(im.header.info['IJK_TO_DICOM']).reshape(3,4)
+    to_ijk = invert_transform(tmp_)
+    fid_mat_ijk = apply_trans(to_ijk, fid_mat[:3,:3])
+    fid_mat_ras = apply_trans(im.affine, fid_mat_ijk)
+    fid_mat_lps = copy.copy(fid_mat_ras)
+    fid_mat_lps[:,0:2]*=-1  #Convert to AFNI orientation
+    tag_labels = im.header.info['TAGSET_LABELS'].split('~')
+    coord={}
+    for idx, label in enumerate(tag_labels):
+        coord[label]=list(fid_mat_lps[idx, :])
+    return coord
+        
+    
 
         
 def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None, 
