@@ -298,6 +298,83 @@ def write_mne_trans(mne_fids_path=None, dsname=None,
     write_trans(output_name, t)
     return output_name
 
+def assess_available_localizers(pathvar):
+    '''Search through toplevel path and find candidate files with anatomical
+    landmarks
+    
+    Returns list of files with fiducial landmarks
+    '''
+    # Create candidate lists of entries
+    afni_list_tmp = glob.glob(op.join(pathvar, '*+orig.HEAD'))
+    txt_list_tmp = glob.glob(op.join(pathvar, '*.txt'))
+    tag_list_tmp = glob.glob(op.join(pathvar, '*.tag'))
+    bsight_raw_list = glob.glob(op.join(pathvar, '*.bsproj'))
+    
+    # Assess candidates using screening criteria
+    afni_list = [i for i in afni_list_tmp if _afni_tags_present(i)]
+    bsigt_txt_list = 
+    tag_list = 
+    
+    # Check to make sure that the outputs have the same value
+    #  Tag / bsight txt / afni file
+    
+    
+    # verify that output is at least 1
+    # if not 1, but bsight raw present - print needs to be exported in bsight
+    
+    
+    
+    print(afni_list_)
+    print(txt_list_)
+    print(tag_list_)
+    print(bsight_raw_list_)
+    
+    if len(afni_list) > 0:
+        
+    
+# =============================================================================
+#         If no other viable option, but a brainsight raw file - print
+# =============================================================================
+    if len(bsight_raw_list_) > 0:
+        print('Raw brainsight project found.  Must be exported as text file in \
+              brainsight prior to conversion.')
+              
+def _afni_tags_present(afni_fname):
+    '''Verify that the TAGSET is present and not all zeros in the afni HEAD file'''
+    tmp_ = nb.load(afni_fname)
+    hdr_ = tmp_.header.info
+    if ('TAGSET_LABELS' in hdr_) and ('TAGSET_FLOATS' in hdr_):
+        tagset = np.array(hdr_['TAGSET_FLOATS'])
+        #Test to see if all the values in the tagset are zero - could be null.tag
+        if sum(tagset==0.0) > 0:
+            return True
+        else:
+            print('Tagset values are zero')
+            return False
+    else:
+        print('TAGSET values not found in header')
+        return False
+
+
+# =============================================================================
+# TESTS for datasets    
+# =============================================================================
+
+testpath='/home/jstout/src/nih_to_mne/nih2mne/tests/calc_mne_trans_testfiles'
+def test_afni_tags_present():
+    neg_fname = op.join(testpath, 's1+orig.HEAD')
+    assert not _afni_tags_present(neg_fname)
+    pos_fname = op.join(testpath, 's2+orig.HEAD')
+    assert _afni_tags_present(pos_fname)
+              
+def test_assess_available_localizers():
+    testpath = '/home/jstout/src/nih_to_mne/nih2mne/tests/calc_mne_trans_testfiles'
+    assess_available_localizers(testpath)
+        
+    
+    
+
+
 def view_coreg(dsname=None, trans_file=None, subjects_dir=None):
     raw = read_raw_ctf(dsname)
     trans = mne.read_trans(trans_file)
