@@ -312,32 +312,49 @@ def assess_available_localizers(pathvar):
     
     # Assess candidates using screening criteria
     afni_list = [i for i in afni_list_tmp if _afni_tags_present(i)]
-    bsigt_txt_list = 
-    tag_list = 
+    bsight_txt_list = [i for i in txt_list_tmp if _is_exported_bsight(i)]
+    tag_list = [i for i in tag_list_tmp if _is_exported_tag(i)]
     
     # Check to make sure that the outputs have the same value
-    #  Tag / bsight txt / afni file
-    
-    
-    # verify that output is at least 1
-    # if not 1, but bsight raw present - print needs to be exported in bsight
-    
-    
-    
-    print(afni_list_)
-    print(txt_list_)
-    print(tag_list_)
-    print(bsight_raw_list_)
-    
-    if len(afni_list) > 0:
-        
-    
-# =============================================================================
-#         If no other viable option, but a brainsight raw file - print
-# =============================================================================
-    if len(bsight_raw_list_) > 0:
-        print('Raw brainsight project found.  Must be exported as text file in \
+    if len(afni_list)==0 and len(bsigt_txt_list)==0 and len(tag_list)==0:
+        if len(bsight_raw_list_) > 0:
+            print('Raw brainsight project found.  Must be exported as text file in \
               brainsight prior to conversion.')
+        return []
+    
+    coords_funcs = []
+    for coord_type, curr_list in zip(['afni','bsight','tag'],[afni_list, bsight_txt_list, tag_list]):
+        if len(curr_list)==0:
+            continue
+        else:
+            if coord_type=='afni':
+                coords_funcs.append(zip(afni_list, [coords_from_oblique_afni]))
+            elif coord_type=='bsight':
+                coords_funcs.append(zip(bsight_txt_list, [coords_from_bsight_txt]))
+            elif coord_type=='tag':
+                coords_funcs.append(zip(tag_list, [coords_from_tagfile]))
+    
+    import itertools
+    full_list = itertools.chain.from_iterable(coords_funcs)
+    coords_out = []
+    for fname, coord_func in full_list:
+        print(fname)
+        coords_out.append(coord_func(fname))
+            # print(i)
+            #coord_func(fname)
+    # =============================================================================
+    #     Must extract cras from AFNI TO match    
+    # =============================================================================
+    # offset_cmd = 'mri_info --cras {}'.format(os.path.join(Subjdir,
+    #                                                       subject, 'mri', 'orig','001.mgz'))
+    # offset = check_output(offset_cmd.split(' ')).decode()[:-1]
+    # offset = np.array(offset.split(' '), dtype=float)
+    
+    # c_ras = offset * .001  # mm to m               
+    # print(afni_list_)
+    # print(txt_list_)
+    # print(tag_list_)
+    # print(bsight_raw_list_)
               
 def _afni_tags_present(afni_fname):
     '''Verify that the TAGSET is present and not all zeros in the afni HEAD file'''
@@ -354,7 +371,35 @@ def _afni_tags_present(afni_fname):
     else:
         print('TAGSET values not found in header')
         return False
-
+    
+def _is_exported_bsight(txt_fname):
+    '''Evaluate text file to determine if an exported brainsight electrode
+    file
+    
+    Returns True if brainsight electrode file
+    '''
+    import linecache
+    bsight_line = linecache.getline(txt_fname, 3)
+    if 'Brainsight' in bsight_line.split():
+        return True
+    else:
+        return False
+    
+def _is_exported_tag(tag_fname):
+    '''Evaluate tag to determine if in the correct fortmat'''
+    with open(tag_fname) as fid:
+        tmp_ = fid.readlines()
+    lines=[i.replace('\n','') for i in tmp_]
+    nas = [i for i in lines if 'Nasion' in i]
+    lpa = [i for i in lines if 'Left Ear' in i]
+    rpa = [i for i in lines if 'Right Ear' in i]
+    if len(nas)>0 and len(lpa)>0 and len(rpa)>0:
+        return True
+    else:
+        print('tag file not formatted correctly')
+        return False
+    
+    
 
 # =============================================================================
 # TESTS for datasets    
@@ -370,7 +415,19 @@ def test_afni_tags_present():
 def test_assess_available_localizers():
     testpath = '/home/jstout/src/nih_to_mne/nih2mne/tests/calc_mne_trans_testfiles'
     assess_available_localizers(testpath)
-        
+    
+def test_is_exported_bsight():
+    neg_fname = op.join(testpath,'README.txt') 
+    assert not _is_exported_bsight(neg_fname)
+    pos_fname = op.join(testpath, 's1.txt')
+    assert _is_exported_bsight(pos_fname)
+
+def test_is_tagfile():
+    neg_fname = op.join(testpath, 's1_mod.tag')
+    assert not _is_exported_tag(neg_fname)
+    pos_fname = op.join(testpath, 's1.tag')
+    assert _is_exported_tag(pos_fname)
+    
     
     
 
