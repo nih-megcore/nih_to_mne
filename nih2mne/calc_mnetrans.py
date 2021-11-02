@@ -2,6 +2,7 @@
 
 import copy
 import sys, os
+import glob
 import os.path as op
 import numpy as np
 import nibabel as nb
@@ -107,7 +108,7 @@ def coords_from_afni(afni_fname):
      ## Done processing Afni header
 
     if 'TAGSET_NUM' not in afni_dict:
-        print("{} has no tags".format(filename), file = sys.stderr)
+        print("{} has no tags".format(afni_fname), file = sys.stderr)
         sys.exit(1)
 
     tmp_ = afni_dict['TAGSET_NUM'][0].split(' ')
@@ -165,7 +166,8 @@ def coords_from_oblique_afni(afni_fname):
         
 def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None, 
                         bsight_txt_fname=None, output_fid_path=None,
-                        afni_fname=None, t1w_json_path=None):
+                        afni_fname=None, t1w_json_path=None, 
+                        searchpath=None):
     '''Pull the LPA,RPA,NAS indices from the T1w json file and correct for the
     freesurfer alignment.  The output is the fiducial file written in .fif format
     written to the (default) freesurfer/bem/"name"-fiducials.fif file
@@ -195,6 +197,10 @@ def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None,
             mri_coords_dict = t1w_json.get('AnatomicalLandmarkCoordinates', dict())
         if type(mri_coords_dict) is list:
             mri_coords_dict = json_list_to_dict(mri_coords_dict)
+    elif searchpath!=None:
+        if not os.path.isdir(searchpath):
+            raise(ValueError('Must provide a directory'))
+        mri_coords_dict = assess_available_localizers(searchpath)
     else:
         raise(ValueError('''Must assign tagfile, bsight_txt_fname, or t1w_json,
                          or afni_mri'''))
@@ -316,8 +322,8 @@ def assess_available_localizers(pathvar):
     tag_list = [i for i in tag_list_tmp if _is_exported_tag(i)]
     
     # Check to make sure that the outputs have the same value
-    if len(afni_list)==0 and len(bsigt_txt_list)==0 and len(tag_list)==0:
-        if len(bsight_raw_list_) > 0:
+    if len(afni_list)==0 and len(bsight_txt_list)==0 and len(tag_list)==0:
+        if len(bsight_raw_list) > 0:
             print('Raw brainsight project found.  Must be exported as text file in \
               brainsight prior to conversion.')
         return []
@@ -340,6 +346,9 @@ def assess_available_localizers(pathvar):
     for fname, coord_func in full_list:
         print(fname)
         coords_out.append(coord_func(fname))
+    return coords_out[0]
+        
+    #Do a data check to verify consistency across coords
             # print(i)
             #coord_func(fname)
     # =============================================================================

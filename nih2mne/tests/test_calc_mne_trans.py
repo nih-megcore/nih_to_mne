@@ -9,9 +9,11 @@ Created on Tue Aug 31 17:08:48 2021
 from ..calc_mnetrans import _afni_tags_present
 from ..calc_mnetrans import _is_exported_bsight
 from ..calc_mnetrans import _is_exported_tag
+from ..calc_mnetrans import assess_available_localizers
 
 import pytest 
 import os, os.path as op
+import numpy as np
 # =============================================================================
 # Tests
 # =============================================================================
@@ -29,9 +31,21 @@ def test_afni_tags_present():
     pos_fname = op.join(testpath, 's2+orig.HEAD')
     assert _afni_tags_present(pos_fname)
               
-# def test_assess_available_localizers():
-#     testpath = '/home/jstout/src/nih_to_mne/nih2mne/tests/calc_mne_trans_testfiles'
-#     assess_available_localizers(testpath)
+def test_assess_available_localizers():
+    coords_val = assess_available_localizers(testpath)
+    correct_val = {'Nasion': [-10.578000000000003, -107.119, 21.007999999999996],
+                   'Left Ear': [70.422, -43.119, -22.99199999999999],
+                   'Right Ear': [-73.578, -41.119, -37.99199999999999]}
+    assert 'Nasion' in coords_val.keys()
+    assert 'Left Ear' in coords_val.keys()
+    assert 'Right Ear' in coords_val.keys()
+    correct =  np.array([correct_val['Nasion'], 
+                         correct_val['Left Ear'], 
+                         correct_val['Right Ear']]).round(2)
+    coords =   np.array([coords_val['Nasion'], 
+                         coords_val['Left Ear'], 
+                         coords_val['Right Ear']]).round(2)
+    assert np.all(coords == correct)
     
 def test_is_exported_bsight():
     neg_fname = op.join(testpath,'README.txt') 
