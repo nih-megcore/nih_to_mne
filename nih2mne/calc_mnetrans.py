@@ -329,7 +329,8 @@ def assess_available_localizers(pathvar):
         return []
     
     coords_funcs = []
-    for coord_type, curr_list in zip(['afni','bsight','tag'],[afni_list, bsight_txt_list, tag_list]):
+    # for coord_type, curr_list in zip(['afni','bsight','tag'],[afni_list, bsight_txt_list, tag_list]):
+    for coord_type, curr_list in zip(['bsight','tag','afni'],[bsight_txt_list, tag_list,afni_list]):
         if len(curr_list)==0:
             continue
         else:
