@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="nih2mne", 
-    version="0.1",
+    version="0.2",
     author="Jeff Stout",
     author_email="stoutjd@nih.gov",
     description="Adapt coregistration from NIH MEG data for use with MNE python",
