@@ -160,7 +160,8 @@ def coords_from_oblique_afni(afni_fname):
     tag_labels = im.header.info['TAGSET_LABELS'].split('~')
     coord={}
     for idx, label in enumerate(tag_labels):
-        coord[label]=list(fid_mat_lps[idx, :])
+        if label[0].upper() in ['N','L','R']:
+            coord[label]=list(fid_mat_lps[idx, :])
     return coord
 
         
