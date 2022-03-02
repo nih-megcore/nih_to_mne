@@ -46,6 +46,16 @@ def test_write_tagfile(tmpdir):
         test_valid=w.readlines()
         
     assert test_test == test_valid
+    
+def test_exported_w_extra_spaces():
+    txtname=os.path.join(test_dir, 'Exported_Electrodes.txt')
+    tags = txt_to_tag(txtname)
+    assert len(tags)==3
+    assert 'Nasion' in tags
+    assert 'Left Ear' in tags
+    assert 'Right Ear' in tags
+    assert 'Nasion ' not in tags  #Make sure that extra space not included
+    
         
     
         
