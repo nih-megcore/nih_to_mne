@@ -30,6 +30,8 @@ def txt_to_tag(txtname):
         l = l.strip()
         if l[0] != '#':
             l = l.split('\t')
+            if l[0][-1]==' ':  #Remove trailing space that sometimes happens
+                l[0]=l[0][:-1]
             if l[0] in fiducials:
                 x, y, z = [float(l[i]) for i in [3, 4, 5]]
                 if l[0] in alt_fid:
