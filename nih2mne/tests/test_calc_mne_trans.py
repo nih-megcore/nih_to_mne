@@ -31,7 +31,7 @@ def test_afni_tags_present():
     pos_fname = op.join(testpath, 's2+orig.HEAD')
     assert _afni_tags_present(pos_fname)
 
-@pytest.skip(reason='Failing, but need to check github actions')
+@pytest.mark.skip(reason='Failing, but need to check github actions')
 def test_assess_available_localizers():
     coords_val = assess_available_localizers(testpath)
     correct_val = {'Nasion': [-10.578000000000003, -107.119, 21.007999999999996],
