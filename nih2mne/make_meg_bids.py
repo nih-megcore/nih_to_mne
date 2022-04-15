@@ -50,7 +50,7 @@ cmd flags:
 
 
 
-# Current limitiation - Only does 1 session
+# Current limitiation - Only does 1 session   !! Set session as a flag
 # Save the error log
 
 
@@ -104,39 +104,8 @@ def sessdir2taskrundict(session_dir=None):
     
     return out_dict
         
-def test_sessdir2taskrundict():
-    input_list=\
-        ['DEC105_ASSR_20220225_002.ds',
-         'DEC105_MMFAU_20220225_009.ds',
-         'DEC105_M100_20220225_007.ds',
-         'DEC105_rest_20220225_005.ds',
-         'DEC105_MMFAU_20220225_003.ds',
-         'DEC105_rest_20220225_012.ds',
-         'DEC105_MMFUA_20220225_004.ds',
-         'DEC105_rest_20220225_011.ds',
-         'DEC105_M100_20220225_006.ds',
-         'DEC105_MMFUA_20220225_010.ds',
-         'DEC105_ASSR_20220225_008.ds',
-         'DEC105_M100_20220225_001.ds']
-    out_dict = sessdir2taskrundict(input_list)
-    
-    g_truth = \
-    {'rest': ['DEC105_rest_20220225_005.ds',
-              'DEC105_rest_20220225_011.ds',
-              'DEC105_rest_20220225_012.ds'],
-     'M100': ['DEC105_M100_20220225_001.ds',
-              'DEC105_M100_20220225_006.ds',
-              'DEC105_M100_20220225_007.ds'],
-     'MMFAU': ['DEC105_MMFAU_20220225_003.ds', 'DEC105_MMFAU_20220225_009.ds'],
-     'MMFUA': ['DEC105_MMFUA_20220225_004.ds', 'DEC105_MMFUA_20220225_010.ds'],
-     'ASSR': ['DEC105_ASSR_20220225_002.ds', 'DEC105_ASSR_20220225_008.ds']}
-    
-    assert out_dict == g_truth
-    
 
-
-
-def process_meg_bids(input_path=None, bids_dir=None, mri_fname=None):
+def process_meg_bids(input_path=None, bids_dir=None, session=1):
     '''
     Process the MEG component of the data into bids.
     Calls sessdir2taskrundict to get the task IDs and sort according to run #
@@ -151,8 +120,8 @@ def process_meg_bids(input_path=None, bids_dir=None, mri_fname=None):
         Path to the MEG folder - typically designated by a Date.
     bids_dir : str, optional
         Output path for your bids data.
-    mri_fname : TYPE, optional
-        T1.nii or T1.nii.gz from brainsight coreg or Afni coreg
+    session : int
+        Session number for data acquisition.  Defaults to 1 if not set
 
     Returns
     -------
@@ -164,6 +133,9 @@ def process_meg_bids(input_path=None, bids_dir=None, mri_fname=None):
     if not os.path.exists(bids_dir): os.mkdir(bids_dir)
     dset_dict = sessdir2taskrundict(session_dir=input_path)
     
+    session = str(session)
+    if len(session)==1: session = '0'+session
+    
     error_count=0
     for task, task_sublist in dset_dict.items():
         for run, base_meg_fname in enumerate(task_sublist):
@@ -173,7 +145,7 @@ def process_meg_bids(input_path=None, bids_dir=None, mri_fname=None):
                 raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore')  
                 raw.info['line_freq'] = 60 
                 
-                ses = '01'   ######### !!!! Hack 
+                ses = session
                 run = str(run) 
                 if len(run)==1: run='0'+run
                 bids_path = BIDSPath(subject=subject, session=ses, task=task,
@@ -189,14 +161,22 @@ def process_meg_bids(input_path=None, bids_dir=None, mri_fname=None):
     else:
         logger.info('SUCCESS: There were no errors!')
     
-    
+
+def main():
+    process_meg_bids(input_path=None, bids_dir=None, mri_fname=None,
+                     session=1)
+        
     
         
 # process_meg_bids(input_path='./20220225', bids_dir='./bids_test', mri_fname='/fast/BIDS_nuge/bidsout/sub-107/ses-01/anat/sub-107_ses-01_T1w.nii.gz')
 
 def process_nih_transforms(topdir=None):
-    csv_fname = op.join(topdir, 'MasterList.csv')
-    dframe=pd.read_csv(csv_fname)
+    
+    
+    'Take the brainsight or afni dataset and create mri json file'
+
+
+
     from nih2mne.calc_mnetrans import write_mne_fiducials 
     from nih2mne.calc_mnetrans import write_mne_trans
     
@@ -310,17 +290,18 @@ def process_mri_bids(bids_dir=None, topdir=None):
             anat_dir = t1w_bids_path.directory   
         except BaseException as e:
             subj_logger.exception('MRI BIDS PROCESSING', e)
+
             
+# =============================================================================
+# Commandline Options
+# =============================================================================
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser('''
-                                     Convert MEG dataset to default Bids 
-                                     format using the MEG hash ID or entered
-                                     subject ID as the bids ID.
-                                     
-                                     \n\nWARNING: This does NOT anonymize the data
-                                     !!!
-                                     ''')
+        Convert MEG dataset to default Bids format using the MEG hash ID or 
+        entered subject ID as the bids ID.        
+        \n\nWARNING: This does NOT anonymize the data!!!
+        ''')
     parser.add_argument('-bids_dir', help='Output bids_dir path', 
                         default='./bids_dir')
     parser.add_argument('-meg_input_dir', 
@@ -333,16 +314,64 @@ if __name__ == '__main__':
                         The exported electrodes text file must be in the same 
                         folder and end in .txt.  Otherwise, provide the 
                         mri_sight_elec flag''')
-    parser.add_argment('-mri_bsight_elec',
+    parser.add_argument('-mri_bsight_elec',
                        help='''Exported electrodes file from brainsight.
                        This has the locations of the fiducials''', 
                        required=False)
-
-
-
-
+    parser.add_argument('-session',
+                        help='''Data acquisition session.  This is set to 1
+                        by default.  If the same subject had multiple sessions
+                        this must be set manually''',
+                        default=1,
+                        required=False)
+    args=parser.parse_args()
     
+    process_meg_bids(input_path=args.meg_input_dir,
+                     bids_dir=args.bids_dir, 
+                     session=args.session)
+    
+    notanon_fname = op.join(args.bids_dir, 'NOT_ANONYMIZED!!!.txt')
+    with open(notanon_fname, 'a') as w:
+        w.write(args.meg_input_dir + '\n')
+    
+    
+                        
 
+
+
+# =============================================================================
+# TESTS - move these to another file
+# =============================================================================
+    
+def test_sessdir2taskrundict():
+    input_list=\
+        ['DEC105_ASSR_20220225_002.ds',
+         'DEC105_MMFAU_20220225_009.ds',
+         'DEC105_M100_20220225_007.ds',
+         'DEC105_rest_20220225_005.ds',
+         'DEC105_MMFAU_20220225_003.ds',
+         'DEC105_rest_20220225_012.ds',
+         'DEC105_MMFUA_20220225_004.ds',
+         'DEC105_rest_20220225_011.ds',
+         'DEC105_M100_20220225_006.ds',
+         'DEC105_MMFUA_20220225_010.ds',
+         'DEC105_ASSR_20220225_008.ds',
+         'DEC105_M100_20220225_001.ds']
+    out_dict = sessdir2taskrundict(input_list)
+    
+    g_truth = \
+    {'rest': ['DEC105_rest_20220225_005.ds',
+              'DEC105_rest_20220225_011.ds',
+              'DEC105_rest_20220225_012.ds'],
+     'M100': ['DEC105_M100_20220225_001.ds',
+              'DEC105_M100_20220225_006.ds',
+              'DEC105_M100_20220225_007.ds'],
+     'MMFAU': ['DEC105_MMFAU_20220225_003.ds', 'DEC105_MMFAU_20220225_009.ds'],
+     'MMFUA': ['DEC105_MMFUA_20220225_004.ds', 'DEC105_MMFUA_20220225_010.ds'],
+     'ASSR': ['DEC105_ASSR_20220225_002.ds', 'DEC105_ASSR_20220225_008.ds']}
+    
+    assert out_dict == g_truth
+ 
 
 
 
