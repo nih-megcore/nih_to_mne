@@ -50,7 +50,6 @@ cmd flags:
 
 
 
-# Current limitiation - Only does 1 session   !! Set session as a flag
 # Save the error log
 
 
@@ -111,8 +110,8 @@ def process_meg_bids(input_path=None, bids_dir=None, session=1):
     Calls sessdir2taskrundict to get the task IDs and sort according to run #
     Output is the data in bids format in the assigned bids_dir
     
-    !Warning - this assumes only 1 session of data acq currently 
     !Warning - this does not parse the events from your dataset
+    !Use parse marks or other tools -  preferably before doing the bids proc.
 
     Parameters
     ----------
@@ -168,67 +167,85 @@ def main():
         
     
         
-# process_meg_bids(input_path='./20220225', bids_dir='./bids_test', mri_fname='/fast/BIDS_nuge/bidsout/sub-107/ses-01/anat/sub-107_ses-01_T1w.nii.gz')
 
-def process_nih_transforms(topdir=None):
+def process_nih_transforms(bids_dir=None):
     
     
     'Take the brainsight or afni dataset and create mri json file'
-
+    'Take nii and import to freesurfer'
+    'Do the conversion'
 
 
     from nih2mne.calc_mnetrans import write_mne_fiducials 
     from nih2mne.calc_mnetrans import write_mne_trans
+    import subprocess
+    from pathlib import Path
     
-    if not os.path.exists(f'{topdir}/trans_mats'): os.mkdir(f'{topdir}/trans_mats')
+    # if not os.path.exists(f'{topdir}/trans_mats'): os.mkdir(f'{topdir}/trans_mats')
+
+
+    subjects_dir = op.join(bids_dir, 
+                        'derivatives',
+                        'freesurfer',
+                        'subjects')
+    os.environ['SUBJECTS_DIR']=subjects_dir
+    Path(subjects_dir).mkdir(parents=True, exists_ok=True)
+
+
+
     
-    for idx, row in dframe.iterrows():
-        subj_logger=get_subj_logger(row['bids_subjid'], log_dir=f'{topdir}/logs')
-        if op.splitext(row['full_mri_path'])[-1] == '.gz':
-            afni_fname=row['full_mri_path'].replace('.nii.gz','+orig.HEAD')
-        else:
-            afni_fname=row['full_mri_path'].replace('.nii','+orig.HEAD')
-        fid_path = op.join('./trans_mats', f'{row["bids_subjid"]}_{str(int(row["meg_session"]))}-fiducials.fif')
+    subj_logger=logger
+    
+    try:
+        subprocess.run(f'recon-all -i {mri} -s {subjid}'.split(),
+                       check=True)
+        subprocess.run(f'recon-all -autorecon1 -noskullstrip -s {subjid}'.split(),
+                       check=True)
+        subj_logger.info('RECON_ALL IMPORT FINISHED')
+    except BaseException as e:
+        subj_logger.error('RECON_ALL IMPORT')
+        subj_logger.error(e)
+    
+    try:
+        subprocess.run(f"mkheadsurf -s {subjid}".split(), check=True)
+        subj_logger.info('MKHEADSURF FINISHED')
+    except:
         try:
-            write_mne_fiducials(subject=row['bids_subjid'],
-                                subjects_dir=subjects_dir, 
-                                searchpath = os.path.dirname(afni_fname),
-                                output_fid_path=fid_path)
+            proc_cmd = f"mkheadsurf -i {op.join(subjects_dir, subjid, 'mri', 'T1.mgz')} \
+                -o {op.join(subjects_dir, subjid, 'mri', 'seghead.mgz')} \
+                -surf {op.join(subjects_dir, subjid, 'surf', 'lh.seghead')}"
+            subprocess.run(proc_cmd.split(), check=True)
         except BaseException as e:
-            subj_logger.error('Error in write_mne_fiducials', e)
-            continue  #No need to write trans if fiducials can't be written
-        try:              
-            trans_fname=op.join('./trans_mats', row['bids_subjid']+'_'+str(int(row['meg_session']))+'-trans.fif')
-            write_mne_trans(mne_fids_path=fid_path,
-                            dsname=row['full_meg_path'], 
-                            output_name=trans_fname, 
-                            subjects_dir=subjects_dir)
-            dframe.loc[idx,'trans_fname']=trans_fname
-        except BaseException as e:
-            subj_logger.error('Error in write_mne_trans', e)
-            print('error in trans calculation '+row['bids_subjid'])
+            subj_logger.error('MKHEADSURF')
+            subj_logger.error(e)
+
+    
+    
+    
+    
+
+    fid_path = op.join('./trans_mats', f'{row["bids_subjid"]}_{str(int(row["meg_session"]))}-fiducials.fif')
+    try:
+        write_mne_fiducials(subject=row['bids_subjid'],
+                            subjects_dir=subjects_dir, 
+                            searchpath = os.path.dirname(afni_fname),
+                            output_fid_path=fid_path)
+    except BaseException as e:
+        subj_logger.error('Error in write_mne_fiducials', e)
+        continue  #No need to write trans if fiducials can't be written
+    try:              
+        trans_fname=op.join('./trans_mats', row['bids_subjid']+'_'+str(int(row['meg_session']))+'-trans.fif')
+        write_mne_trans(mne_fids_path=fid_path,
+                        dsname=row['full_meg_path'], 
+                        output_name=trans_fname, 
+                        subjects_dir=subjects_dir)
+        dframe.loc[idx,'trans_fname']=trans_fname
+    except BaseException as e:
+        subj_logger.error('Error in write_mne_trans', e)
+        print('error in trans calculation '+row['bids_subjid'])
+            
+            
     dframe.to_csv('MasterList_final.csv', index=False)  
-
-
-
-
-# def subjid_from_filename(filename, position=[0], split_on='_', multi_index_cat='_'):
-#     filename = os.path.basename(filename)
-#     tmp = os.path.splitext(filename)
-#     if len(tmp)>2:
-#         return 'Error on split extension - Possibly mutiple "." in filename'
-#     if not isinstance(position, list):
-#         print('The position variable must be a list even if a single entry')
-#         raise ValueError
-#     filename = os.path.splitext(filename)[0]
-#     filename_parts = filename.split(split_on)    
-#     subjid_components = [filename_parts[idx] for idx in position]
-#     if isinstance(subjid_components, str) or len(subjid_components)==1:
-#         return subjid_components[0]
-#     elif len(subjid_components)>1:
-#         return multi_index_cat.join(subjid_components)
-#     else:
-#         return 'Error'
 
 
 
@@ -333,6 +350,22 @@ if __name__ == '__main__':
     notanon_fname = op.join(args.bids_dir, 'NOT_ANONYMIZED!!!.txt')
     with open(notanon_fname, 'a') as w:
         w.write(args.meg_input_dir + '\n')
+        
+    if args.mri_brik:
+        host = os.uname().nodename
+        
+        #Determine if on a biowulf node
+        if (host[0:2]=='cn') and (len(host)==6):
+            if 'LOADEDMODULES' in os.environ: lmods=os.environ['LOADEDMODULES']
+            
+            lmods = lmods.split(':')
+            lmods = [i.split('/')[0] for i in lmods]
+            if 'afni' not in lmods:
+                raise ValueError('Load the afni module before performing')
+    
+    global temp_dir
+    temp_dir=op.join(os.getcwd(), 'TEMP')
+    os.mkdir(temp_dir)
     
     
                         
