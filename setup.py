@@ -22,5 +22,5 @@ setuptools.setup(
     install_requires=['mne', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids'],
     scripts=['nih2mne/bstags.py',
         'nih2mne/calc_mnetrans.py',
-        'nih2mn3/make_mne_bids.py'],
+        'nih2mne/make_meg_bids.py'],
 )
