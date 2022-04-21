@@ -190,41 +190,34 @@ def main():
     
 #     # if not os.path.exists(f'{topdir}/trans_mats'): os.mkdir(f'{topdir}/trans_mats')
 
-
-#     subjects_dir = op.join(bids_dir, 
-#                         'derivatives',
-#                         'freesurfer',
-#                         'subjects')
-#     os.environ['SUBJECTS_DIR']=subjects_dir
-#     Path(subjects_dir).mkdir(parents=True, exist_ok=True)
-
-
-
+def freesurfer_import(mri=None, subjid=None, tmp_subjects_dir=None):
+    '''
+    '''
+    os.environ['SUBJECTS_DIR']=str(tmp_subjects_dir)
     
-#     subj_logger=logger
+    try:
+        subprocess.run(f'recon-all -i {mri} -s {subjid}'.split(),
+                        check=True)
+        # subprocess.run(f'recon-all -autorecon1 -noskullstrip -s {subjid}'.split(),
+        #                 check=True)
+        logger.info('RECON_ALL IMPORT FINISHED')
+    except BaseException as e:
+        logger.error('RECON_ALL IMPORT')
+        logger.error(e)
     
-#     try:
-#         subprocess.run(f'recon-all -i {mri} -s {subjid}'.split(),
-#                        check=True)
-#         subprocess.run(f'recon-all -autorecon1 -noskullstrip -s {subjid}'.split(),
-#                        check=True)
-#         subj_logger.info('RECON_ALL IMPORT FINISHED')
-#     except BaseException as e:
-#         subj_logger.error('RECON_ALL IMPORT')
-#         subj_logger.error(e)
     
-#     try:
-#         subprocess.run(f"mkheadsurf -s {subjid}".split(), check=True)
-#         subj_logger.info('MKHEADSURF FINISHED')
-#     except:
-#         try:
-#             proc_cmd = f"mkheadsurf -i {op.join(subjects_dir, subjid, 'mri', 'T1.mgz')} \
-#                 -o {op.join(subjects_dir, subjid, 'mri', 'seghead.mgz')} \
-#                 -surf {op.join(subjects_dir, subjid, 'surf', 'lh.seghead')}"
-#             subprocess.run(proc_cmd.split(), check=True)
-#         except BaseException as e:
-#             subj_logger.error('MKHEADSURF')
-#             subj_logger.error(e)
+    # try:
+    #     subprocess.run(f"mkheadsurf -s {subjid}".split(), check=True)
+    #     logger.info('MKHEADSURF FINISHED')
+    # except:
+    #     try:
+    #         proc_cmd = f"mkheadsurf -i {op.join(subjects_dir, subjid, 'mri', 'T1.mgz')} \
+    #             -o {op.join(subjects_dir, subjid, 'mri', 'seghead.mgz')} \
+    #             -surf {op.join(subjects_dir, subjid, 'surf', 'lh.seghead')}"
+    #         subprocess.run(proc_cmd.split(), check=True)
+    #     except BaseException as e:
+    #         subj_logger.error('MKHEADSURF')
+    #         subj_logger.error(e)
 
     
     
@@ -394,7 +387,7 @@ if __name__ == '__main__':
                        help='''Exported electrodes file from brainsight.
                        This has the locations of the fiducials''', 
                        required=False)
-    parser.add_argument('-session',
+    parser.add_argument('-bids_session',
                         help='''Data acquisition session.  This is set to 1
                         by default.  If the same subject had multiple sessions
                         this must be set manually''',
@@ -420,7 +413,7 @@ if __name__ == '__main__':
     #
     # process_meg_bids(input_path=args.meg_input_dir,
     #                  bids_dir=args.bids_dir, 
-    #                  session=args.session)
+    #                  session=args.bids_session)
     
     #
     #   Prep MRI
@@ -428,11 +421,12 @@ if __name__ == '__main__':
     #Create temporary MRI directories at the parent directory of the bids dir
     global temp_dir
     temp_dir=Path(args.bids_dir).parent / 'bids_prep_temp'
-    temp_dir.mkdir(exist_ok=True)
+    if op.exists(temp_dir): shutil.rmtree(temp_dir)
+    temp_dir.mkdir()
     temp_subjects_dir = temp_dir / 'subjects_tmp'
-    temp_subjects_dir.mkdir(exist_ok=True)
+    temp_subjects_dir.mkdir()
     temp_mri_prep = temp_dir / 'mri_tmp'
-    temp_mri_prep.mkdir(exist_ok=True)
+    temp_mri_prep.mkdir()
 
     #Check for Afni and convert the mri to nifti
     if args.mri_brik:
@@ -457,12 +451,24 @@ if __name__ == '__main__':
         assert op.splitext(args.mri_bsight)[-1] in ['.nii','.nii.gz']
         nii_mri = args.mri_bsight
         
+    freesurfer_import(mri=nii_mri, 
+                      subjid=subjid, 
+                      tmp_subjects_dir=temp_subjects_dir)
+    print(nii_mri)
+        
 
 
 
          
         
+'''
+Still need to make tests for 
+copy afni and convert to nii
+check for multiple subjects in folder
 
+
+
+'''
     
     
     
