@@ -16,6 +16,7 @@ import copy
 import numpy as np
 import logging
 import subprocess
+from pathlib import Path
 
 import wget #  !pip install wget
 import gzip
@@ -28,8 +29,7 @@ from multiprocessing import Pool
 
 from mne_bids import write_anat, BIDSPath, write_raw_bids
 
-
-logger = logging.getLogger()
+# logger = logging.basicConfig(filename='example.log', encoding='utf-8', level=logging.DEBUG)
 
 # =============================================================================
 # make_meg_bids.py
@@ -162,94 +162,104 @@ def process_meg_bids(input_path=None, bids_dir=None, session=1):
     
 
 def main():
-    process_meg_bids(input_path=None, bids_dir=None, mri_fname=None,
-                     session=1)
+    # process_meg_bids(input_path=None, bids_dir=None, mri_fname=None,
+    #                  session=1)
+    'test'
+    
+    
+    
         
+
+# def process_nih_transforms(bids_dir=None):
+#     '''
+#     Step 1 - if afni >> convert to nii ./tmp/current.nii
+#     Step 2 - if bsignt >> locate nii and txt
+#     Step 3 - send to 
     
-        
-
-def process_nih_transforms(bids_dir=None):
+#     '''
     
     
-    'Take the brainsight or afni dataset and create mri json file'
-    'Take nii and import to freesurfer'
-    'Do the conversion'
-
-
-    from nih2mne.calc_mnetrans import write_mne_fiducials 
-    from nih2mne.calc_mnetrans import write_mne_trans
-    import subprocess
-    from pathlib import Path
     
-    # if not os.path.exists(f'{topdir}/trans_mats'): os.mkdir(f'{topdir}/trans_mats')
-
-
-    subjects_dir = op.join(bids_dir, 
-                        'derivatives',
-                        'freesurfer',
-                        'subjects')
-    os.environ['SUBJECTS_DIR']=subjects_dir
-    Path(subjects_dir).mkdir(parents=True, exists_ok=True)
+#     'Take the brainsight or afni dataset and create mri json file'
+#     'Take nii and import to freesurfer'
+#     'Do the conversion'
+#     from nih2mne.calc_mnetrans import write_mne_fiducials 
+#     from nih2mne.calc_mnetrans import write_mne_trans
+#     import subprocess
+#     from pathlib import Path
+    
+#     # if not os.path.exists(f'{topdir}/trans_mats'): os.mkdir(f'{topdir}/trans_mats')
 
 
+#     subjects_dir = op.join(bids_dir, 
+#                         'derivatives',
+#                         'freesurfer',
+#                         'subjects')
+#     os.environ['SUBJECTS_DIR']=subjects_dir
+#     Path(subjects_dir).mkdir(parents=True, exist_ok=True)
+
+
 
     
-    subj_logger=logger
+#     subj_logger=logger
     
-    try:
-        subprocess.run(f'recon-all -i {mri} -s {subjid}'.split(),
-                       check=True)
-        subprocess.run(f'recon-all -autorecon1 -noskullstrip -s {subjid}'.split(),
-                       check=True)
-        subj_logger.info('RECON_ALL IMPORT FINISHED')
-    except BaseException as e:
-        subj_logger.error('RECON_ALL IMPORT')
-        subj_logger.error(e)
+#     try:
+#         subprocess.run(f'recon-all -i {mri} -s {subjid}'.split(),
+#                        check=True)
+#         subprocess.run(f'recon-all -autorecon1 -noskullstrip -s {subjid}'.split(),
+#                        check=True)
+#         subj_logger.info('RECON_ALL IMPORT FINISHED')
+#     except BaseException as e:
+#         subj_logger.error('RECON_ALL IMPORT')
+#         subj_logger.error(e)
     
-    try:
-        subprocess.run(f"mkheadsurf -s {subjid}".split(), check=True)
-        subj_logger.info('MKHEADSURF FINISHED')
-    except:
-        try:
-            proc_cmd = f"mkheadsurf -i {op.join(subjects_dir, subjid, 'mri', 'T1.mgz')} \
-                -o {op.join(subjects_dir, subjid, 'mri', 'seghead.mgz')} \
-                -surf {op.join(subjects_dir, subjid, 'surf', 'lh.seghead')}"
-            subprocess.run(proc_cmd.split(), check=True)
-        except BaseException as e:
-            subj_logger.error('MKHEADSURF')
-            subj_logger.error(e)
+#     try:
+#         subprocess.run(f"mkheadsurf -s {subjid}".split(), check=True)
+#         subj_logger.info('MKHEADSURF FINISHED')
+#     except:
+#         try:
+#             proc_cmd = f"mkheadsurf -i {op.join(subjects_dir, subjid, 'mri', 'T1.mgz')} \
+#                 -o {op.join(subjects_dir, subjid, 'mri', 'seghead.mgz')} \
+#                 -surf {op.join(subjects_dir, subjid, 'surf', 'lh.seghead')}"
+#             subprocess.run(proc_cmd.split(), check=True)
+#         except BaseException as e:
+#             subj_logger.error('MKHEADSURF')
+#             subj_logger.error(e)
 
     
     
     
     
 
-    fid_path = op.join('./trans_mats', f'{row["bids_subjid"]}_{str(int(row["meg_session"]))}-fiducials.fif')
-    try:
-        write_mne_fiducials(subject=row['bids_subjid'],
-                            subjects_dir=subjects_dir, 
-                            searchpath = os.path.dirname(afni_fname),
-                            output_fid_path=fid_path)
-    except BaseException as e:
-        subj_logger.error('Error in write_mne_fiducials', e)
-        continue  #No need to write trans if fiducials can't be written
-    try:              
-        trans_fname=op.join('./trans_mats', row['bids_subjid']+'_'+str(int(row['meg_session']))+'-trans.fif')
-        write_mne_trans(mne_fids_path=fid_path,
-                        dsname=row['full_meg_path'], 
-                        output_name=trans_fname, 
-                        subjects_dir=subjects_dir)
-        dframe.loc[idx,'trans_fname']=trans_fname
-    except BaseException as e:
-        subj_logger.error('Error in write_mne_trans', e)
-        print('error in trans calculation '+row['bids_subjid'])
+#     fid_path = op.join('./trans_mats', f'{row["bids_subjid"]}_{str(int(row["meg_session"]))}-fiducials.fif')
+#     try:
+#         write_mne_fiducials(subject=row['bids_subjid'],
+#                             subjects_dir=subjects_dir, 
+#                             searchpath = os.path.dirname(afni_fname),
+#                             output_fid_path=fid_path)
+#     except BaseException as e:
+#         subj_logger.error('Error in write_mne_fiducials', e)
+#         continue  #No need to write trans if fiducials can't be written
+#     try:              
+#         trans_fname=op.join('./trans_mats', row['bids_subjid']+'_'+str(int(row['meg_session']))+'-trans.fif')
+#         write_mne_trans(mne_fids_path=fid_path,
+#                         dsname=row['full_meg_path'], 
+#                         output_name=trans_fname, 
+#                         subjects_dir=subjects_dir)
+#         dframe.loc[idx,'trans_fname']=trans_fname
+#     except BaseException as e:
+#         subj_logger.error('Error in write_mne_trans', e)
+#         print('error in trans calculation '+row['bids_subjid'])
             
             
-    dframe.to_csv('MasterList_final.csv', index=False)  
+#     dframe.to_csv('MasterList_final.csv', index=False)  
 
 
 
-def convert_brik(mri_fname):
+def convert_brik(mri_fname, outdir=None):
+    '''Convert the afni file to nifti
+    The outdir should be the tempdir/mri_temp folder
+    Returns the converted afni file for input to freesurfer'''
     if op.splitext(mri_fname)[-1] not in ['.BRIK', '.HEAD']:
         raise(TypeError('Must be an afni BRIK or HEAD file to convert'))
     import shutil
@@ -259,10 +269,11 @@ def convert_brik(mri_fname):
     basename = op.basename(mri_fname)
     dirname = op.dirname(mri_fname)
     outname = basename.split('+')[0]+'.nii'
-    outname = op.join(dirname, outname)
+    outname = op.join(outdir, outname)
     subcmd = f'3dAFNItoNIFTI {mri_fname} {outname}'
     subprocess.run(subcmd.split())
     print(f'Converted {mri_fname} to nifti')
+    return outname
     
 
 
@@ -308,6 +319,43 @@ def process_mri_bids(bids_dir=None, topdir=None):
         except BaseException as e:
             subj_logger.exception('MRI BIDS PROCESSING', e)
 
+def _check_multiple_subjects(meg_input_dir):
+    '''Checks to see if multiple subjects were acquired in teh same dated 
+    folder.  If multiple subjects found - the output will require manual
+    choice to determine the correct subject'''
+    meglist = os.listdir(meg_input_dir)
+    subjects = set([i.split('_')[0] for i in meglist])
+    subjects = list(subjects)
+    if len(subjects) == 1:
+        subjid = subjects
+        return subjid
+    elif len(subjects) > 1:
+        subjid=input(f'Which subject do you want to process (Do not use quotes)\
+                     :\n{subjects}\n')
+        if subjid in subjects:
+            return subjid
+        else:
+            logger.exception(f'User provided {subjid} not in {subjects}')
+    elif len(subjects) ==0:
+        logger.exception(f'''Could not extract any subjects from the list of 
+                         files {meglist}''')
+
+def get_subj_logger(subjid, log_dir=None, loglevel=logging.INFO):
+    '''Return the subject specific logger.
+    This is particularly useful in the multiprocessing where logging is not
+    necessarily in order'''
+    logger = logging.getLogger(subjid)
+    logger.setLevel(level=loglevel)
+    if logger.handlers != []:
+        # Check to make sure that more than one file handler is not added
+        tmp_ = [type(i) for i in logger.handlers ]
+        if logging.FileHandler in tmp_:
+            return logger
+    fileHandle = logging.FileHandler(f'{log_dir}/{subjid}_log.txt')
+    fmt = logging.Formatter(fmt=f'%(asctime)s - %(levelname)s - {subjid} - %(message)s')
+    fileHandle.setFormatter(fmt=fmt) 
+    logger.addHandler(fileHandle)
+    return logger
             
 # =============================================================================
 # Commandline Options
@@ -343,6 +391,15 @@ if __name__ == '__main__':
                         required=False)
     args=parser.parse_args()
     
+    global logger
+    logger_dir = Path(args.bids_dir).parent / 'bids_prep_logs'
+    logger_dir.mkdir(exist_ok=True)
+    
+    
+    
+    subjid = _check_multiple_subjects(args.meg_input_dir)
+    logger = get_subj_logger(subjid, log_dir=logger_dir, loglevel=logging.DEBUG)
+    
     process_meg_bids(input_path=args.meg_input_dir,
                      bids_dir=args.bids_dir, 
                      session=args.session)
@@ -351,6 +408,16 @@ if __name__ == '__main__':
     with open(notanon_fname, 'a') as w:
         w.write(args.meg_input_dir + '\n')
         
+    #Create temporary directories at the parent directory of the bids dir
+    global temp_dir
+    temp_dir=Path(args.bids_dir).parent / 'bids_prep_temp'
+    temp_dir.mkdir(exist_ok=True)
+    temp_subjects_dir = temp_dir / 'subjects_tmp'
+    temp_subjects_dir.mkdir(exist_ok=True)
+    temp_mri_prep = temp_dir / 'mri_tmp'
+    temp_mri_prep.mkdir(exist_ok=True)
+
+    #Check for Afni and convert the mri to nifti
     if args.mri_brik:
         host = os.uname().nodename
         
@@ -362,10 +429,22 @@ if __name__ == '__main__':
             lmods = [i.split('/')[0] for i in lmods]
             if 'afni' not in lmods:
                 raise ValueError('Load the afni module before performing')
+        
+        #Convert the mri to nifti
+        nii_mri = convert_brik(args.mri_brik, outdir=temp_mri_prep)
+        logger.info(f'Converted {args.mri_brik} to {nii_mri}')
+        
+    if args.mri_bsight:
+        assert op.splitext(args.mri_bsight)[-1] in ['.nii','.nii.gz']
+        nii_mri = args.mri_bsight
+        
+
+
+
+         
+        
+
     
-    global temp_dir
-    temp_dir=op.join(os.getcwd(), 'TEMP')
-    os.mkdir(temp_dir)
     
     
                         
@@ -375,6 +454,12 @@ if __name__ == '__main__':
 # =============================================================================
 # TESTS - move these to another file
 # =============================================================================
+def test_check_multiple_subjects():
+    #Make this extensible - currently limited
+    #Make a temp dir and link together the files from two different folders
+    indir='/fast/oberman_test/TEMP'
+    _check_multiple_subjects(indir)
+
     
 def test_sessdir2taskrundict():
     input_list=\
