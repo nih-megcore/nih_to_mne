@@ -28,6 +28,8 @@ import matplotlib.pyplot as plt;
 from multiprocessing import Pool
 
 from mne_bids import write_anat, BIDSPath, write_raw_bids
+from nih2mne.calc_mnetrans import write_mne_fiducials 
+from nih2mne.calc_mnetrans import write_mne_trans
 
 # logger = logging.basicConfig(filename='example.log', encoding='utf-8', level=logging.DEBUG)
 
@@ -39,21 +41,6 @@ from mne_bids import write_anat, BIDSPath, write_raw_bids
 # Assume no repeats
 # =============================================================================
 
-'''
-cmd flags:
--brainsight MRI
--exported electrodes textfile
-
--meg folder
--bids_dir
-
-
-
-
-# Save the error log
-
-
-'''
 
 
 
@@ -161,49 +148,55 @@ def process_meg_bids(input_path=None, bids_dir=None, session=1):
         logger.info('SUCCESS: There were no errors!')
     
 
-def main():
-    # process_meg_bids(input_path=None, bids_dir=None, mri_fname=None,
-    #                  session=1)
-    'test'
-    
-    
-    
-        
-
-# def process_nih_transforms(bids_dir=None):
-#     '''
-#     Step 1 - if afni >> convert to nii ./tmp/current.nii
-#     Step 2 - if bsignt >> locate nii and txt
-#     Step 3 - send to 
-    
-#     '''
-    
-    
-    
-#     'Take the brainsight or afni dataset and create mri json file'
-#     'Take nii and import to freesurfer'
-#     'Do the conversion'
-#     from nih2mne.calc_mnetrans import write_mne_fiducials 
-#     from nih2mne.calc_mnetrans import write_mne_trans
-#     import subprocess
-#     from pathlib import Path
-    
-#     # if not os.path.exists(f'{topdir}/trans_mats'): os.mkdir(f'{topdir}/trans_mats')
-
-def freesurfer_import(mri=None, subjid=None, tmp_subjects_dir=None):
+def freesurfer_import(mri=None, subjid=None, tmp_subjects_dir=None,
+                      afni_fname=None,
+                      bsight_elec=None, 
+                      meg_fname=None):
     '''
+    only select afni_fname if the coreg is in the AFNI.HEAD file
+    
+    
     '''
     os.environ['SUBJECTS_DIR']=str(tmp_subjects_dir)
     
     try:
         subprocess.run(f'recon-all -i {mri} -s {subjid}'.split(),
                         check=True)
-        # subprocess.run(f'recon-all -autorecon1 -noskullstrip -s {subjid}'.split(),
-        #                 check=True)
+        subprocess.run(f'recon-all -autorecon1 -noskullstrip -s {subjid}'.split(),
+                        check=True)
         logger.info('RECON_ALL IMPORT FINISHED')
     except BaseException as e:
         logger.error('RECON_ALL IMPORT')
         logger.error(e)
+    return op.join(tmp_subjects_dir, subjid)
+
+
+def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
+                      afni_fname=None,
+                      bsight_elec=None, 
+                      meg_fname=None):
+    trans_dir = tmp_subjects_dir.parent / 'trans_mats'
+    trans_dir.mkdir()
+    fid_path = trans_dir / f'{subjid}-fiducials.fif'
+    try:
+        write_mne_fiducials(subject=subjid,
+                            subjects_dir=str(tmp_subjects_dir), 
+                            afni_fname=afni_fname,
+                            output_fid_path=str(fid_path))
+    except BaseException as e:
+        logger.error('Error in write_mne_fiducials', e)
+        # continue  #No need to write trans if fiducials can't be written
+    try:              
+        trans_fname=trans_dir / (subjid +'-trans.fif')
+        # op.join('./trans_mats', row['bids_subjid']+'_'+str(int(row['meg_session']))+'-trans.fif')
+        write_mne_trans(mne_fids_path=str(fid_path),
+                        dsname=meg_fname, 
+                        output_name=str(trans_fname), 
+                        subjects_dir=str(temp_subjects_dir))
+    except BaseException as e:
+        logger.error('Error in write_mne_trans', e)
+        print(f'error in trans calculation {subjid}')
+    return str(trans_fname)
     
     
     # try:
@@ -220,35 +213,6 @@ def freesurfer_import(mri=None, subjid=None, tmp_subjects_dir=None):
     #         subj_logger.error(e)
 
     
-    
-    
-    
-
-#     fid_path = op.join('./trans_mats', f'{row["bids_subjid"]}_{str(int(row["meg_session"]))}-fiducials.fif')
-#     try:
-#         write_mne_fiducials(subject=row['bids_subjid'],
-#                             subjects_dir=subjects_dir, 
-#                             searchpath = os.path.dirname(afni_fname),
-#                             output_fid_path=fid_path)
-#     except BaseException as e:
-#         subj_logger.error('Error in write_mne_fiducials', e)
-#         continue  #No need to write trans if fiducials can't be written
-#     try:              
-#         trans_fname=op.join('./trans_mats', row['bids_subjid']+'_'+str(int(row['meg_session']))+'-trans.fif')
-#         write_mne_trans(mne_fids_path=fid_path,
-#                         dsname=row['full_meg_path'], 
-#                         output_name=trans_fname, 
-#                         subjects_dir=subjects_dir)
-#         dframe.loc[idx,'trans_fname']=trans_fname
-#     except BaseException as e:
-#         subj_logger.error('Error in write_mne_trans', e)
-#         print('error in trans calculation '+row['bids_subjid'])
-            
-            
-#     dframe.to_csv('MasterList_final.csv', index=False)  
-
-
-
 def convert_brik(mri_fname, outdir=None):
     '''Convert the afni file to nifti
     The outdir should be the tempdir/mri_temp folder
@@ -279,49 +243,40 @@ def convert_brik(mri_fname, outdir=None):
         os.chdir(init_dir)
     return outname
     
-
-
-        
-
-#%% Create the bids from the anonymized MRI
-def process_mri_bids(bids_dir=None, topdir=None):
-    bids_dir = f'{topdir}/bids'
+#Currently only supports 1 session of MRI
+def process_mri_bids(bids_dir=None,
+                     subjid=None, 
+                     trans_fname=None,
+                     meg_fname=None):
     if not os.path.exists(bids_dir): os.mkdir(bids_dir)
-
-    for idx, row in dframe.iterrows():
-        subj_logger = get_subj_logger(row.bids_subjid, log_dir=f'{topdir}/logs')
-        try:
-            sub=row['bids_subjid'][4:] 
-            ses='01'
-            output_path = f'{topdir}/bids_out'
-            
-            raw = read_meg(row['full_meg_path'])          #FIX currently should be full_meg_path - need to verify anon
-            trans = mne.read_trans(row['trans_fname'])
-            t1_path = row['T1anon']
-            
-            t1w_bids_path = \
-                BIDSPath(subject=sub, session=ses, root=output_path, suffix='T1w')
+    
+    try:
+        ses='01'
+        raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore')
+        trans = mne.read_trans(trans_fname)
         
-            landmarks = mne_bids.get_anat_landmarks(
-                image=row['T1anon'],
-                info=raw.info,
-                trans=trans,
-                fs_subject=row['bids_subjid']+'_defaced',
-                fs_subjects_dir=subjects_dir
-                )
-            
-            # Write regular
-            t1w_bids_path = write_anat(
-                image=row['T1anon'],
-                bids_path=t1w_bids_path,
-                landmarks=landmarks,
-                deface=False,  #Deface already done
-                overwrite=True
-                )
-            
-            anat_dir = t1w_bids_path.directory   
-        except BaseException as e:
-            subj_logger.exception('MRI BIDS PROCESSING', e)
+        t1w_bids_path = \
+            BIDSPath(subject=subjid, session=ses, root=bids_dir, suffix='T1w')
+    
+        landmarks = mne_bids.get_anat_landmarks(
+            image=op.join(temp_subjects_dir, subjid, 'mri','T1.mgz'),
+            info=raw.info,
+            trans=trans,
+            fs_subject=subjid,
+            fs_subjects_dir=temp_subjects_dir
+            )
+        
+        # Write regular
+        t1w_bids_path = write_anat(
+            image=op.join(temp_subjects_dir, subjid, 'mri','T1.mgz'),
+            bids_path=t1w_bids_path,
+            landmarks=landmarks,
+            deface=False, 
+            overwrite=True
+            )
+        
+    except BaseException as e:
+        logger.exception('MRI BIDS PROCESSING', e)
 
 def _check_multiple_subjects(meg_input_dir):
     '''Checks to see if multiple subjects were acquired in teh same dated 
@@ -396,6 +351,7 @@ if __name__ == '__main__':
     args=parser.parse_args()
     
     #Initialize
+    if not op.exists(args.bids_dir): os.mkdir(args.bids_dir)
     notanon_fname = op.join(args.bids_dir, 'NOT_ANONYMIZED!!!.txt')
     with open(notanon_fname, 'a') as w:
         w.write(args.meg_input_dir + '\n')
@@ -411,9 +367,9 @@ if __name__ == '__main__':
     #
     #   Process MEG
     #
-    # process_meg_bids(input_path=args.meg_input_dir,
-    #                  bids_dir=args.bids_dir, 
-    #                  session=args.bids_session)
+    process_meg_bids(input_path=args.meg_input_dir,
+                      bids_dir=args.bids_dir, 
+                      session=args.bids_session)
     
     #
     #   Prep MRI
@@ -428,7 +384,9 @@ if __name__ == '__main__':
     temp_mri_prep = temp_dir / 'mri_tmp'
     temp_mri_prep.mkdir()
 
+    #    
     #Check for Afni and convert the mri to nifti
+    #
     if args.mri_brik:
         host = os.uname().nodename
         
@@ -447,14 +405,34 @@ if __name__ == '__main__':
         nii_mri = convert_brik(args.mri_brik, outdir=temp_mri_prep)
         logger.info(f'Converted {args.mri_brik} to {nii_mri}')
         
+    #
+    # Proc Brainsight Data
+    #
     if args.mri_bsight:
         assert op.splitext(args.mri_bsight)[-1] in ['.nii','.nii.gz']
         nii_mri = args.mri_bsight
         
+    template_meg = glob.glob(op.join(args.meg_input_dir, subjid+'*.ds'))[0]
     freesurfer_import(mri=nii_mri, 
                       subjid=subjid, 
-                      tmp_subjects_dir=temp_subjects_dir)
-    print(nii_mri)
+                      tmp_subjects_dir=temp_subjects_dir, 
+                      afni_fname=args.mri_brik, 
+                      meg_fname=template_meg)
+    
+    trans_fname = make_trans_mat(mri=nii_mri, subjid=subjid, 
+                                 tmp_subjects_dir=temp_subjects_dir,
+                      afni_fname=args.mri_brik,
+                      bsight_elec=args.mri_bsight_elec, 
+                      meg_fname=template_meg)
+    
+    process_mri_bids(bids_dir=args.bids_dir,
+                     subjid=subjid, 
+                     trans_fname=trans_fname,
+                     meg_fname=template_meg)
+    
+    
+    
+    
         
 
 
@@ -462,6 +440,16 @@ if __name__ == '__main__':
          
         
 '''
+Cannot be parallelized because deletes folder - not subj specific
+ - Can fix by making a folder with subjid
+
+Still need to code for bsight 
+
+If 2 subjects in 1 folder - still writes out 2 subjects of MEGdata even if
+only 1 subject chosen
+
+If successful clean up bids_prep folder
+
 Still need to make tests for 
 copy afni and convert to nii
 check for multiple subjects in folder
