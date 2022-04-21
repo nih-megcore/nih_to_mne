@@ -267,12 +267,23 @@ def convert_brik(mri_fname, outdir=None):
         raise(SystemError('It does not appear Afni is installed, cannot call\
                           3dAFNItoNIFTI'))
     basename = op.basename(mri_fname)
-    dirname = op.dirname(mri_fname)
-    outname = basename.split('+')[0]+'.nii'
-    outname = op.join(outdir, outname)
-    subcmd = f'3dAFNItoNIFTI {mri_fname} {outname}'
-    subprocess.run(subcmd.split())
-    print(f'Converted {mri_fname} to nifti')
+    in_hdr,in_brk = mri_fname[:-4]+'HEAD', mri_fname[:-4]+'BRIK'
+    out_hdr = op.join(outdir, op.basename(in_hdr))
+    out_brk = op.join(outdir, op.basename(in_brk))
+    shutil.copy(in_hdr, out_hdr)
+    shutil.copy(in_brk, out_brk)
+    
+    #Required because afni only outputs to current directory
+    init_dir=os.getcwd()
+    try:
+        os.chdir(outdir)
+        outname = basename.split('+')[0]+'.nii'
+        outname = op.join(outdir, outname)
+        subcmd = f'3dAFNItoNIFTI {out_brk}'
+        subprocess.run(subcmd.split())
+        print(f'Converted {mri_fname} to nifti')
+    finally:
+        os.chdir(init_dir)
     return outname
     
 
@@ -368,7 +379,7 @@ if __name__ == '__main__':
         \n\nWARNING: This does NOT anonymize the data!!!
         ''')
     parser.add_argument('-bids_dir', help='Output bids_dir path', 
-                        default='./bids_dir')
+                        default=op.join(os.getcwd(),'bids_dir'))
     parser.add_argument('-meg_input_dir', 
                         help=''''Acquisition directory - typically designated
                         by the acquisition date''', required=True)
@@ -391,24 +402,30 @@ if __name__ == '__main__':
                         required=False)
     args=parser.parse_args()
     
+    #Initialize
+    notanon_fname = op.join(args.bids_dir, 'NOT_ANONYMIZED!!!.txt')
+    with open(notanon_fname, 'a') as w:
+        w.write(args.meg_input_dir + '\n')
+
+    #Establish Logging
     global logger
     logger_dir = Path(args.bids_dir).parent / 'bids_prep_logs'
     logger_dir.mkdir(exist_ok=True)
     
-    
-    
     subjid = _check_multiple_subjects(args.meg_input_dir)
     logger = get_subj_logger(subjid, log_dir=logger_dir, loglevel=logging.DEBUG)
     
-    process_meg_bids(input_path=args.meg_input_dir,
-                     bids_dir=args.bids_dir, 
-                     session=args.session)
+    #
+    #   Process MEG
+    #
+    # process_meg_bids(input_path=args.meg_input_dir,
+    #                  bids_dir=args.bids_dir, 
+    #                  session=args.session)
     
-    notanon_fname = op.join(args.bids_dir, 'NOT_ANONYMIZED!!!.txt')
-    with open(notanon_fname, 'a') as w:
-        w.write(args.meg_input_dir + '\n')
-        
-    #Create temporary directories at the parent directory of the bids dir
+    #
+    #   Prep MRI
+    #
+    #Create temporary MRI directories at the parent directory of the bids dir
     global temp_dir
     temp_dir=Path(args.bids_dir).parent / 'bids_prep_temp'
     temp_dir.mkdir(exist_ok=True)
@@ -429,6 +446,8 @@ if __name__ == '__main__':
             lmods = [i.split('/')[0] for i in lmods]
             if 'afni' not in lmods:
                 raise ValueError('Load the afni module before performing')
+        elif not shutil.which('afni'):
+            raise ValueError('It does not look like Afni can be found')
         
         #Convert the mri to nifti
         nii_mri = convert_brik(args.mri_brik, outdir=temp_mri_prep)
