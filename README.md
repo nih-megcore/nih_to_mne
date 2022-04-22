@@ -4,7 +4,7 @@ Create MNE transformation matrix from NIMH MEG datasets
 ```pip install git+https://github.com/nih-megcore/nih_to_mne```
 
 
-## Adds calc_mnetrans.py  and bstags.py to the commandline
+## Adds calc_mnetrans.py, bstags.py, and make_meg_bids.py to the commandline
 
 ```
 usage: calc_mnetrans.py [-h] [-subjects_dir SUBJECTS_DIR] [-anat_json ANAT_JSON] [-tagfile TAGFILE]
@@ -32,4 +32,37 @@ optional arguments:
 ```
 usage: bstags.py file.txt
           Where file.txt is the saved electrode location output from Brainsight.
+```
+
+```
+usage: make_meg_bids.py -meg_input_dir 
+        Convert MEG dataset to default Bids format using the MEG hash ID or 
+        entered subject ID as the bids ID.        
+        
+
+WARNING: This does NOT anonymize the data!!!
+        
+       [-h] [-bids_dir BIDS_DIR] -meg_input_dir MEG_INPUT_DIR
+       [-mri_brik MRI_BRIK] [-mri_bsight MRI_BSIGHT]
+       [-mri_bsight_elec MRI_BSIGHT_ELEC] [-bids_session BIDS_SESSION]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -bids_dir BIDS_DIR    Output bids_dir path
+  -meg_input_dir MEG_INPUT_DIR
+                        'Acquisition directory - typically designated by the
+                        acquisition date
+  -mri_brik MRI_BRIK    Afni coregistered MRI
+  -mri_bsight MRI_BSIGHT
+                        Brainsight mri. This should be a .nii file. The
+                        exported electrodes text file must be in the same
+                        folder and end in .txt. Otherwise, provide the
+                        mri_sight_elec flag
+  -mri_bsight_elec MRI_BSIGHT_ELEC
+                        Exported electrodes file from brainsight. This has the
+                        locations of the fiducials
+  -bids_session BIDS_SESSION
+                        Data acquisition session. This is set to 1 by default.
+                        If the same subject had multiple sessions this must be
+                        set manually
 ```
