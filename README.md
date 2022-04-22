@@ -1,4 +1,6 @@
 Create MNE transformation matrix from NIMH MEG datasets
+Create tag files from Brainsight electrode files for use with AFNI/SAM processing
+Create BIDS data from the default acquisition file naming from the NIMH CTF scanner
 
 ## Install:
 ```pip install git+https://github.com/nih-megcore/nih_to_mne```
