@@ -18,8 +18,6 @@ import logging
 import subprocess
 from pathlib import Path
 
-import wget #  !pip install wget
-import gzip
 
 import shutil
 import matplotlib
