@@ -21,7 +21,6 @@ from pathlib import Path
 
 import shutil
 import matplotlib
-matplotlib.use('Qt5agg'); 
 import matplotlib.pyplot as plt; 
 from multiprocessing import Pool
 
