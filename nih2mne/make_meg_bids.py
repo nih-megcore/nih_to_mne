@@ -63,13 +63,13 @@ def sessdir2taskrundict(session_dir=None):
     elif type(session_dir) is list:
         dsets=session_dir
     else:
-        logging.exception(f'session_dir variable is not a valid path or \
+        logger.exception(f'session_dir variable is not a valid path or \
                           dataset list: {session_dir}')
     
     #Verify that these are meg datasets
     for dset in dsets:
         if os.path.splitext(dset)[-1] != '.ds':
-            logging.warning(f'{dset} does not end in .ds and will be ignored')
+            logger.warning(f'{dset} does not end in .ds and will be ignored')
             
     dsets = sorted(dsets)
     
@@ -77,7 +77,7 @@ def sessdir2taskrundict(session_dir=None):
     task_list = [i.split('_')[1] for i in dsets]
     task_set = set(task_list)
     
-    logging.info(f'Using {len(task_set)} tasks: {task_set}')
+    logger.info(f'Using {len(task_set)} tasks: {task_set}')
     
     out_dict=dict()
     for key in task_set:
@@ -284,7 +284,7 @@ def _check_multiple_subjects(meg_input_dir):
     subjects = list(subjects)
     if len(subjects) == 1:
         subjid = subjects
-        return subjid
+        return subjid[0]
     elif len(subjects) > 1:
         subjid=input(f'Which subject do you want to process (Do not use quotes)\
                      :\n{subjects}\n')
