@@ -121,7 +121,7 @@ def process_meg_bids(input_path=None, bids_dir=None, session=1):
     
     error_count=0
     for task, task_sublist in dset_dict.items():
-        for run, base_meg_fname in enumerate(task_sublist):
+        for run, base_meg_fname in enumerate(task_sublist, start=1):
             meg_fname = op.join(input_path, base_meg_fname)
             try:
                 subject = op.basename(meg_fname).split('_')[0]
