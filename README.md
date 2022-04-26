@@ -1,3 +1,5 @@
+[![nih2mne-tests](https://github.com/nih-megcore/nih_to_mne/actions/workflows/nih2mne-actions.yml/badge.svg?branch=master)](https://github.com/nih-megcore/nih_to_mne/actions/workflows/nih2mne-actions.yml)
+
 Create MNE transformation matrix from NIMH MEG datasets
 Create tag files from Brainsight electrode files for use with AFNI/SAM processing
 Create BIDS data from the default acquisition file naming from the NIMH CTF scanner
@@ -8,6 +10,7 @@ Create BIDS data from the default acquisition file naming from the NIMH CTF scan
 
 ## Adds calc_mnetrans.py, bstags.py, and make_meg_bids.py to the commandline
 
+### calc_mnetrans.py
 ```
 usage: calc_mnetrans.py [-h] [-subjects_dir SUBJECTS_DIR] [-anat_json ANAT_JSON] [-tagfile TAGFILE]
                         [-elec_txt ELEC_TXT] -subject SUBJECT [-afni_mri AFNI_MRI]
@@ -31,11 +34,13 @@ optional arguments:
   -view_coreg           Display the coregistration of MEG and head surface
 ```
 
+### bstags.py
 ```
 usage: bstags.py file.txt
           Where file.txt is the saved electrode location output from Brainsight.
 ```
 
+### make_meg_bids.py
 ```
 usage: make_meg_bids.py -meg_input_dir 
         Convert MEG dataset to default Bids format using the MEG hash ID or 
