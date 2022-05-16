@@ -345,6 +345,10 @@ if __name__ == '__main__':
                         this must be set manually''',
                         default=1,
                         required=False)
+    parser.add_argument('-subjid',
+                        help='''The default subject ID is given by the MEG hash.
+                        To override the default subject ID, use this flag'''
+                        )
     args=parser.parse_args()
     
     #Initialize
@@ -358,7 +362,10 @@ if __name__ == '__main__':
     logger_dir = Path(args.bids_dir).parent / 'bids_prep_logs'
     logger_dir.mkdir(exist_ok=True)
     
-    subjid = _check_multiple_subjects(args.meg_input_dir)
+    if args.subjid:
+        subjid=args.subjid
+    else:
+        subjid = _check_multiple_subjects(args.meg_input_dir)
     logger = get_subj_logger(subjid, log_dir=logger_dir, loglevel=logging.DEBUG)
     
     #
@@ -430,7 +437,11 @@ if __name__ == '__main__':
     
     
     
-        
+# def test_bsight_inputs():
+#     anat = 'IIARVYKX/IIARVYKX_anat.nii'
+#     meg_input_dir = '20190328'
+    
+            
 
 
 
