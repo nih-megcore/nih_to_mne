@@ -279,7 +279,8 @@ def _check_multiple_subjects(meg_input_dir):
     '''Checks to see if multiple subjects were acquired in teh same dated 
     folder.  If multiple subjects found - the output will require manual
     choice to determine the correct subject'''
-    meglist = os.listdir(meg_input_dir)
+    #Filter for CTF datasets - Ignore folders with MRIs for example
+    meglist = glob.glob(op.join(meg_input_dir, '*.ds')) 
     subjects = set([i.split('_')[0] for i in meglist])
     subjects = list(subjects)
     if len(subjects) == 1:
