@@ -175,10 +175,16 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
     trans_dir = tmp_subjects_dir.parent / 'trans_mats'
     trans_dir.mkdir()
     fid_path = trans_dir / f'{subjid}-fiducials.fif'
+    if (afni_fname is not None) and (bsight_elec is not None):
+        logger.error(f'''Brainsight and Afni Brik Coreg can not both be chosen:
+                     AFNI: {afni_fname}  Brainsight: {bsight_elec}''')
+    #Now that either afni_fname or bsight_elec is None
+    #Both can be passed into the function
     try:
         write_mne_fiducials(subject=subjid,
                             subjects_dir=str(tmp_subjects_dir), 
                             afni_fname=afni_fname,
+                            bsight_txt_fname=bsight_elec,
                             output_fid_path=str(fid_path))
     except BaseException as e:
         logger.error('Error in write_mne_fiducials', e)
@@ -188,7 +194,7 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
         # op.join('./trans_mats', row['bids_subjid']+'_'+str(int(row['meg_session']))+'-trans.fif')
         write_mne_trans(mne_fids_path=str(fid_path),
                         dsname=meg_fname, 
-                        output_name=str(trans_fname), 
+                        output_name=str(trans_fname),
                         subjects_dir=str(temp_subjects_dir))
     except BaseException as e:
         logger.error('Error in write_mne_trans', e)
@@ -281,6 +287,7 @@ def _check_multiple_subjects(meg_input_dir):
     choice to determine the correct subject'''
     #Filter for CTF datasets - Ignore folders with MRIs for example
     meglist = glob.glob(op.join(meg_input_dir, '*.ds')) 
+    meglist = [op.basename(i) for i in meglist]
     subjects = set([i.split('_')[0] for i in meglist])
     subjects = list(subjects)
     if len(subjects) == 1:
@@ -292,9 +299,9 @@ def _check_multiple_subjects(meg_input_dir):
         if subjid in subjects:
             return subjid
         else:
-            logger.exception(f'User provided {subjid} not in {subjects}')
+            raise ValueError(f'User provided {subjid} not in {subjects}')
     elif len(subjects) ==0:
-        logger.exception(f'''Could not extract any subjects from the list of 
+        raise ValueError(f'''Could not extract any subjects from the list of 
                          files {meglist}''')
 
 def get_subj_logger(subjid, log_dir=None, loglevel=logging.INFO):
@@ -438,11 +445,6 @@ if __name__ == '__main__':
     
     
     
-# def test_bsight_inputs():
-#     anat = 'IIARVYKX/IIARVYKX_anat.nii'
-#     meg_input_dir = '20190328'
-    
-            
 
 
 
@@ -513,9 +515,40 @@ def test_sessdir2taskrundict():
     assert out_dict == g_truth
  
 
+def test_bsight():
+    subjid = 'APBWVFAR'
+    mr_dir = '/fast/OPEN/APBWVFAR'
+    nii_mri = f'{mr_dir}/APBWVFAR.nii'
+    mri_bsight_elec = f'{mr_dir}/APBWVFAR.txt'
+    meg_input_dir = '/fast/OPEN/20200122'
+    
+    global temp_dir
+    temp_dir=Path(f'{mr_dir}').parent / 'bids_prep_temp'
+    if op.exists(temp_dir): shutil.rmtree(temp_dir)
+    temp_dir.mkdir()
+    temp_subjects_dir = temp_dir / 'subjects_tmp'
+    temp_subjects_dir.mkdir()
+    temp_mri_prep = temp_dir / 'mri_tmp'
+    temp_mri_prep.mkdir()
 
 
     
-            
+    template_meg = glob.glob(op.join(meg_input_dir, subjid+'*.ds'))[0]
+    freesurfer_import(mri=nii_mri, 
+                      subjid=subjid, 
+                      tmp_subjects_dir=temp_subjects_dir, 
+                      bsight_elec=mri_bsight_elec, 
+                      meg_fname=template_meg)
+    
+    trans_fname = make_trans_mat(mri=nii_mri, subjid=subjid, 
+                                 tmp_subjects_dir=temp_subjects_dir,
+                      afni_fname=None,
+                      bsight_elec=mri_bsight_elec, 
+                      meg_fname=template_meg)
+    
+    process_mri_bids(bids_dir='./bids_dir',
+                     subjid=subjid, 
+                     trans_fname=trans_fname,
+                     meg_fname=template_meg)
 
  
