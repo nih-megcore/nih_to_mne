@@ -88,7 +88,7 @@ def sessdir2taskrundict(session_dir=None):
     return out_dict
         
 
-def process_meg_bids(input_path=None, bids_dir=None, session=1):
+def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1):
     '''
     Process the MEG component of the data into bids.
     Calls sessdir2taskrundict to get the task IDs and sort according to run #
@@ -103,6 +103,8 @@ def process_meg_bids(input_path=None, bids_dir=None, session=1):
         Path to the MEG folder - typically designated by a Date.
     bids_dir : str, optional
         Output path for your bids data.
+    subject : str, 
+        Bids subject ID
     session : int
         Session number for data acquisition.  Defaults to 1 if not set
 
@@ -124,7 +126,7 @@ def process_meg_bids(input_path=None, bids_dir=None, session=1):
         for run, base_meg_fname in enumerate(task_sublist, start=1):
             meg_fname = op.join(input_path, base_meg_fname)
             try:
-                subject = op.basename(meg_fname).split('_')[0]
+                # subject = op.basename(meg_fname).split('_')[0]
                 raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore')  
                 raw.info['line_freq'] = 60 
                 
@@ -380,6 +382,7 @@ if __name__ == '__main__':
     #   Process MEG
     #
     process_meg_bids(input_path=args.meg_input_dir,
+                     subject=subjid,
                       bids_dir=args.bids_dir, 
                       session=args.bids_session)
     
