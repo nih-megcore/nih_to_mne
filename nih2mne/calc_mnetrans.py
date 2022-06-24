@@ -224,8 +224,12 @@ def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None,
         print('Could not find freesurfer mri_info.  If on biowulf - \
               load freesurfer module first')
         sys.exit(1)
-    offset_cmd = 'mri_info --cras {}'.format(os.path.join(Subjdir,
+    if os.path.exists(os.path.join(Subjdir,subject, 'mri', 'orig','001.mgz')):
+            offset_cmd = 'mri_info --cras {}'.format(os.path.join(Subjdir,
                                                           subject, 'mri', 'orig','001.mgz'))
+    else:
+        offset_cmd = 'mri_info --cras {}'.format(os.path.join(Subjdir,
+                                                          subject, 'mri', 'T1.mgz'))
     offset = check_output(offset_cmd.split(' ')).decode()[:-1]
     offset = np.array(offset.split(' '), dtype=float)
     
