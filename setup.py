@@ -19,7 +19,7 @@ setuptools.setup(
         "Operating System :: Linux/Unix",
     ],
     python_requires='>=3.6',
-    install_requires=['mne', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids'],
+    install_requires=['mne', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas'],
     scripts=['nih2mne/bstags.py',
         'nih2mne/calc_mnetrans.py',
         'nih2mne/make_meg_bids.py'],
