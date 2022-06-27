@@ -118,8 +118,8 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1):
     if not os.path.exists(bids_dir): os.mkdir(bids_dir)
     dset_dict = sessdir2taskrundict(session_dir=input_path)
     
-    session = str(session)
-    if len(session)==1: session = '0'+session
+    session = str(int(session)) #Confirm no leading zeros
+    #if len(session)==1: session = '0'+session
     
     error_count=0
     for task, task_sublist in dset_dict.items():
@@ -252,11 +252,12 @@ def convert_brik(mri_fname, outdir=None):
 def process_mri_bids(bids_dir=None,
                      subjid=None, 
                      trans_fname=None,
-                     meg_fname=None):
+                     meg_fname=None,
+                     session=None):
     if not os.path.exists(bids_dir): os.mkdir(bids_dir)
     
     try:
-        ses='01'
+        ses=string(int(session)) #Confirm no leading zeros
         raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore')
         trans = mne.read_trans(trans_fname)
         
@@ -443,7 +444,8 @@ if __name__ == '__main__':
     process_mri_bids(bids_dir=args.bids_dir,
                      subjid=subjid, 
                      trans_fname=trans_fname,
-                     meg_fname=template_meg)
+                     meg_fname=template_meg,
+                     session=args.bids_session)
     
     
     
