@@ -428,7 +428,7 @@ if __name__ == '__main__':
         assert op.splitext(args.mri_bsight)[-1] in ['.nii','.nii.gz']
         nii_mri = args.mri_bsight
         
-    template_meg = glob.glob(op.join(args.meg_input_dir, subjid+'*.ds'))[0]
+    template_meg = glob.glob(op.join(args.meg_input_dir, '*.ds'))[0]
     freesurfer_import(mri=nii_mri, 
                       subjid=subjid, 
                       tmp_subjects_dir=temp_subjects_dir, 
