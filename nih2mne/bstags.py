@@ -55,7 +55,7 @@ def txt_to_tag_pd(txtname):
          raise BaseException('''Too many entries in the brainsight file 
                              listed for LPA, RPA, Nasion''')
     tags={}
-    for key, ser in zip(['Nasion','RPA','LPA'],[nas_idx, rpa_idx, lpa_idx]):
+    for key, ser in zip(['Nasion','Right Ear','Left Ear'],[nas_idx, rpa_idx, lpa_idx]):
         x=ser['Loc. X'].values[0]
         y=ser['Loc. Y'].values[0]
         z=ser['Loc. Z'].values[0]

@@ -44,10 +44,9 @@ def coords_from_tagfile(tag_fname):
 def coords_from_bsight_txt(bsight_txt_fname):
     '''Input the text file from the brainsight file.
     This is exported to a text file using the brainsight software'''
-    try:
-        tags = txt_to_tag(bsight_txt_fname)
-    except:
-        #If the Fidcuals are labelled in the type column vs name column 
+    tags = txt_to_tag(bsight_txt_fname)
+    if len(tags)==0:
+        #Checks if the fiducial labels are in the Electrode Type column
         tags = txt_to_tag_pd(bsight_txt_fname)
     if len(tags)==0:
         raise BaseException(f'''No tags were found in brainsight file:
