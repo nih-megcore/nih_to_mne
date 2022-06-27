@@ -1,0 +1,10 @@
+# Version: 12
+# Coordinate system: NIfTI:Scanner
+# Created by: Brainsight 2.4.10
+# Units: millimetres, degrees, milliseconds, and microvolts
+# Encoding: UTF-8
+# Notes: Each column is delimited by a tab. Each value within a column is delimited by a semicolon.
+# Electrode Name	Electrode Type	Session Name	Loc. X	Loc. Y	Loc. Z	m0n0	m0n1	m0n2	m1n0	m1n1	m1n2	m2n0	m2n1	m2n2
+left fiducial	LPA	Session 2	-64.1748	28.3103	-32.4693	-0.1201	-0.7887	0.6029	-0.0243	0.6095	0.7924	-0.9925	0.0805	-0.0924
+nasion fiducial	Nasion	Session 2	6.0344	114.7126	-2.6041	-0.9531	-0.2505	0.1697	0.1297	0.1685	0.9771	-0.2734	0.9533	-0.1281
+right fiducial	RPA	Session 2	67.2147	18.6125	-36.5009	-0.2705	0.5933	-0.7582	-0.2423	0.7202	0.6500	0.9317	0.3596	-0.0511

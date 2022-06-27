@@ -6,7 +6,7 @@ Created on Tue Aug 31 17:08:48 2021
 @author: jstout
 """
 
-from ..bstags import txt_to_tag
+from ..bstags import txt_to_tag, txt_to_tag_pd
 from ..bstags import write_tagfile
 import pytest 
 import os
@@ -55,6 +55,14 @@ def test_exported_w_extra_spaces():
     assert 'Left Ear' in tags
     assert 'Right Ear' in tags
     assert 'Nasion ' not in tags  #Make sure that extra space not included
+    
+def test_alt_exported():
+    '''Some users put the fiducial labels in the Electrode Type'''
+    txtname=os.path.join(test_dir, 'alt_ExportedElectrodes.txt')
+    tags=txt_to_tag_pd(txtname)
+    assert tags['Nasion']=="'Nasion' -6.0344 -114.7126 -2.6041"
+    assert tags['RPA']=="'RPA' -67.2147 -18.6125 -36.5009"
+    assert tags['LPA']=="'LPA' 64.1748 -28.3103 -32.4693"
     
         
     

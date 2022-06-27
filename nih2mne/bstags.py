@@ -4,10 +4,9 @@ import os, sys
 
 # The tags have to be output in this order ...
 fiducials0 = [ "Nasion", "Left Ear", "Right Ear" ]
-fiducials = [ "Nasion", "Left Ear", "Right Ear", "LPA", "RPA" ,
-             "left fiducial", "right fiducial", "nasion fiducial"]
+fiducials = [ "Nasion", "Left Ear", "Right Ear", "LPA", "RPA" ]
 alt_fid = { "LPA" : "Left Ear", "RPA" : "Right Ear" }
-alt_fid2 = {"left fiducial":"Left Ear", "right fiducial":"Right Ear" ,"nasion fiducial":"Nasion"}
+# alt_fid2 = {"left fiducial":"Left Ear", "right fiducial":"Right Ear" ,"nasion fiducial":"Nasion"}
 
 def txt_to_tag(txtname):
     '''Extract the fiducials from the brainsight text file'''
@@ -38,11 +37,31 @@ def txt_to_tag(txtname):
                 x, y, z = [float(l[i]) for i in [3, 4, 5]]
                 if l[0] in alt_fid:
                     l[0] = alt_fid[l[0]]
-                elif l[0] in alt_fid2:
-                    l[0] = alt_fid2[l[0]]
                 # the coordinates are LPI, convert them to RAI
                 tags[l[0]] = "'{}' {} {} {}".format(l[0], -x, -y, z)
     return tags
+
+def txt_to_tag_pd(txtname):
+    '''Extract the fiducials from brainsight using pandas'''
+    import pandas as pd
+    dframe = pd.read_csv(txtname, skiprows=6, sep='\t')
+    # fids_idx=dframe['Electrode Type'].isin(['LPA','Nasion','RPA'])
+    # fids_dframe=dframe.loc[fids_idx]   
+    lpa_idx = dframe[dframe['Electrode Type']=='LPA']
+    rpa_idx = dframe[dframe['Electrode Type']=='RPA']
+    nas_idx = dframe[dframe['Electrode Type']=='Nasion']
+    
+    if (0 < len(nas_idx) > 2) or (0 < len(rpa_idx) > 2) or (0 < len(lpa_idx) > 2):
+         raise BaseException('''Too many entries in the brainsight file 
+                             listed for LPA, RPA, Nasion''')
+    tags={}
+    for key, ser in zip(['Nasion','RPA','LPA'],[nas_idx, rpa_idx, lpa_idx]):
+        x=ser['Loc. X'].values[0]
+        y=ser['Loc. Y'].values[0]
+        z=ser['Loc. Z'].values[0]
+        tags[key]="'{}' {} {} {}".format(key, -x, -y, z)
+    return tags
+
 
 def write_tagfile(tags, out_fname=None):
     ''''''
