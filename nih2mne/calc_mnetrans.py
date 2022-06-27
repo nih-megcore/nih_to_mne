@@ -15,7 +15,7 @@ from mne.transforms import read_trans, write_trans, Transform
 from mne.transforms import apply_trans, invert_transform
 from mne.io import read_raw_ctf
 
-from nih2mne.bstags import txt_to_tag
+from nih2mne.bstags import txt_to_tag, txt_to_tag_pd
 
 
 # =============================================================================
@@ -44,7 +44,14 @@ def coords_from_tagfile(tag_fname):
 def coords_from_bsight_txt(bsight_txt_fname):
     '''Input the text file from the brainsight file.
     This is exported to a text file using the brainsight software'''
-    tags = txt_to_tag(bsight_txt_fname)
+    try:
+        tags = txt_to_tag(bsight_txt_fname)
+    except:
+        #If the Fidcuals are labelled in the type column vs name column 
+        tags = txt_to_tag_pd(bsight_txt_fname)
+    if len(tags)==0:
+        raise BaseException(f'''No tags were found in brainsight file:
+                            {bsight_txt_fname}''')
     lines = tags.values()
     coord = {}
     for row in lines:
