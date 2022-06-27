@@ -4,8 +4,10 @@ import os, sys
 
 # The tags have to be output in this order ...
 fiducials0 = [ "Nasion", "Left Ear", "Right Ear" ]
-fiducials = [ "Nasion", "Left Ear", "Right Ear", "LPA", "RPA" ]
+fiducials = [ "Nasion", "Left Ear", "Right Ear", "LPA", "RPA" ,
+             "left fiducial", "right fiducial", "nasion fiducial"]
 alt_fid = { "LPA" : "Left Ear", "RPA" : "Right Ear" }
+alt_fid2 = {"left fiducial":"Left Ear", "right fiducial":"Right Ear" ,"nasion fiducial":"Nasion"}
 
 def txt_to_tag(txtname):
     '''Extract the fiducials from the brainsight text file'''
@@ -36,6 +38,8 @@ def txt_to_tag(txtname):
                 x, y, z = [float(l[i]) for i in [3, 4, 5]]
                 if l[0] in alt_fid:
                     l[0] = alt_fid[l[0]]
+                elif l[0] in alt_fid2:
+                    l[0] = alt_fid2[l[0]]
                 # the coordinates are LPI, convert them to RAI
                 tags[l[0]] = "'{}' {} {} {}".format(l[0], -x, -y, z)
     return tags
