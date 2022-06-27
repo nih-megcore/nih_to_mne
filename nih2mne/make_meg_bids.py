@@ -257,7 +257,7 @@ def process_mri_bids(bids_dir=None,
     if not os.path.exists(bids_dir): os.mkdir(bids_dir)
     
     try:
-        ses=string(int(session)) #Confirm no leading zeros
+        ses=str(int(session)) #Confirm no leading zeros
         raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore')
         trans = mne.read_trans(trans_fname)
         
