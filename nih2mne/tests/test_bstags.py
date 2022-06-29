@@ -61,8 +61,8 @@ def test_alt_exported():
     txtname=os.path.join(test_dir, 'alt_ExportedElectrodes.txt')
     tags=txt_to_tag_pd(txtname)
     assert tags['Nasion']=="'Nasion' -6.0344 -114.7126 -2.6041"
-    assert tags['RPA']=="'RPA' -67.2147 -18.6125 -36.5009"
-    assert tags['LPA']=="'LPA' 64.1748 -28.3103 -32.4693"
+    assert tags['Right Ear']=="'Right Ear' -67.2147 -18.6125 -36.5009"
+    assert tags['Left Ear']=="'Left Ear' 64.1748 -28.3103 -32.4693"
     
         
     
