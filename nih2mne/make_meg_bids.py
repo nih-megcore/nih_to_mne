@@ -126,7 +126,17 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1):
     error_count=0
     for task, task_sublist in dset_dict.items():
         for run, base_meg_fname in enumerate(task_sublist, start=1):
-            meg_fname = op.join(input_path, base_meg_fname)
+            meg_fname = op.join(input_path, base_meg_fname) 
+            
+            #Special case for pre/post intervention in same session
+            testval_case = base_meg_fname.replace('.ds','').split('_')[-1]
+            if testval_case.lower() == 'pre':
+                run=1
+                logging.info(f'Special case pre assigned to run 1: {meg_fname}')
+            elif testval_case.lower() == 'post':
+                run=2
+                logging.info(f'Special case post assigned to run2: {meg_fname}')
+            
             try:
                 # subject = op.basename(meg_fname).split('_')[0]
                 raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore')  
