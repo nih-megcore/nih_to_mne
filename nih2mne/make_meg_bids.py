@@ -28,7 +28,9 @@ from mne_bids import write_anat, BIDSPath, write_raw_bids
 from nih2mne.calc_mnetrans import write_mne_fiducials 
 from nih2mne.calc_mnetrans import write_mne_trans
 
-# logger = logging.basicConfig(filename='example.log', encoding='utf-8', level=logging.DEBUG)
+global logger
+logger = logging.getLogger('__main__')
+#basicConfig(filename='example.log', encoding='utf-8', level=logging.DEBUG)
 
 # =============================================================================
 # make_meg_bids.py
@@ -124,7 +126,17 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1):
     error_count=0
     for task, task_sublist in dset_dict.items():
         for run, base_meg_fname in enumerate(task_sublist, start=1):
-            meg_fname = op.join(input_path, base_meg_fname)
+            meg_fname = op.join(input_path, base_meg_fname) 
+            
+            #Special case for pre/post intervention in same session
+            testval_case = base_meg_fname.replace('.ds','').split('_')[-1]
+            if testval_case.lower() == 'pre':
+                run=1
+                logging.info(f'Special case pre assigned to run 1: {meg_fname}')
+            elif testval_case.lower() == 'post':
+                run=2
+                logging.info(f'Special case post assigned to run2: {meg_fname}')
+            
             try:
                 # subject = op.basename(meg_fname).split('_')[0]
                 raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore')  
@@ -369,7 +381,7 @@ if __name__ == '__main__':
         w.write(args.meg_input_dir + '\n')
 
     #Establish Logging
-    global logger
+    # global logger
     logger_dir = Path(args.bids_dir).parent / 'bids_prep_logs'
     logger_dir.mkdir(exist_ok=True)
     
