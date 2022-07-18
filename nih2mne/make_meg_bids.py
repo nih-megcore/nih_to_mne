@@ -28,7 +28,9 @@ from mne_bids import write_anat, BIDSPath, write_raw_bids
 from nih2mne.calc_mnetrans import write_mne_fiducials 
 from nih2mne.calc_mnetrans import write_mne_trans
 
-# logger = logging.basicConfig(filename='example.log', encoding='utf-8', level=logging.DEBUG)
+global logger
+logger = logging.getLogger('__main__')
+#basicConfig(filename='example.log', encoding='utf-8', level=logging.DEBUG)
 
 # =============================================================================
 # make_meg_bids.py
@@ -369,7 +371,7 @@ if __name__ == '__main__':
         w.write(args.meg_input_dir + '\n')
 
     #Establish Logging
-    global logger
+    # global logger
     logger_dir = Path(args.bids_dir).parent / 'bids_prep_logs'
     logger_dir.mkdir(exist_ok=True)
     
