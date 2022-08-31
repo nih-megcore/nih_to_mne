@@ -9,7 +9,22 @@ Email: lina.teichmann@nih.gov
 
     Created on 2022-07-12 10:25:35
     Modified on 2022-07-12 10:25:35
+    
+Preprocessing functions (based on Kret et al., 2019)
+ - removing invalid samples
+ - removing based on dilation speeds
+ - removing based on deviation from a fitted line
+ - detrending
+ 
+Helper functions 
+ - volts_to_pixels: converts voltages recorded by the MEG to pixels - (0,0) is the middle of the screen
+ - deviation_calculator: fits a smooth line over the samples and checks how much each sample deviates from it 
+ - expand_gap: this pads significanly large gaps (>75ms). Before the gap we padded 100ms, after the gap for 150ms (based on Matthias Nau pipeline in NSD paper)
+ - remove_loners: see whether there are any chunks of data that are temporally isolated and relatively short. If yes, exclude them.
+    
 """
+# What is pd_channel
+
 
 import pandas as pd 
 import numpy as np
@@ -22,9 +37,10 @@ from matplotlib import gridspec
 import matplotlib.pyplot as plt
 plt.rcParams["font.family"] = "Helvetica"
 matplotlib.rcParams.update({'font.size': 12})
-%matplotlib qt
 
-### Setup
+# =============================================================================
+# Setup
+# =============================================================================
 # folders
 rootdir                     = '' # this needs to be set to the parent of the codes folder
 preprocdir                  = rootdir + '/preprocessed'
@@ -45,15 +61,7 @@ pd_channel                  = 'UADC016-2104'
 eye_channel                 = ['UADC009-2104','UADC010-2104','UADC013-2104'] # x, y, pupil
 
 
-# settings for eyetracker to volts conversion
-minvoltage                  = -5
-maxvoltage                  = 5
-minrange                    = -0.2
-maxrange                    = 1.2
-screenleft                  = 0
-screenright                 = 1023
-screentop                   = 0
-screenbottom                = 767
+
 
 # parameters to transform from pixels to degrees
 screenwidth_cm              = 42
@@ -72,38 +80,92 @@ stim_size_deg               = 10
 stim_width                  = stim_size_deg*pix_per_deg
 stim_height                 = stim_size_deg*pix_per_deg
 
+# =============================================================================
+# 
+# =============================================================================
+def load_raw_data(raw_fname=None, trigger_channel='UPPT001',
+                  pd_channel='UADC016', iseyes=True,
+                  eye_channel=['UADC009','UADC010','UADC013']):
+    '''
+    Load data and return the eye tracking channels (iseyes=True) or 
+    the trigger channel
 
-# %% [markdown]
-# ### Data loading functions
-# - load_raw_data: load the raw data with mne
-# - raw2df: transform into a dataframe 
+    Parameters
+    ----------
+    raw_fname : path str, required
+        Path of CTF meg file ending in .ds
+    trigger_channel : str, optional
+        Trigger channel for projector. The default is 'UPPT001'.
+    pd_channel : TYPE, optional
+        DESCRIPTION. The default is 'UADC016'.
+    iseyes : bool, optional
+        Return the eye channels. The default is True.
+    eye_channel : list, optional
+        Channel list of eye chans. 
+        The default is ['UADC009','UADC010','UADC013'].
 
-# %%
-# This function loads the data, if "iseyes" is true it will return the raw data for the eyetracking channels, otherwise it will return the raw data for the photodiode to make the epochs
-def load_raw_data(rootdir,p,s,r,trigger_channel,pd_channel,eye_channel,iseyes):
-    sess_num                                        = str(s+1)
-    run_num                                         = str(r+1)
-    data_dir                                        = rootdir + '/bids/sub-BIGMEG' + str(p)
-    data_ses_dir                                    = data_dir + '/ses-' + sess_num.zfill(2) + '/meg'
-    meg_fn                                          = data_ses_dir + '/sub-BIGMEG' + str(p) + '_ses-' + sess_num.zfill(2) + '_task-main_run-' + run_num.zfill(2) + '_meg.ds'
-    print('loading participant ' + str(p) + ' session ' + sess_num + ' run ' + run_num + '...')
+    Returns
+    -------
+    mne.io.ctf.ctf.RawCTF
+        Raw MNE dataset.
 
-    raw                                             = mne.io.read_raw_ctf(meg_fn,preload=True)   
+    '''
+    if raw_fname==None:
+        raise ValueError('Must include a meg filename for raw_fname')
+    print(f'loading file {raw_fname}')
+
+    raw = mne.io.read_raw_ctf(raw_fname,preload=False, system_clock='ignore',
+                              clean_names=True)   
     if iseyes:
-        raw_eyes                                    = raw.copy().pick_channels([eye_channel[0],eye_channel[1],eye_channel[2]])
-        raw_eyes.get_data()
+        raw_eyes= raw.copy().pick_channels(eye_channel)
+        raw_eyes.load_data()
         print(raw_eyes.ch_names)
         return raw_eyes
     
     else:
-        raw_triggers                                = raw.copy().pick_channels([pd_channel])
-        raw_triggers.get_data()
+        raw_triggers = raw.copy().pick_channels(pd_channel)
+        raw_triggers.load_data()
         return raw_triggers
 
 
-# The MEG saves the data in volts. Here we convert the volts to pixels for x/y and return a dataframe for easier handling
-# I'm also median centering the data in case there was some drift over the session
-def raw2df(raw_et,minvoltage,maxvoltage,minrange,maxrange,screenbottom,screenleft,screenright,screentop,screensize_pix):
+def raw2df(raw_et, minvoltage=-5, maxvoltage=5, minrange=-0.2, maxrange=1.2,
+           screenbottom=767, screenleft=0, screenright=1023, screentop=0, 
+           screensize_pix=[1024, 768]):
+    '''
+    Convert the MEG data lines (volts) to pixels for x/y and return a pandas
+    dataframe.
+    
+    Median centering is performed on the data to reduce drift over the session
+
+    Parameters
+    ----------
+    raw_et : mne raw
+        Raw MNE dataset consisting of eye tracker channels.
+    minvoltage : int or float
+        DESCRIPTION.
+    maxvoltage : TYPE
+        DESCRIPTION.
+    minrange : TYPE
+        DESCRIPTION.
+    maxrange : TYPE
+        DESCRIPTION.
+    screenbottom : TYPE
+        DESCRIPTION.
+    screenleft : TYPE
+        DESCRIPTION.
+    screenright : TYPE
+        DESCRIPTION.
+    screentop : TYPE
+        DESCRIPTION.
+    screensize_pix : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    raw_et_df : TYPE
+        DESCRIPTION.
+
+    '''
     raw_et_df                                       = pd.DataFrame(raw_et._data.T,columns=['x_volts','y_volts','pupil'])
     #  not scaling the pupil anymore
     raw_et_df['x'],raw_et_df['y']                   = volts_to_pixels(raw_et_df['x_volts'],raw_et_df['y_volts'],raw_et_df['pupil'],minvoltage,maxvoltage,minrange,maxrange,screenbottom,screenleft,screenright,screentop,scaling_factor=978.982673828819)
@@ -114,17 +176,6 @@ def raw2df(raw_et,minvoltage,maxvoltage,minrange,maxrange,screenbottom,screenlef
     raw_et_df['pupil']                              = raw_et_df['pupil']-np.median(raw_et_df['pupil'])
     return raw_et_df
 
-
-
-
-# %% [markdown]
-# ### Preprocessing functions (based on Kret et al., 2019)
-# - removing invalid samples
-# - removing based on dilation speeds
-# - removing based on deviation from a fitted line
-# - detrending
-# 
-# 
 
 # %%
 
@@ -218,12 +269,6 @@ def remove_invalid_detrend(eyes_in,is_valid,isdetrend):
     return eyes_in
 
 
-# %% [markdown]
-# ### Helper functions 
-# - volts_to_pixels: converts voltages recorded by the MEG to pixels - (0,0) is the middle of the screen
-# - deviation_calculator: fits a smooth line over the samples and checks how much each sample deviates from it 
-# - expand_gap: this pads significanly large gaps (>75ms). Before the gap we padded 100ms, after the gap for 150ms (based on Matthias Nau pipeline in NSD paper)
-# - remove_loners: see whether there are any chunks of data that are temporally isolated and relatively short. If yes, exclude them.
 
 # %%
 def volts_to_pixels(x,y,pupil,minvoltage,maxvoltage,minrange,maxrange,screenbottom,screenleft,screenright,screentop,scaling_factor):
@@ -560,4 +605,6 @@ fig.supylabel('      y (\N{DEGREE SIGN})')
 
 fig.savefig(figdir + '/supplementary_ET_preprcocess.png',dpi=600)
 
-
+# =============================================================================
+# TESTS
+# =============================================================================
