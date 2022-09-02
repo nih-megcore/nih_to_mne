@@ -23,7 +23,9 @@ Helper functions
  - remove_loners: see whether there are any chunks of data that are temporally isolated and relatively short. If yes, exclude them.
     
 """
-# What is pd_channel
+#What is the -0.2 and +2
+# start = pd_new[0]*1/meg_refreshrate-0.2
+# end = pd_new[-1]*1/meg_refreshrate+2
 
 
 import pandas as pd 
@@ -55,7 +57,6 @@ trigger_amplitude           = 64
 
 # MEG info
 et_refreshrate              = 1200 # eye-tracker signal is recorded with MEG -- so it's the same resolution
-meg_refreshrate             = 1200
 trigger_channel             = 'UPPT001'
 pd_channel                  = 'UADC016-2104'
 eye_channel                 = ['UADC009-2104','UADC010-2104','UADC013-2104'] # x, y, pupil
@@ -84,7 +85,7 @@ stim_height                 = stim_size_deg*pix_per_deg
 # 
 # =============================================================================
 def load_raw_data(raw_fname=None, trigger_channel='UPPT001',
-                  pd_channel='UADC016', iseyes=True,
+                  pd_channel=['UADC016'], iseyes=True,
                   eye_channel=['UADC009','UADC010','UADC013']):
     '''
     Load data and return the eye tracking channels (iseyes=True) or 
@@ -355,18 +356,23 @@ def remove_loners(is_valid,et_refreshrate):
 
 # %%
 # Run the preprocessing
-for p in range(n_participants+1):
-    data_dir = rootdir + '/rawdata/sub-BIGMEG' + str(p)
-    sa = pd.read_csv(labelsdir + '/sample_attributes_P' + str(p) + '.csv')
-    sessions = [0]*n_sessions
+# for p in range(n_participants+1):
+#     data_dir = rootdir + '/rawdata/sub-BIGMEG' + str(p)
+#     sa = pd.read_csv(labelsdir + '/sample_attributes_P' + str(p) + '.csv')
+#     sessions = [0]*n_sessions
 
-    for s in range(n_sessions):
-        for r in range(n_runs):
+#     for s in range(n_sessions):
+#         for r in range(n_runs):
+            
+            
+def process_run(raw_fname):
             # load raw eye-tracking data from the MEG
-            raw_eyes = load_raw_data(rootdir=rootdir,p=p,s=s,r=r,trigger_channel=trigger_channel,pd_channel=pd_channel,eye_channel=eye_channel,iseyes=True)
-
-            # now we are getting the onsets from the photodiode channel
-            raw_photodiode = load_raw_data(rootdir,p,s,r,trigger_channel,pd_channel,eye_channel,False)
+            raw_eyes = load_raw_data(raw_fname, iseyes=True)
+            meg_refreshrate = et_refreshrate = raw_eyes.info['sfreq']
+            
+            #!!!May want to add PD flip code - has been an issue before
+            # now we are getting the onsets from the photodiode channel      
+            raw_photodiode = load_raw_data(raw_fname, iseyes=False)
             photo_d = np.where(np.diff([0]+raw_photodiode._data[0])>1.5)
             pd_new= photo_d[0][np.where(np.diff([0]+photo_d[0])>1000)]
 
@@ -378,7 +384,7 @@ for p in range(n_participants+1):
             pd_new= pd_new-raw_eyes_cut.first_samp
 
             # transform MNE-struct to pandas and change from volts to degrees (x,y) and area (pupil)
-            eyes = raw2df(raw_eyes_cut,minvoltage,maxvoltage,minrange,maxrange,screenbottom,screenleft,screenright,screentop,screensize_pix)
+            eyes = raw2df(raw_eyes_cut)
 
             # Define parameters
             tv=(eyes.index.to_numpy()*1/meg_refreshrate)*1000
@@ -414,23 +420,28 @@ for p in range(n_participants+1):
             ev_pd = np.empty(shape=(len(pd_new),3),dtype=int)
             for i,ev in enumerate(pd_new):
                 ev_pd[i]=([int(ev),0,4])
-
+                
+            # =============================================================================
+            # Don't Understand this part yet
+            # =============================================================================
             if r == 0:
                 epochs = mne.Epochs(preprocessed_eyes,ev_pd,event_id = event_dict, tmin = -0.1, tmax = 1.3, baseline=None,preload=False)
             if r > 0:
                 epochs_1 = mne.Epochs(preprocessed_eyes,ev_pd,event_id = event_dict, tmin = -0.1, tmax = 1.3, baseline=None,preload=False)
                 epochs_1.info['dev_head_t'] = epochs.info['dev_head_t']
                 epochs = mne.concatenate_epochs([epochs,epochs_1])
-
-
-        # add metadata and get rid of catch trials
-        epochs.metadata = sa.loc[sa.session_nr==s+1,:]
-        epochs = epochs[(epochs.metadata['trial_type']!='catch')]
-        # save as dataframe
-        tmp = pd.DataFrame(np.repeat(epochs.metadata.values,len(epochs.times), axis=0))
-        tmp.columns = epochs.metadata.columns
-        tosave = pd.concat([epochs.to_data_frame(),tmp],axis=1)
-        tosave.to_csv(preprocdir + '/eyes_epoched_cleaned_P' + str(p) + '_S' + str(s+1) + '.csv')
+            # =============================================================================
+            #             
+            # =============================================================================
+        
+            # add metadata and get rid of catch trials
+            epochs.metadata = sa.loc[sa.session_nr==s+1,:]
+            epochs = epochs[(epochs.metadata['trial_type']!='catch')]
+            # save as dataframe
+            tmp = pd.DataFrame(np.repeat(epochs.metadata.values,len(epochs.times), axis=0))
+            tmp.columns = epochs.metadata.columns
+            tosave = pd.concat([epochs.to_data_frame(),tmp],axis=1)
+            tosave.to_csv(preprocdir + '/eyes_epoched_cleaned_P' + str(p) + '_S' + str(s+1) + '.csv')
 
 
 
