@@ -18,3 +18,8 @@ def test_find_end_hdr():
 def test_extract_csv():
     fname='./tests/test_entry.csv'
     dframe = read_csv_entries(fname)
+    g_truth = ['bids_dir', 'subjid', 'meg_dir', 'afni_brik', 'brainsight_mri',
+               'brainsight_electrodes', 'bids_session']
+    for i in dframe.columns:
+        assert i in g_truth
+    assert len(dframe.columns) == len(g_truth)
