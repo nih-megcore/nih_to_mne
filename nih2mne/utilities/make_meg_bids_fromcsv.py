@@ -148,7 +148,10 @@ def make_serial_proc(csvfile, run=False, return_cmd=False):
         
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser()
+    template = op.join(op.dirname(__file__),'..','..', 'templates', 'bids_entry_template.csv')
+    template = op.abspath(template)
+    parser = argparse.ArgumentParser(description=f'''Write bids from a csv file using the template found in {template}.
+                                     Edit the template and save as a csv file somewhere, then use as an input to this command.''')
     parser.add_argument('-csvfile', required=True)
     parser.add_argument('-print_bids_loop', required=False,
                         help='''Print out a serial processing of the bids import''')
@@ -160,4 +163,14 @@ if __name__ == '__main__':
     parser.add_argument('-swarmfile_fname', help='''Used inconjunction with 
                         -write_swarmf flag''', required=False)
     args = parser.parse_args()
+    
+    csvfile=args.csvfile
+    if args.print_bids_loop:
+        make_serial_proc(csvfile, run=False)
+    if args.run_bids_loop:
+        make_serial_proc(csvfile, run=True)
+    if (args.write_swarmf and args.swarmfile_fname):
+        make_swarm_file(csvfile, swarmfile=args.swarmfile_fname, write=True)
+    elif args.write_swarmf:
+        make_swarm_file(csvfile, write=True)
                         
