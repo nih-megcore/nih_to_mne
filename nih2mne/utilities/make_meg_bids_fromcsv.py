@@ -145,4 +145,19 @@ def make_serial_proc(csvfile, run=False, return_cmd=False):
     else:
         import subprocess
         subprocess.run(cmd_chain)
-    
+        
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-csvfile', required=True)
+    parser.add_argument('-print_bids_loop', required=False,
+                        help='''Print out a serial processing of the bids import''')
+    parser.add_argument('-run_bids_loop', required=False,
+                        help='''Send the bids loop to a subprocess for computing''')
+    parser.add_argument('-write_swarmf', required=False,
+                        action='store_true', help='''Write a swarm file from
+                        the csv.  Default name is megbids_swarm.sh unless set''')
+    parser.add_argument('-swarmfile_fname', help='''Used inconjunction with 
+                        -write_swarmf flag''', required=False)
+    args = parser.parse_args()
+                        
