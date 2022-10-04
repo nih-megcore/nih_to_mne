@@ -6,7 +6,7 @@ Created on Tue Oct  4 14:50:24 2022
 @author: jstout
 """
 import os.path as op
-from nih2mne.utilities.extract_csv_bids_entries import (read_csv_entries, 
+from nih2mne.utilities.make_meg_bids_fromcsv import (read_csv_entries, 
                                                         find_end_hdr,
                                                         make_cmd,
                                                         make_swarm_file,
