@@ -16,7 +16,7 @@ def test_find_end_hdr():
     assert hdrline==11
 
 def test_extract_csv():
-    fname='./tests/test_entry.csv'
+    fname=op.join(op.dirname(__file__),'test_entry.csv')
     dframe = read_csv_entries(fname)
     g_truth = ['bids_dir', 'subjid', 'meg_dir', 'afni_brik', 'brainsight_mri',
                'brainsight_electrodes', 'bids_session']
