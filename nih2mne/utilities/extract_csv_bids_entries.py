@@ -46,6 +46,20 @@ mapping_dtypes = dict(bids_dir=str,
 # 
 # =============================================================================
 def find_end_hdr(csvfile):
+    '''
+    This determines the End of header line - for import into pandas
+
+    Parameters
+    ----------
+    csvfile : textfile, csv format
+        Entries of csv file input for processing.
+
+    Returns
+    -------
+    i : int
+        End of header line - pandas.read_csv(...,skiprows = i+1)
+
+    '''
     i=0
     with open(csvfile) as w:
         lines=w.readlines()
@@ -56,6 +70,7 @@ def find_end_hdr(csvfile):
     return i
             
 def get_version(csvfile):
+    '''Get the template version - for future changes to code'''
     i=0
     with open(csvfile) as w:
         lines=w.readlines()
@@ -67,10 +82,26 @@ def get_version(csvfile):
 
 
 def read_csv_entries(csvfile):
+    '''
+    Read the CSV file.  
+    Skip header.
+    Assign datatypes.
+    Change empty lines to null values.
+
+    Parameters
+    ----------
+    csvfile : csv text file
+        CSV file with data entries.
+
+    Returns
+    -------
+    dframe : pd.DataFrame
+        dataframe with cleaned entries from csv file
+
+    '''
     hdrline = find_end_hdr(csvfile)+1
     dframe = pd.read_csv(csvfile, skiprows=hdrline, dtype=mapping_dtypes)
     dframe = dframe.replace(r'^\s*$', np.nan, regex=True)
-    # dframe.fillna(False, inplace=True)
     return dframe
 
 
@@ -87,6 +118,7 @@ def make_cmd(row):
 
         
 def make_swarm_file(csvfile, swarmfile='megbids_swarm.sh', write=False):
+    '''Assemble csv file into swarm file'''
     dframe = read_csv_entries(csvfile)
     swarm = []
     for i,row in dframe.iterrows():
@@ -98,41 +130,19 @@ def make_swarm_file(csvfile, swarmfile='megbids_swarm.sh', write=False):
             f.writelines(swarm)
     else:
         return swarm
-        
     
+def make_serial_proc(csvfile, run=False, return_cmd=False):
+    dframe = read_csv_entries(csvfile)
+    cmd_chain = []
+    for i,row in dframe.iterrows():
+        cmd = make_cmd(row)
+        cmd_chain.append(cmd)
+    cmd_chain = ';'.join(cmd_chain)
+    if run==False:
+        print(cmd_chain)
+    if return_cmd==True:
+        return cmd_chain
+    else:
+        import subprocess
+        subprocess.run(cmd_chain)
     
-
-# def test_
-
-
-
-
-
-
-
-# bids_dir / meg_input_dir / mri_brik / mri_bsight / mri_electrodes.txt / bids session / subj
-
-# usage: 
-#         Convert MEG dataset to default Bids format using the MEG hash ID or 
-#         entered subject ID as the bids ID.        
-        
-
-# WARNING: This does NOT anonymize the data!!!
-        
-#        [-h] [-bids_dir BIDS_DIR] -meg_input_dir MEG_INPUT_DIR [-mri_brik MRI_BRIK] [-mri_bsight MRI_BSIGHT] [-mri_bsight_elec MRI_BSIGHT_ELEC] [-bids_session BIDS_SESSION]
-#        [-subjid SUBJID]
-
-# optional arguments:
-#   -h, --help            show this help message and exit
-#   -bids_dir BIDS_DIR    Output bids_dir path
-#   -meg_input_dir MEG_INPUT_DIR
-#                         'Acquisition directory - typically designated by the acquisition date
-#   -mri_brik MRI_BRIK    Afni coregistered MRI
-#   -mri_bsight MRI_BSIGHT
-#                         Brainsight mri. This should be a .nii file. The exported electrodes text file must be in the same folder and end in .txt. Otherwise, provide the
-#                         mri_sight_elec flag
-#   -mri_bsight_elec MRI_BSIGHT_ELEC
-#                         Exported electrodes file from brainsight. This has the locations of the fiducials
-#   -bids_session BIDS_SESSION
-#                         Data acquisition session. This is set to 1 by default. If the same subject had multiple sessions this must be set manually
-#   -subjid SUBJID        The default subject ID is given by the MEG hash. To override the default subject ID, use this flag

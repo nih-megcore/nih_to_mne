@@ -9,7 +9,8 @@ import os.path as op
 from nih2mne.utilities.extract_csv_bids_entries import (read_csv_entries, 
                                                         find_end_hdr,
                                                         make_cmd,
-                                                        make_swarm_file)
+                                                        make_swarm_file,
+                                                        make_serial_proc)
                                                         
 
 test_csv_filled=op.join(op.dirname(__file__),'test_entry.csv')
@@ -39,4 +40,6 @@ def test_make_swarm_file():
     assert swarm[0] == 'make_meg_bids.py -bids_dir bids_dir -subjid test1 -meg_input_dir /data/test -afni_brik /data/mri/mri.BRIK\n'
     assert swarm[1] == 'make_meg_bids.py -bids_dir /tmp/test -subjid test2 -meg_input_dir /tmp -mri_bsight /test/tmp.nii -mri_bsight_elec /test/tmp.txt -bids_session 2\n'
     
-    
+def test_make_serial_proc():
+    proc=make_serial_proc(test_csv_filled, run=False, return_cmd=True)
+    assert proc=='''make_meg_bids.py -bids_dir bids_dir -subjid test1 -meg_input_dir /data/test -afni_brik /data/mri/mri.BRIK;make_meg_bids.py -bids_dir /tmp/test -subjid test2 -meg_input_dir /tmp -mri_bsight /test/tmp.nii -mri_bsight_elec /test/tmp.txt -bids_session 2'''
