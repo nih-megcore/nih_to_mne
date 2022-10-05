@@ -238,7 +238,7 @@ def convert_brik(mri_fname, outdir=None):
         os.chdir(outdir)
         outname = basename.split('+')[0]+'.nii'
         outname = op.join(outdir, outname)
-        subcmd = f'3dAFNItoNIFTI {out_brk}'
+        subcmd = f'3dAFNItoNIFTI {op.basename(out_brk)}'
         subprocess.run(subcmd.split())
         print(f'Converted {mri_fname} to nifti')
     finally:
@@ -390,12 +390,13 @@ if __name__ == '__main__':
     #Create temporary MRI directories at the parent directory of the bids dir
     global temp_dir
     temp_dir=Path(args.bids_dir).parent / 'bids_prep_temp'
-    if op.exists(temp_dir): shutil.rmtree(temp_dir)
-    temp_dir.mkdir()
-    temp_subjects_dir = temp_dir / 'subjects_tmp'
-    temp_subjects_dir.mkdir()
-    temp_mri_prep = temp_dir / 'mri_tmp'
-    temp_mri_prep.mkdir()
+    #if op.exists(temp_dir): shutil.rmtree(temp_dir)
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_subjects_dir = temp_dir / 'subjects_tmp' 
+    temp_subjects_dir.mkdir(parents=True, exist_ok=True)
+    temp_mri_prep = temp_dir / 'mri_tmp' / subjid
+    if op.exists(temp_mri_prep): shutil.rmtree(temp_mri_prep)
+    temp_mri_prep.mkdir(parents=True)
 
     #    
     #Check for Afni and convert the mri to nifti
