@@ -13,19 +13,6 @@ import os
 import numpy as np
 
 dirpath = op.join(nih2mne.__path__[0], 'templates', 'bids_entry_template.csv')
-#   -bids_dir BIDS_DIR    Output bids_dir path
-#   -meg_input_dir MEG_INPUT_DIR
-#                         'Acquisition directory - typically designated by the acquisition date
-#   -mri_brik MRI_BRIK    Afni coregistered MRI
-#   -mri_bsight MRI_BSIGHT
-#                         Brainsight mri. This should be a .nii file. The exported electrodes text file must be in the same folder and end in .txt. Otherwise, provide the
-#                         mri_sight_elec flag
-#   -mri_bsight_elec MRI_BSIGHT_ELEC
-#                         Exported electrodes file from brainsight. This has the locations of the fiducials
-#   -bids_session BIDS_SESSION
-#                         Data acquisition session. This is set to 1 by default. If the same subject had multiple sessions this must be set manually
-#   -subjid SUBJID 
-
 csv_cmdline_mapping = dict(bids_dir='bids_dir',
                         meg_dir='meg_input_dir',
                         mri_brik='mri_brik',
@@ -148,7 +135,7 @@ def make_serial_proc(csvfile, run=False, return_cmd=False):
         
 if __name__ == '__main__':
     import argparse
-    template = op.join(op.dirname(__file__),'..','..', 'templates', 'bids_entry_template.csv')
+    template = op.join(op.dirname(__file__),'..', 'templates', 'bids_entry_template.csv')
     template = op.abspath(template)
     parser = argparse.ArgumentParser(description=f'''Write bids from a csv file using the template found in {template}.
                                      Edit the template and save as a csv file somewhere, then use as an input to this command.''')
