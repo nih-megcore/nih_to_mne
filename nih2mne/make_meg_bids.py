@@ -215,21 +215,6 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
         print(f'error in trans calculation {subjid}')
     return str(trans_fname)
     
-    
-    # try:
-    #     subprocess.run(f"mkheadsurf -s {subjid}".split(), check=True)
-    #     logger.info('MKHEADSURF FINISHED')
-    # except:
-    #     try:
-    #         proc_cmd = f"mkheadsurf -i {op.join(subjects_dir, subjid, 'mri', 'T1.mgz')} \
-    #             -o {op.join(subjects_dir, subjid, 'mri', 'seghead.mgz')} \
-    #             -surf {op.join(subjects_dir, subjid, 'surf', 'lh.seghead')}"
-    #         subprocess.run(proc_cmd.split(), check=True)
-    #     except BaseException as e:
-    #         subj_logger.error('MKHEADSURF')
-    #         subj_logger.error(e)
-
-    
 def convert_brik(mri_fname, outdir=None):
     '''Convert the afni file to nifti
     The outdir should be the tempdir/mri_temp folder
