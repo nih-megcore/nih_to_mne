@@ -186,8 +186,8 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
                       afni_fname=None,
                       bsight_elec=None, 
                       meg_fname=None):
-    trans_dir = tmp_subjects_dir.parent / 'trans_mats'
-    trans_dir.mkdir()
+    trans_dir = tmp_subjects_dir.parent / 'trans_mats' / subjid
+    trans_dir.mkdir(parents=True)
     fid_path = trans_dir / f'{subjid}-fiducials.fif'
     if (afni_fname is not None) and (bsight_elec is not None):
         logger.error(f'''Brainsight and Afni Brik Coreg can not both be chosen:
