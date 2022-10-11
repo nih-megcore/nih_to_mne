@@ -55,7 +55,7 @@ if __name__ == '__main__':
     parser.add_argument('-print_task_counts',
                         help='''Print out the number of task runs 
                         and number of subjects in the bids dataset''',
-                        action='set_true')
+                        action='store_true')
     args = parser.parse_args()
     
     dframe = get_bids_table(bids_dir, ses=args.session)
