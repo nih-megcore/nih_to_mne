@@ -27,6 +27,7 @@ def get_tag_output(fname, tag='task'):
     return tmp.split(f'{tag}-')[-1].split('_')[0]
 
 def get_bids_table(bids_dir, ses='1'):
+    init_dir = os.getcwd()
     os.chdir(bids_dir)
     subjids = glob.glob('sub-*')
     dsets=[]
@@ -36,6 +37,7 @@ def get_bids_table(bids_dir, ses='1'):
     dframe['task']=dframe.fname.apply(get_tag_output, tag='task')
     dframe['run']=dframe.fname.apply(get_tag_output, tag='run')
     dframe['subjid']=dframe.fname.apply(get_tag_output, tag='sub')
+    os.chdir(init_dir)
     return dframe
                                      
 
@@ -57,7 +59,7 @@ if __name__ == '__main__':
                         and number of subjects in the bids dataset''',
                         action='store_true')
     args = parser.parse_args()
-    
+    bids_dir=args.bids_dir 
     dframe = get_bids_table(bids_dir, ses=args.session)
     
     if args.print_task_counts:
@@ -71,8 +73,10 @@ if __name__ == '__main__':
         print(dframe.task.value_counts())
     
     if args.output_fname:
+        out_fname = op.abspath(args.output_fname)
         pivot = dframe.pivot_table(columns='task', index='subjid', aggfunc='count')
-        pivot.to_csv(args.output_fname)
+        pivot.to_csv(out_fname)
+        print(f'Table saved to {out_fname}')
         
     
     
