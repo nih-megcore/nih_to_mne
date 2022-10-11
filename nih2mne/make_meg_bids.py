@@ -187,7 +187,7 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
                       bsight_elec=None, 
                       meg_fname=None):
     tmp_ = tmp_subjects_dir.parent / 'trans_mats'
-    if not os.exists(tmp_); os.mkdir(tmp_)
+    if not os.path.exists(tmp_): os.mkdir(tmp_)
     trans_dir = tmp_subjects_dir.parent / 'trans_mats' / subjid
     trans_dir.mkdir()
     fid_path = trans_dir / f'{subjid}-fiducials.fif'
