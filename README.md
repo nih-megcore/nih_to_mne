@@ -74,3 +74,20 @@ optional arguments:
                         If the same subject had multiple sessions this must be
                         set manually
 ```
+
+### print_bids_table.py
+Print out information on the created bids dataset, including the number of acq runs per subject with task column headers
+```
+usage: print_bids_table.py [-h] [-bids_dir BIDS_DIR] [-session SESSION]
+                           [-output_fname OUTPUT_FNAME] [-print_task_counts]
+
+options:
+  -h, --help            show this help message and exit
+  -bids_dir BIDS_DIR    Location of the bids directory
+  -session SESSION      Session of data acq
+  -output_fname OUTPUT_FNAME
+                        If set the value counts of all the tasks will be written to a csv
+                        table. This has more information than the print_task_counts
+  -print_task_counts    Print out the number of task runs and number of subjects in the
+                        bids dataset
+```
