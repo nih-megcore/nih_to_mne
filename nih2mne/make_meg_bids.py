@@ -30,7 +30,6 @@ from nih2mne.calc_mnetrans import write_mne_trans
 
 global logger
 logger = logging.getLogger('__main__')
-#basicConfig(filename='example.log', encoding='utf-8', level=logging.DEBUG)
 
 # =============================================================================
 # make_meg_bids.py
@@ -207,7 +206,6 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
         # continue  #No need to write trans if fiducials can't be written
     try:              
         trans_fname=trans_dir / (subjid +'-trans.fif')
-        # op.join('./trans_mats', row['bids_subjid']+'_'+str(int(row['meg_session']))+'-trans.fif')
         write_mne_trans(mne_fids_path=str(fid_path),
                         dsname=meg_fname, 
                         output_name=str(trans_fname),
@@ -392,7 +390,6 @@ if __name__ == '__main__':
     #Create temporary MRI directories at the parent directory of the bids dir
     global temp_dir
     temp_dir=Path(args.bids_dir).parent / 'bids_prep_temp'
-    #if op.exists(temp_dir): shutil.rmtree(temp_dir)
     temp_dir.mkdir(parents=True, exist_ok=True)
     temp_subjects_dir = temp_dir / 'subjects_tmp' 
     temp_subjects_dir.mkdir(parents=True, exist_ok=True)
@@ -456,10 +453,6 @@ if __name__ == '__main__':
          
         
 '''
-Cannot be parallelized because deletes folder - not subj specific
- - Can fix by making a folder with subjid
-
-Still need to code for bsight 
 
 If 2 subjects in 1 folder - still writes out 2 subjects of MEGdata even if
 only 1 subject chosen
