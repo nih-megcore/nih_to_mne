@@ -68,11 +68,13 @@ def sessdir2taskrundict(session_dir=None):
                           dataset list: {session_dir}')
     
     #Verify that these are meg datasets
+    tmp_=[]
     for dset in dsets:
         if os.path.splitext(dset)[-1] != '.ds':
             logger.warning(f'{dset} does not end in .ds and will be ignored')
-            
-    dsets = sorted(dsets)
+        else:
+            tmp_.append(dset)
+    dsets = sorted(tmp_)
     
     #Return bids dictionary
     task_list = [i.split('_')[1] for i in dsets]
