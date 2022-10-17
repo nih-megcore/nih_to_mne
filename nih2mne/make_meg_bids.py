@@ -484,36 +484,6 @@ def test_check_multiple_subjects():
     indir='/fast/oberman_test/TEMP'
     _check_multiple_subjects(indir)
 
-    
-def test_sessdir2taskrundict():
-    input_list=\
-        ['DEC105_ASSR_20220225_002.ds',
-         'DEC105_MMFAU_20220225_009.ds',
-         'DEC105_M100_20220225_007.ds',
-         'DEC105_rest_20220225_005.ds',
-         'DEC105_MMFAU_20220225_003.ds',
-         'DEC105_rest_20220225_012.ds',
-         'DEC105_MMFUA_20220225_004.ds',
-         'DEC105_rest_20220225_011.ds',
-         'DEC105_M100_20220225_006.ds',
-         'DEC105_MMFUA_20220225_010.ds',
-         'DEC105_ASSR_20220225_008.ds',
-         'DEC105_M100_20220225_001.ds']
-    out_dict = sessdir2taskrundict(input_list)
-    
-    g_truth = \
-    {'rest': ['DEC105_rest_20220225_005.ds',
-              'DEC105_rest_20220225_011.ds',
-              'DEC105_rest_20220225_012.ds'],
-     'M100': ['DEC105_M100_20220225_001.ds',
-              'DEC105_M100_20220225_006.ds',
-              'DEC105_M100_20220225_007.ds'],
-     'MMFAU': ['DEC105_MMFAU_20220225_003.ds', 'DEC105_MMFAU_20220225_009.ds'],
-     'MMFUA': ['DEC105_MMFUA_20220225_004.ds', 'DEC105_MMFUA_20220225_010.ds'],
-     'ASSR': ['DEC105_ASSR_20220225_002.ds', 'DEC105_ASSR_20220225_008.ds']}
-    
-    assert out_dict == g_truth
- 
 
 def test_bsight():
     subjid = 'APBWVFAR'
