@@ -1,8 +1,4 @@
-# %% [markdown]
-# #### Step1: preprocessing eye tracking data
-# 
 
-# %%
 """
 Author: linateichmann
 Email: lina.teichmann@nih.gov
@@ -23,9 +19,6 @@ Helper functions
  - remove_loners: see whether there are any chunks of data that are temporally isolated and relatively short. If yes, exclude them.
     
 """
-#What is the -0.2 and +2
-# start = pd_new[0]*1/meg_refreshrate-0.2
-# end = pd_new[-1]*1/meg_refreshrate+2
 
 
 import pandas as pd 
@@ -34,59 +27,11 @@ import math, mne
 from scipy import stats
 from scipy.signal import butter,filtfilt
 from scipy.interpolate import interp1d
-import matplotlib
-from matplotlib import gridspec
-import matplotlib.pyplot as plt
-plt.rcParams["font.family"] = "Helvetica"
-matplotlib.rcParams.update({'font.size': 12})
-
-# =============================================================================
-# Setup
-# =============================================================================
-# folders
-rootdir                     = '' # this needs to be set to the parent of the codes folder
-preprocdir                  = rootdir + '/preprocessed'
-labelsdir                   = rootdir + '/labels'
-figdir                      = rootdir + '/figures'
-resdir                      = rootdir + '/output'
-
-n_participants              = 4
-n_sessions                  = 12
-n_runs                      = 10
-trigger_amplitude           = 64
-
-# MEG info
-et_refreshrate              = 1200 # eye-tracker signal is recorded with MEG -- so it's the same resolution
-trigger_channel             = 'UPPT001'
-pd_channel                  = 'UADC016-2104'
-eye_channel                 = ['UADC009-2104','UADC010-2104','UADC013-2104'] # x, y, pupil
-
-
-
-
-# parameters to transform from pixels to degrees
-screenwidth_cm              = 42
-screenheight_cm             = 32
-screendistance_cm           = 75
-
-screensize_pix = [1024, 768]
-def pix_to_deg(full_size_pix,screensize_pix,screenwidth_cm,screendistance_cm):
-    pix_per_cm = screensize_pix[0]/screenwidth_cm
-    size_cm = full_size_pix/pix_per_cm
-    dva = math.atan(size_cm/2/screendistance_cm)*2
-    return np.rad2deg(dva)
-
-pix_per_deg                 = screensize_pix[0]/(math.degrees(math.atan(screenwidth_cm/2/screendistance_cm)*2))
-stim_size_deg               = 10
-stim_width                  = stim_size_deg*pix_per_deg
-stim_height                 = stim_size_deg*pix_per_deg
 
 # =============================================================================
 # 
 # =============================================================================
-def load_raw_data(raw_fname=None, trigger_channel='UPPT001',
-                  pd_channel=['UADC016'], iseyes=True,
-                  eye_channel=['UADC009','UADC010','UADC013']):
+def load_raw_data(raw_fname=None, eye_channel=['UADC009','UADC010','UADC013']):
     '''
     Load data and return the eye tracking channels (iseyes=True) or 
     the trigger channel
@@ -95,12 +40,6 @@ def load_raw_data(raw_fname=None, trigger_channel='UPPT001',
     ----------
     raw_fname : path str, required
         Path of CTF meg file ending in .ds
-    trigger_channel : str, optional
-        Trigger channel for projector. The default is 'UPPT001'.
-    pd_channel : TYPE, optional
-        DESCRIPTION. The default is 'UADC016'.
-    iseyes : bool, optional
-        Return the eye channels. The default is True.
     eye_channel : list, optional
         Channel list of eye chans. 
         The default is ['UADC009','UADC010','UADC013'].
@@ -117,16 +56,11 @@ def load_raw_data(raw_fname=None, trigger_channel='UPPT001',
 
     raw = mne.io.read_raw_ctf(raw_fname,preload=False, system_clock='ignore',
                               clean_names=True)   
-    if iseyes:
-        raw_eyes= raw.copy().pick_channels(eye_channel)
-        raw_eyes.load_data()
-        print(raw_eyes.ch_names)
-        return raw_eyes
+    raw_eyes= raw.copy().pick_channels(eye_channel)
+    raw_eyes.load_data()
+
+    return raw_eyes
     
-    else:
-        raw_triggers = raw.copy().pick_channels(pd_channel)
-        raw_triggers.load_data()
-        return raw_triggers
 
 
 def raw2df(raw_et, minvoltage=-5, maxvoltage=5, minrange=-0.2, maxrange=1.2,
@@ -168,28 +102,26 @@ def raw2df(raw_et, minvoltage=-5, maxvoltage=5, minrange=-0.2, maxrange=1.2,
 
     '''
     raw_et_df                                       = pd.DataFrame(raw_et._data.T,columns=['x_volts','y_volts','pupil'])
-    #  not scaling the pupil anymore
     raw_et_df['x'],raw_et_df['y']                   = volts_to_pixels(raw_et_df['x_volts'],raw_et_df['y_volts'],raw_et_df['pupil'],minvoltage,maxvoltage,minrange,maxrange,screenbottom,screenleft,screenright,screentop,scaling_factor=978.982673828819)
     raw_et_df['x']                                  = raw_et_df['x']-screensize_pix[0]/2
     raw_et_df['x']                                  = raw_et_df['x']-np.median(raw_et_df['x'])
     raw_et_df['y']                                  = raw_et_df['y']-screensize_pix[1]/2
     raw_et_df['y']                                  = raw_et_df['y']-np.median(raw_et_df['y'])
     raw_et_df['pupil']                              = raw_et_df['pupil']-np.median(raw_et_df['pupil'])
+    raw_et_df['time']                               = raw_et.times
     return raw_et_df
 
 
-# %%
+# # Step 1: We are removing all samples where x,y is outside of stimulus [currently not using]
+# def remove_invalid_samples(eyes,tv):
+#     withinwidth                                     = np.abs(eyes['x'])<(stim_width/2)
+#     withinheight                                    = np.abs(eyes['y'])<(stim_height/2)
+#     is_valid                                        = np.array([x and y for x,y in zip(withinwidth,withinheight)]).astype(bool)
+#     if not any(is_valid):
+#         is_valid                                    = remove_loners(is_valid,et_refreshrate)
+#         is_valid                                    = expand_gap(tv,is_valid)
 
-# Step 1: We are removing all samples that either go beyond the stimulus height or width (10 degrees), or where the recorded pupil size is outside of the recording range (+/-5 volts)
-def remove_invalid_samples(eyes,tv):
-    withinwidth                                     = np.abs(eyes['x'])<(stim_width/2)
-    withinheight                                    = np.abs(eyes['y'])<(stim_height/2)
-    is_valid                                        = np.array([x and y for x,y in zip(withinwidth,withinheight)]).astype(bool)
-    if not any(is_valid):
-        is_valid                                    = remove_loners(is_valid,et_refreshrate)
-        is_valid                                    = expand_gap(tv,is_valid)
-
-    return is_valid.astype(bool)
+#     return is_valid.astype(bool)
 
 # Step 2: Checking how much the pupil dliation changes from timepoint to timepoint and exclude timepoints where the dilation change is large
 def madspeedfilter(tv,dia,is_valid):
@@ -265,21 +197,18 @@ def remove_invalid_detrend(eyes_in,is_valid,isdetrend):
     all_tp                                          = np.arange(len(eyes_in))
     eyes_in[~is_valid]                              = np.nan
     if isdetrend:
-        m, b, _, _, _                                   = stats.linregress(all_tp[is_valid],eyes_in[is_valid])
-        eyes_in                                         = eyes_in - (m*all_tp + b)
+        m, b, _, _, _                               = stats.linregress(all_tp[is_valid],eyes_in[is_valid])
+        eyes_in                                     = eyes_in - (m*all_tp + b)
     return eyes_in
 
 
-
-# %%
+## Helper functions
 def volts_to_pixels(x,y,pupil,minvoltage,maxvoltage,minrange,maxrange,screenbottom,screenleft,screenright,screentop,scaling_factor):
     S_x                                             = ((x-minvoltage)/(maxvoltage-minvoltage))*(maxrange-minrange)+minrange
     S_y                                             = ((y-minvoltage)/(maxvoltage-minvoltage))*(maxrange-minrange)+minrange
     Xgaze                                           = S_x*(screenright-screenleft+1)+screenleft
     Ygaze                                           = S_y*(screenbottom-screentop+1)+screentop
-    # pupil_n                                         = (pupil-pupil.min())*scaling_factor
     return(Xgaze,Ygaze)
-
 
 def deviation_calculator(tv,dia,is_valid,t_interp,smooth_filt_a,smooth_filt_b):
     dia_valid                                       = dia[[x and y for x,y in zip(is_valid,~np.isnan(dia))]]
@@ -336,6 +265,7 @@ def remove_loners(is_valid,et_refreshrate):
     size_valid_data_chunks                          = np.diff(valid_data_chunks,axis=1)
     size_idx                                        = np.where((size_valid_data_chunks/et_refreshrate*1000)<lonely_sample_max_length)[0]
     separation                                      = np.squeeze(np.diff(np.reshape(np.sort(np.concatenate([gap_start,gap_end])),[-1,2]),axis=1))
+    if separation.shape == (): separation = [separation]
     sep_idx                                         = np.where(np.pad([i>(time_separation*1/et_refreshrate) for i in separation],(1,0)))[0]
     data_chunks_to_delete                           = valid_data_chunks[np.intersect1d(sep_idx,size_idx)]
 
@@ -347,275 +277,45 @@ def remove_loners(is_valid,et_refreshrate):
     
     return valid_out.astype(bool)
 
+def pix_to_deg(full_size_pix,screensize_pix=[1024,768],screenwidth_cm=42,screendistance_cm=75):
+    pix_per_cm = screensize_pix[0]/screenwidth_cm
+    size_cm = full_size_pix/pix_per_cm
+    dva = math.atan(size_cm/2/screendistance_cm)*2
+    return np.rad2deg(dva)
 
 
-# %% [markdown]
-# ### Running the preprocessing 
-# - this is done for every run separately
-# - output is a csv with the cleaned data plus the metadata
 
-# %%
-# Run the preprocessing
-# for p in range(n_participants+1):
-#     data_dir = rootdir + '/rawdata/sub-BIGMEG' + str(p)
-#     sa = pd.read_csv(labelsdir + '/sample_attributes_P' + str(p) + '.csv')
-#     sessions = [0]*n_sessions
-
-#     for s in range(n_sessions):
-#         for r in range(n_runs):
-            
-            
+# Run preprocessing            
 def process_run(raw_fname):
-            # load raw eye-tracking data from the MEG
-            raw_eyes = load_raw_data(raw_fname, iseyes=True)
-            meg_refreshrate = et_refreshrate = raw_eyes.info['sfreq']
-            
-            #!!!May want to add PD flip code - has been an issue before
-            # now we are getting the onsets from the photodiode channel      
-            raw_photodiode = load_raw_data(raw_fname, iseyes=False)
-            photo_d = np.where(np.diff([0]+raw_photodiode._data[0])>1.5)
-            pd_new= photo_d[0][np.where(np.diff([0]+photo_d[0])>1000)]
+    # load raw eye-tracking data from the MEG
+    raw_eyes = load_raw_data(raw_fname)
+    meg_refreshrate = et_refreshrate = raw_eyes.info['sfreq']
 
-            # cut raw-eyes so that you don't keep all the data after the end of the run
-            raw_eyes_cut = raw_eyes.copy()
-            start = pd_new[0]*1/meg_refreshrate-0.2
-            end = pd_new[-1]*1/meg_refreshrate+2
-            raw_eyes_cut.crop(tmin=start, tmax=end, include_tmax=True)
-            pd_new= pd_new-raw_eyes_cut.first_samp
+    # transform MNE-struct to pandas and change from volts to degrees (x,y) and area (pupil)
+    eyes = raw2df(raw_eyes_cut)
 
-            # transform MNE-struct to pandas and change from volts to degrees (x,y) and area (pupil)
-            eyes = raw2df(raw_eyes_cut)
+    # Define parameters
+    tv=(eyes.index.to_numpy()*1/meg_refreshrate)*1000
+    dia = eyes['pupil'].copy().to_numpy()
 
-            # Define parameters
-            tv=(eyes.index.to_numpy()*1/meg_refreshrate)*1000
-            dia = eyes['pupil'].copy().to_numpy()
+    # PREPROCESSING
+    # speed dilation exclusion
+    isvalid2 = madspeedfilter(tv,dia,is_valid=len(dia)*[True])
 
-            # PREPROCESSING
-            # Step 1: remove out of bounds
-            isvalid1 = remove_invalid_samples(eyes,tv)
+    # deviation from smooth line
+    isvalid3 = mad_deviation(tv,dia,isvalid2)
 
-            # Step 2: speed dilation exclusion
-            isvalid2 = madspeedfilter(tv,dia,isvalid1)
+    # remove invalid and detrend
+    eyes_preproc_meg = eyes.copy()
+    eyes_preproc_meg['x'] = remove_invalid_detrend(eyes_preproc_meg['x'].to_numpy(),isvalid3,True)
+    eyes_preproc_meg['x_deg'] = [pix_to_deg(i,screensize_pix,screenwidth_cm,screendistance_cm) for i in eyes_preproc_meg['x']]
 
-            # Step 3: deviation from smooth line
-            isvalid3 = mad_deviation(tv,dia,isvalid2)
+    eyes_preproc_meg['y'] = remove_invalid_detrend(eyes_preproc_meg['y'].to_numpy(),isvalid3,True)
+    eyes_preproc_meg['y_deg'] = [pix_to_deg(i,screensize_pix,screenwidth_cm,screendistance_cm) for i in eyes_preproc_meg['y']]
 
-            # remove invalid and detrend
-            eyes_preproc_meg = eyes.copy()
-            eyes_preproc_meg['x'] = remove_invalid_detrend(eyes_preproc_meg['x'].to_numpy(),isvalid3,True)
-            eyes_preproc_meg['x'] = [pix_to_deg(i,screensize_pix,screenwidth_cm,screendistance_cm) for i in eyes_preproc_meg['x']]
+    eyes_preproc_meg['pupil'] = remove_invalid_detrend(eyes_preproc_meg['pupil'].to_numpy(),isvalid3,True)
 
-            eyes_preproc_meg['y'] = remove_invalid_detrend(eyes_preproc_meg['y'].to_numpy(),isvalid3,True)
-            eyes_preproc_meg['y'] = [pix_to_deg(i,screensize_pix,screenwidth_cm,screendistance_cm) for i in eyes_preproc_meg['y']]
-
-            eyes_preproc_meg['pupil'] = remove_invalid_detrend(eyes_preproc_meg['pupil'].to_numpy(),isvalid3,True)
-
-            # Replace data with preprocessed data
-            preprocessed_eyes = raw_eyes.copy()
-            preprocessed_eyes._data = eyes_preproc_meg.loc[:,['x','y','pupil']].to_numpy().T
-
-
-            # make epochs based on photodiode
-            event_dict = {'onset_pd':4}
-            ev_pd = np.empty(shape=(len(pd_new),3),dtype=int)
-            for i,ev in enumerate(pd_new):
-                ev_pd[i]=([int(ev),0,4])
-                
-            # =============================================================================
-            # Don't Understand this part yet
-            # =============================================================================
-            if r == 0:
-                epochs = mne.Epochs(preprocessed_eyes,ev_pd,event_id = event_dict, tmin = -0.1, tmax = 1.3, baseline=None,preload=False)
-            if r > 0:
-                epochs_1 = mne.Epochs(preprocessed_eyes,ev_pd,event_id = event_dict, tmin = -0.1, tmax = 1.3, baseline=None,preload=False)
-                epochs_1.info['dev_head_t'] = epochs.info['dev_head_t']
-                epochs = mne.concatenate_epochs([epochs,epochs_1])
-            # =============================================================================
-            #             
-            # =============================================================================
-        
-            # add metadata and get rid of catch trials
-            epochs.metadata = sa.loc[sa.session_nr==s+1,:]
-            epochs = epochs[(epochs.metadata['trial_type']!='catch')]
-            # save as dataframe
-            tmp = pd.DataFrame(np.repeat(epochs.metadata.values,len(epochs.times), axis=0))
-            tmp.columns = epochs.metadata.columns
-            tosave = pd.concat([epochs.to_data_frame(),tmp],axis=1)
-            tosave.to_csv(preprocdir + '/eyes_epoched_cleaned_P' + str(p) + '_S' + str(s+1) + '.csv')
+    return eyes_preproc_meg
 
 
 
-# %% [markdown]
-# #### Plot an overview of the preprocessing steps
-
-# %%
-# load data
-p = 1
-s = 0
-r = 0
-sa = pd.read_csv(labelsdir + '/sample_attributes_P' + str(p) + '.csv')
-raw_eyes = load_raw_data(rootdir=rootdir,p=p,s=s,r=r,trigger_channel=trigger_channel,pd_channel=pd_channel,eye_channel=eye_channel,iseyes=True)
-
-# now we are getting the onsets from the photodiode channel
-raw_photodiode = load_raw_data(rootdir,p,s,r,trigger_channel,pd_channel,eye_channel,False)
-photo_d = np.where(np.diff([0]+raw_photodiode._data[0])>1.5)
-pd_new= photo_d[0][np.where(np.diff([0]+photo_d[0])>1000)]
-
-# cut raw-eyes so that you don't keep all the data after the end of the run
-raw_eyes_cut = raw_eyes.copy()
-start = pd_new[0]*1/1200-0.2
-end = pd_new[-1]*1/1200+2
-raw_eyes_cut.crop(tmin=start, tmax=end, include_tmax=True)
-pd_new= pd_new-raw_eyes_cut.first_samp
-
-# transform MNE-struct to pandas and change from volts to degrees (x,y) and area (pupil)
-eyes = raw2df(raw_eyes_cut,minvoltage,maxvoltage,minrange,maxrange,screenbottom,screenleft,screenright,screentop,screensize_pix)
-
-# Define parameters
-tv=(eyes.index.to_numpy()*1/1200)*1000
-dia = eyes['pupil'].copy().to_numpy()
-
-# PREPROCESSING
-# Step 1: remove out of bounds
-isvalid1 = remove_invalid_samples(eyes,tv)
-
-# Step 2: speed dilation exclusion
-isvalid2 = madspeedfilter(tv,dia,isvalid1)
-
-# Step 3: deviation from smooth line
-isvalid3 = mad_deviation(tv,dia,isvalid2)
-
-# remove invalid and detrend
-eyes_preproc_meg = eyes.copy()
-eyes_preproc_meg['x'] = remove_invalid_detrend(eyes_preproc_meg['x'].to_numpy(),isvalid3,True)
-eyes_preproc_meg['x'] = [pix_to_deg(i,screensize_pix,screenwidth_cm,screendistance_cm) for i in eyes_preproc_meg['x']]
-
-eyes_preproc_meg['y'] = remove_invalid_detrend(eyes_preproc_meg['y'].to_numpy(),isvalid3,True)
-eyes_preproc_meg['y'] = [pix_to_deg(i,screensize_pix,screenwidth_cm,screendistance_cm) for i in eyes_preproc_meg['y']]
-
-eyes_preproc_meg['pupil'] = remove_invalid_detrend(eyes_preproc_meg['pupil'].to_numpy(),isvalid3,True)
-
-# Replace data with preprocessed data
-preprocessed_eyes = raw_eyes.copy()
-preprocessed_eyes._data = eyes_preproc_meg.loc[:,['x','y','pupil']].to_numpy().T
-
-
-# make epochs based on photodiode
-event_dict = {'onset_pd':4}
-ev_pd = np.empty(shape=(len(pd_new),3),dtype=int)
-for i,ev in enumerate(pd_new):
-    ev_pd[i]=([int(ev),0,4])
-
-epochs = mne.Epochs(preprocessed_eyes,ev_pd,event_id = event_dict, tmin = -0.1, tmax = 1.3, baseline=None,preload=False)
-
-epochs.metadata = sa.loc[(sa.session_nr==s+1)&(sa.run_nr==r+1),:]
-epochs = epochs[(epochs.metadata['trial_type']!='catch')]
-
-# save as dataframe
-tmp = pd.DataFrame(np.repeat(epochs.metadata.values,len(epochs.times), axis=0))
-tmp.columns = epochs.metadata.columns
-tosave = pd.concat([epochs.to_data_frame(),tmp],axis=1)
-
-# make a plot
-from matplotlib import gridspec
-fig = plt.figure()
-fig.set_figheight(8)
-fig.set_figwidth(15)
-spec = gridspec.GridSpec(ncols=2, nrows=5,width_ratios=[3, 1], wspace=0.1,hspace=0.7)
-
-def plot_run(toplot,ax,ylabel,xlabel,title,n_samples,is_preprocessed):
-    print(is_preprocessed)
-    if is_preprocessed==0:
-        toplot = [pix_to_deg(i,screensize_pix,screenwidth_cm,screendistance_cm) for i in toplot]
-
-    ax.plot(np.take(toplot,np.arange(n_samples)),'grey')
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.legend(frameon=False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    ax.set_title(title)
-    ax.set_ylim([-3,3])
-
-
-selection = np.repeat([None, isvalid1, isvalid2, isvalid3],2)
-titles = np.repeat(['raw','step1: invalid samples exclusion', 'step2: dilation speed exclusion', 'step3: deviation exclusion'],2)
-for i,v in enumerate(range(len(titles))):
-    print(i,v)
-    ax = fig.add_subplot(spec[v])
-    tmp = eyes.copy()
-    if (selection[i] is not None):
-        empt = np.ones(len(eyes))
-        empt[selection[i]] = 0
-        tmp.loc[empt.astype(bool),:] = np.nan
-    
-    if i % 2 == 0:
-        plot_run(tmp.y,ax,'y (\N{DEGREE SIGN})','',titles[i],len(tmp),False)
-    else: 
-        plot_run(tmp.y,ax,'y (\N{DEGREE SIGN})','',titles[i],20000,False)
-        ax.axes.yaxis.set_visible(False)
-    ax.axes.xaxis.set_visible(False)
-
-
-ax = fig.add_subplot(spec[8])
-plot_run(eyes_preproc_meg['y'],ax,'y (\N{DEGREE SIGN})','samples (1200 Hz)','step4: linear detrending',len(eyes_preproc_meg),True)
-
-ax = fig.add_subplot(spec[9])
-plot_run(eyes_preproc_meg['y'],ax,'y (\N{DEGREE SIGN})','samples (1200 Hz)','step4: linear detrending',20000,True)
-ax.axes.yaxis.set_visible(False)
-
-
-# %%
-# only plot pre-processing and post-processsing example 
-eyes = raw2df(raw_eyes_cut,minvoltage,maxvoltage,minrange,maxrange,screenbottom,screenleft,screenright,screentop,screensize_pix)
-
-fig = plt.figure()
-fig.set_figheight(2)
-fig.set_figwidth(5)
-spec = gridspec.GridSpec(ncols=2, nrows=2,width_ratios=[1, 1], wspace=0.1,hspace=0.25,bottom=0.22,left=0.14)
-
-samples  = 30000
-
-def plot_run(toplot,ax,ylabel,xlabel,title,n_samples,is_preprocessed):
-    y = np.take(toplot,np.arange(n_samples))
-    x = np.arange(len(y))*(1/1200)
-    if is_preprocessed==1:
-        ax.plot(x,y,'darkgrey',lw=1)
-    else:
-        y= [pix_to_deg(i,screensize_pix,screenwidth_cm,screendistance_cm) for i in y]
-        ax.plot(x,y,'lightgrey',lw=1)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.legend(frameon=False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    ax.set_title(title)
-   
-ax = fig.add_subplot(spec[0])
-tmp = eyes.copy()
-plot_run(tmp.y,ax,'','','',len(tmp),False)
-ax.axes.xaxis.set_visible(False)
-ax.set_ylim([-10,10])
-
-ax = fig.add_subplot(spec[1])
-plot_run(tmp.y,ax,'y (\N{DEGREE SIGN})','','',samples,False)
-ax.axes.yaxis.set_visible(False)
-ax.axes.xaxis.set_visible(False)
-ax.set_ylim([-10,10])
-
-ax = fig.add_subplot(spec[2])
-plot_run(eyes_preproc_meg['y'],ax,'','time (s)','',len(eyes_preproc_meg),True)
-ax.set_ylim([-1,1])
-
-ax = fig.add_subplot(spec[3])
-plot_run(eyes_preproc_meg['y'],ax,'y (\N{DEGREE SIGN})','time (s)','',samples,True)
-ax.axes.yaxis.set_visible(False)
-ax.set_ylim([-1,1])
-
-fig.supylabel('      y (\N{DEGREE SIGN})')
-
-fig.savefig(figdir + '/supplementary_ET_preprcocess.png',dpi=600)
-
-# =============================================================================
-# TESTS
-# =============================================================================
