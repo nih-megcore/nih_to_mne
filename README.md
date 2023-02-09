@@ -74,6 +74,13 @@ optional arguments:
                         If the same subject had multiple sessions this must be
                         set manually
 ```
+### make_bid_fs_swarm.sh
+From the bids folder - will create derivatives folder for freesurfer/subjects; write out the swarm file; and submit to swarm (with confirmation)
+```
+make_bids_fs_swarm.sh    #Must be in the bids folder
+```
+
+
 
 ### print_bids_table.py
 Print out information on the created bids dataset, including the number of acq runs per subject with task column headers
