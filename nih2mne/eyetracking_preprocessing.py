@@ -27,7 +27,7 @@ import math, mne
 from scipy import stats
 from scipy.signal import butter,filtfilt
 from scipy.interpolate import interp1d
-
+screensize_pix=[1024, 768]
 # =============================================================================
 # 
 # =============================================================================
@@ -149,7 +149,7 @@ def madspeedfilter(tv,dia,is_valid):
     print('threshold: ' + str(threshold))
     
 
-    valid_out                                   = is_valid.copy()
+    valid_out                                   = np.array(is_valid.copy())
 
     valid_out[max_dilation_speed>=threshold]    = False
     valid_out                                   = remove_loners(valid_out.astype(bool),et_refreshrate)
@@ -292,7 +292,7 @@ def process_run(raw_fname):
     meg_refreshrate = et_refreshrate = raw_eyes.info['sfreq']
 
     # transform MNE-struct to pandas and change from volts to degrees (x,y) and area (pupil)
-    eyes = raw2df(raw_eyes_cut)
+    eyes = raw2df(raw_eyes)#_cut)
 
     # Define parameters
     tv=(eyes.index.to_numpy()*1/meg_refreshrate)*1000
@@ -308,14 +308,13 @@ def process_run(raw_fname):
     # remove invalid and detrend
     eyes_preproc_meg = eyes.copy()
     eyes_preproc_meg['x'] = remove_invalid_detrend(eyes_preproc_meg['x'].to_numpy(),isvalid3,True)
-    eyes_preproc_meg['x_deg'] = [pix_to_deg(i,screensize_pix,screenwidth_cm,screendistance_cm) for i in eyes_preproc_meg['x']]
+    eyes_preproc_meg['x_deg'] = [pix_to_deg(i,screensize_pix=[1024,768],screenwidth_cm=42,screendistance_cm=75) for i in eyes_preproc_meg['x']]
 
     eyes_preproc_meg['y'] = remove_invalid_detrend(eyes_preproc_meg['y'].to_numpy(),isvalid3,True)
-    eyes_preproc_meg['y_deg'] = [pix_to_deg(i,screensize_pix,screenwidth_cm,screendistance_cm) for i in eyes_preproc_meg['y']]
+    eyes_preproc_meg['y_deg'] = [pix_to_deg(i,screensize_pix=[1024,768],screenwidth_cm=42,screendistance_cm=75) for i in eyes_preproc_meg['y']]
 
     eyes_preproc_meg['pupil'] = remove_invalid_detrend(eyes_preproc_meg['pupil'].to_numpy(),isvalid3,True)
 
     return eyes_preproc_meg
-
 
 
