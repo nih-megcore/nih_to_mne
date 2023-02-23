@@ -70,7 +70,7 @@ def sessdir2taskrundict(session_dir=None):
     #Verify that these are meg datasets
     tmp_=[]
     for dset in dsets:
-        if os.path.splitext(dset)[-1] != '.ds':
+        if not dset.endswith('.ds'):
             logger.warning(f'{dset} does not end in .ds and will be ignored')
         else:
             tmp_.append(dset)
