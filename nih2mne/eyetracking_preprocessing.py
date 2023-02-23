@@ -289,6 +289,7 @@ def pix_to_deg(full_size_pix,screensize_pix=[1024,768],screenwidth_cm=42,screend
 def process_run(raw_fname):
     # load raw eye-tracking data from the MEG
     raw_eyes = load_raw_data(raw_fname)
+    global et_refreshrate
     meg_refreshrate = et_refreshrate = raw_eyes.info['sfreq']
 
     # transform MNE-struct to pandas and change from volts to degrees (x,y) and area (pupil)
@@ -307,10 +308,15 @@ def process_run(raw_fname):
 
     # remove invalid and detrend
     eyes_preproc_meg = eyes.copy()
-    eyes_preproc_meg['x'] = remove_invalid_detrend(eyes_preproc_meg['x'].to_numpy(),isvalid3,True)
+    # eyes_preproc_meg['x'] = remove_invalid_detrend(eyes_preproc_meg['x'].to_numpy(),isvalid3,True)
+    ## 
+    
+    
+    
+    
     eyes_preproc_meg['x_deg'] = [pix_to_deg(i,screensize_pix=[1024,768],screenwidth_cm=42,screendistance_cm=75) for i in eyes_preproc_meg['x']]
 
-    eyes_preproc_meg['y'] = remove_invalid_detrend(eyes_preproc_meg['y'].to_numpy(),isvalid3,True)
+    # eyes_preproc_meg['y'] = remove_invalid_detrend(eyes_preproc_meg['y'].to_numpy(),isvalid3,True)
     eyes_preproc_meg['y_deg'] = [pix_to_deg(i,screensize_pix=[1024,768],screenwidth_cm=42,screendistance_cm=75) for i in eyes_preproc_meg['y']]
 
     eyes_preproc_meg['pupil'] = remove_invalid_detrend(eyes_preproc_meg['pupil'].to_numpy(),isvalid3,True)
