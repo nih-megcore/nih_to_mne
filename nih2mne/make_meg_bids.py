@@ -338,14 +338,16 @@ if __name__ == '__main__':
     parser.add_argument('-meg_input_dir', 
                         help=''''Acquisition directory - typically designated
                         by the acquisition date''', required=True)
-    parser.add_argument('-mri_brik', 
+    group1 = parser.add_argument_group('Afni Coreg')
+    group1.add_argument('-mri_brik', 
                         help='''Afni coregistered MRI''')
-    parser.add_argument('-mri_bsight',
+    group2 = parser.add_argument_group('Brainsight Coreg')
+    group2.add_argument('-mri_bsight',
                         help='''Brainsight mri.  This should be a .nii file.
                         The exported electrodes text file must be in the same 
                         folder and end in .txt.  Otherwise, provide the 
                         mri_sight_elec flag''')
-    parser.add_argument('-mri_bsight_elec',
+    group2.add_argument('-mri_bsight_elec',
                        help='''Exported electrodes file from brainsight.
                        This has the locations of the fiducials''', 
                        required=False)
