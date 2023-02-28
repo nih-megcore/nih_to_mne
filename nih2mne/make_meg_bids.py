@@ -211,7 +211,7 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
         write_mne_trans(mne_fids_path=str(fid_path),
                         dsname=meg_fname, 
                         output_name=str(trans_fname),
-                        subjects_dir=str(temp_subjects_dir))
+                        subjects_dir=str(tmp_subjects_dir))
     except BaseException as e:
         logger.error('Error in write_mne_trans', e)
         print(f'error in trans calculation {subjid}')
@@ -362,6 +362,8 @@ if __name__ == '__main__':
                         To override the default subject ID, use this flag'''
                         )
     args=parser.parse_args()
+    if (not args.mri_brik) and (not args.mri_bsight):
+        raise ValueError('Must supply afni or brainsight coregistration')
     
     #Initialize
     if not op.exists(args.bids_dir): os.mkdir(args.bids_dir)
