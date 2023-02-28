@@ -151,8 +151,11 @@ def coords_from_oblique_afni(afni_fname):
         LPS to conform to AFNI format.
         The function returns a dictionary of the tag labels with LPS coords'''
     im = nb.load(afni_fname)
-    fid_mat = np.array(im.header.info['TAGSET_FLOATS']).reshape(3,5)
-
+    if len(im.header.info['TAGSET_FLOATS'])==15:
+        fid_mat = np.array(im.header.info['TAGSET_FLOATS']).reshape(3,5)
+    if len(im.header.info['TAGSET_FLOATS'])==25:
+        fid_mat = np.array(im.header.info['TAGSET_FLOATS']).reshape(5,5)
+        fid_mat = fid_mat[0:3,:]  #!!! HACK to perform 3 point coreg -- Assumes first 3 are LPA/RPA/NAS
     # =============================================================================
     # Correct oblique transform
     # =============================================================================
@@ -164,6 +167,8 @@ def coords_from_oblique_afni(afni_fname):
     fid_mat_lps = copy.copy(fid_mat_ras)
     fid_mat_lps[:,0:2]*=-1  #Convert to AFNI orientation LPS - assumed downstream
     tag_labels = im.header.info['TAGSET_LABELS'].split('~')
+    if len(tag_labels) > 3:
+        tag_labels=tag_labels[0:3]  #!!! HACK to perform 3 point coreg
     coord={}
     for idx, label in enumerate(tag_labels):
         if label[0].upper() in ['N','L','R']:
@@ -300,9 +305,13 @@ def write_mne_trans(mne_fids_path=None, dsname=None,
     
     fids = read_fiducials(name)
     fidc = _fiducial_coords(fids[0])
-
-    raw = read_raw_ctf(dsname, clean_names = True, preload = False, 
-                       system_clock='ignore')
+    
+    if dsname.endswith('.ds'):
+        raw = read_raw_ctf(dsname, clean_names = True, preload = False, 
+                           system_clock='ignore')
+    elif dsname.endswith('.con'):
+        raw = mne.io.read_raw_kit(dsname, preload=False)
+        
     fidd = _fiducial_coords(raw.info['dig'])
 
     xform = fit_matched_points(fidd, fidc, weights = [1, 10, 1])
