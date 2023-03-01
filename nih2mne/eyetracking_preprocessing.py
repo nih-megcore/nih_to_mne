@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 """
 Author: linateichmann
 Email: lina.teichmann@nih.gov
@@ -327,11 +327,7 @@ def process_run(raw_fname):
     # remove invalid and detrend
     eyes_preproc_meg = eyes.copy()
     eyes_preproc_meg['x'] = remove_invalid_detrend(eyes_preproc_meg['x'].to_numpy(),isvalid3,True)
-    ## 
-    
-    
-    
-    
+
     eyes_preproc_meg['x_deg'] = [pix_to_deg(i,screensize_pix=screensize_pix,screenwidth_cm=42,screendistance_cm=75) for i in eyes_preproc_meg['x']]
 
     eyes_preproc_meg['y'] = remove_invalid_detrend(eyes_preproc_meg['y'].to_numpy(),isvalid3,True)
@@ -342,3 +338,12 @@ def process_run(raw_fname):
     return eyes_preproc_meg
 
 
+# command line calls
+if __name__=='__main__':
+    import argparse
+    parser=argparse.ArgumentParser()
+    parser.add_argument('-fname',help='path to MEG file with eyetracking')
+    args = parser.parse_args()
+
+    raw_fname = args.fname
+    process_run(raw_fname)
