@@ -27,7 +27,9 @@ import math, mne
 from scipy import stats
 from scipy.signal import butter,filtfilt
 from scipy.interpolate import interp1d
+global screensize_pix
 screensize_pix=[1024, 768]
+
 # =============================================================================
 # 
 # =============================================================================
@@ -65,7 +67,7 @@ def load_raw_data(raw_fname=None, eye_channel=['UADC009','UADC010','UADC013']):
 
 def raw2df(raw_et, minvoltage=-5, maxvoltage=5, minrange=-0.2, maxrange=1.2,
            screenbottom=767, screenleft=0, screenright=1023, screentop=0, 
-           screensize_pix=[1024, 768]):
+           screensize_pix=screensize_pix):
     '''
     Convert the MEG data lines (volts) to pixels for x/y and return a pandas
     dataframe.
@@ -112,16 +114,16 @@ def raw2df(raw_et, minvoltage=-5, maxvoltage=5, minrange=-0.2, maxrange=1.2,
     return raw_et_df
 
 
-# # Step 1: We are removing all samples where x,y is outside of stimulus [currently not using]
-# def remove_invalid_samples(eyes,tv):
-#     withinwidth                                     = np.abs(eyes['x'])<(stim_width/2)
-#     withinheight                                    = np.abs(eyes['y'])<(stim_height/2)
-#     is_valid                                        = np.array([x and y for x,y in zip(withinwidth,withinheight)]).astype(bool)
-#     if not any(is_valid):
-#         is_valid                                    = remove_loners(is_valid,et_refreshrate)
-#         is_valid                                    = expand_gap(tv,is_valid)
+# Step 1: We are removing all samples where x,y is outside of the screen
+def remove_invalid_samples(eyes,tv,screensize_pix=screensize_pix):
+    withinwidth                                     = np.abs(eyes['x'])<(screensize_pix[0]/2)
+    withinheight                                    = np.abs(eyes['y'])<(screensize_pix[1]/2)
+    is_valid                                        = np.array([x and y for x,y in zip(withinwidth,withinheight)]).astype(bool)
+    if not any(is_valid):
+        is_valid                                    = remove_loners(is_valid,et_refreshrate)
+        is_valid                                    = expand_gap(tv,is_valid)
 
-#     return is_valid.astype(bool)
+    return is_valid.astype(bool)
 
 # Step 2: Checking how much the pupil dliation changes from timepoint to timepoint and exclude timepoints where the dilation change is large
 def madspeedfilter(tv,dia,is_valid):
@@ -233,6 +235,11 @@ def expand_gap(tv,is_valid):
     valid_t                                         = tv[is_valid]
     valid_idx                                       = np.where(is_valid)[0]
     gaps                                            = np.diff(valid_t)
+
+    # Convert to samples 
+    for i in min_gap_width, max_gap_width, pad_back, pad_forward:
+        i/=et_refreshrate
+
     needs_padding                                   = [x and y for x,y in zip(gaps>min_gap_width,gaps<max_gap_width)]
     gap_start_t                                     = valid_t[np.pad(needs_padding,(0,1),constant_values=False)]
     gap_end_t                                       = valid_t[np.pad(needs_padding,(1,0),constant_values=False)]
@@ -277,18 +284,27 @@ def remove_loners(is_valid,et_refreshrate):
     
     return valid_out.astype(bool)
 
-def pix_to_deg(full_size_pix,screensize_pix=[1024,768],screenwidth_cm=42,screendistance_cm=75):
+def pix_to_deg(full_size_pix,screensize_pix=screensize_pix,screenwidth_cm=42,screendistance_cm=75):
     pix_per_cm = screensize_pix[0]/screenwidth_cm
     size_cm = full_size_pix/pix_per_cm
     dva = math.atan(size_cm/2/screendistance_cm)*2
     return np.rad2deg(dva)
 
+def crop_trailing_zeros(raw_eyes):
+    '''
+    the index of 20 consecutive zeros is used as an identifier to a terminated run (when user hit "abort")
+    '''
+    idx_crop = np.where((np.diff(np.convolve(np.ones(20),raw_eyes._data[2,:]==0)))==1)[0][0]
+    raw_eyes.crop(0,idx_crop/raw_eyes.info['sfreq'])
 
 
 # Run preprocessing            
 def process_run(raw_fname):
     # load raw eye-tracking data from the MEG
     raw_eyes = load_raw_data(raw_fname)
+    crop_trailing_zeros(raw_eyes)
+
+
     global et_refreshrate
     meg_refreshrate = et_refreshrate = raw_eyes.info['sfreq']
 
@@ -300,24 +316,26 @@ def process_run(raw_fname):
     dia = eyes['pupil'].copy().to_numpy()
 
     # PREPROCESSING
+    isvalid1 = remove_invalid_samples(eyes,tv,screensize_pix=screensize_pix)
+    
     # speed dilation exclusion
-    isvalid2 = madspeedfilter(tv,dia,is_valid=len(dia)*[True])
+    isvalid2 = madspeedfilter(tv,dia,is_valid=isvalid1)
 
     # deviation from smooth line
     isvalid3 = mad_deviation(tv,dia,isvalid2)
 
     # remove invalid and detrend
     eyes_preproc_meg = eyes.copy()
-    # eyes_preproc_meg['x'] = remove_invalid_detrend(eyes_preproc_meg['x'].to_numpy(),isvalid3,True)
+    eyes_preproc_meg['x'] = remove_invalid_detrend(eyes_preproc_meg['x'].to_numpy(),isvalid3,True)
     ## 
     
     
     
     
-    eyes_preproc_meg['x_deg'] = [pix_to_deg(i,screensize_pix=[1024,768],screenwidth_cm=42,screendistance_cm=75) for i in eyes_preproc_meg['x']]
+    eyes_preproc_meg['x_deg'] = [pix_to_deg(i,screensize_pix=screensize_pix,screenwidth_cm=42,screendistance_cm=75) for i in eyes_preproc_meg['x']]
 
-    # eyes_preproc_meg['y'] = remove_invalid_detrend(eyes_preproc_meg['y'].to_numpy(),isvalid3,True)
-    eyes_preproc_meg['y_deg'] = [pix_to_deg(i,screensize_pix=[1024,768],screenwidth_cm=42,screendistance_cm=75) for i in eyes_preproc_meg['y']]
+    eyes_preproc_meg['y'] = remove_invalid_detrend(eyes_preproc_meg['y'].to_numpy(),isvalid3,True)
+    eyes_preproc_meg['y_deg'] = [pix_to_deg(i,screensize_pix=screensize_pix,screenwidth_cm=42,screendistance_cm=75) for i in eyes_preproc_meg['y']]
 
     eyes_preproc_meg['pupil'] = remove_invalid_detrend(eyes_preproc_meg['pupil'].to_numpy(),isvalid3,True)
 
