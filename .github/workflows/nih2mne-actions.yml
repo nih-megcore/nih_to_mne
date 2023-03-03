@@ -6,7 +6,9 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
-        #with:
+      - name: Checkout submodules
+      - run: git submodule update --init --recursive
+                #with:
                 #Enode-version: '14'
       - run: pip install pytest install git+https://github.com/nih-megcore/nih_to_mne
       - run: pytest -vv
