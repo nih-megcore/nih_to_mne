@@ -1,0 +1,3 @@
+[submodule "nih2mne/test_data"]
+	path = nih2mne/test_data
+	url = https://github.com/nih-megcore/TEST_ctf_data.git
