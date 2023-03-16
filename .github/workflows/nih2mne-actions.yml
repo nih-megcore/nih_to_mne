@@ -8,5 +8,5 @@ jobs:
       - uses: actions/setup-node@v2
       - run: git submodule update --init --recursive
       - run: pip install gdown pytest install git+https://github.com/nih-megcore/nih_to_mne
-      - run: gdown ${{ secrets.GDRIVE_MRI }}
+      - run: gdown --folder ${{ secrets.GDRIVE_MRI }}
       - run: pytest -vv
