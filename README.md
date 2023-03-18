@@ -43,36 +43,41 @@ usage: bstags.py file.txt
 
 ### make_meg_bids.py
 ```
-usage: make_meg_bids.py -meg_input_dir 
+usage: 
         Convert MEG dataset to default Bids format using the MEG hash ID or 
         entered subject ID as the bids ID.        
         
 
 WARNING: This does NOT anonymize the data!!!
         
-       [-h] [-bids_dir BIDS_DIR] -meg_input_dir MEG_INPUT_DIR
-       [-mri_brik MRI_BRIK] [-mri_bsight MRI_BSIGHT]
-       [-mri_bsight_elec MRI_BSIGHT_ELEC] [-bids_session BIDS_SESSION]
+       [-h] [-bids_dir BIDS_DIR] -meg_input_dir MEG_INPUT_DIR [-mri_brik MRI_BRIK]
+       [-mri_bsight MRI_BSIGHT] [-mri_bsight_elec MRI_BSIGHT_ELEC]
+       [-bids_session BIDS_SESSION] [-subjid SUBJID]
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -bids_dir BIDS_DIR    Output bids_dir path
   -meg_input_dir MEG_INPUT_DIR
-                        'Acquisition directory - typically designated by the
+                        Acquisition directory - typically designated by the
                         acquisition date
+  -bids_session BIDS_SESSION
+                        Data acquisition session. This is set to 1 by default. If
+                        the same subject had multiple sessions this must be set
+                        manually
+  -subjid SUBJID        The default subject ID is given by the MEG hash. To override
+                        the default subject ID, use this flag
+
+Afni Coreg:
   -mri_brik MRI_BRIK    Afni coregistered MRI
+
+Brainsight Coreg:
   -mri_bsight MRI_BSIGHT
-                        Brainsight mri. This should be a .nii file. The
-                        exported electrodes text file must be in the same
-                        folder and end in .txt. Otherwise, provide the
-                        mri_sight_elec flag
+                        Brainsight mri. This should be a .nii file. The exported
+                        electrodes text file must be in the same folder and end in
+                        .txt. Otherwise, provide the mri_sight_elec flag
   -mri_bsight_elec MRI_BSIGHT_ELEC
                         Exported electrodes file from brainsight. This has the
                         locations of the fiducials
-  -bids_session BIDS_SESSION
-                        Data acquisition session. This is set to 1 by default.
-                        If the same subject had multiple sessions this must be
-                        set manually
 ```
 ### make_bid_fs_swarm.sh
 From the bids folder - will create derivatives folder for freesurfer/subjects; write out the swarm file; and submit to swarm (with confirmation)
