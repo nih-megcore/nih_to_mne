@@ -361,6 +361,12 @@ if __name__ == '__main__':
                         help='''The default subject ID is given by the MEG hash.
                         To override the default subject ID, use this flag'''
                         )
+    parser.add_argument('-autocrop_zeros',
+                        help='''If files are terminated early, leaving zeros
+                        at the end of the file - this will detect and remove
+                        the trailing zeros''',
+                        action='store_true'
+                        )
     args=parser.parse_args()
     if (not args.mri_brik) and (not args.mri_bsight):
         raise ValueError('Must supply afni or brainsight coregistration')
