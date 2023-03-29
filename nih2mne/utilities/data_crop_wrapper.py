@@ -3,31 +3,68 @@
 """
 Created on Wed Mar 22 15:38:31 2023
 
-@author: stoutjd
+@author: stoutjd and amaia
 """
+import os, os.path as op
 import mne
 import numpy as np
 import subprocess
-fname = '/home/stoutjd/data/BIDS_ZOOM/sub-ON02747/ses-01/meg/sub-ON02747_ses-01_task-sternberg_run-01_meg.ds'
-raw = mne.io.read_raw_ctf(fname, system_clock='ignore', preload=True)
 
-
-def get_term_time(raw):
+def get_term_time(raw, channel_idx=100):
     '''
     the index of 20 consecutive zeros is used as an identifier to a terminated run (when user hit "abort")
     
     '''
     try:
-        idx_crop = np.where((np.diff(np.convolve(np.ones(20),raw._data[100,:]==0)))==1)[0][0]
+        idx_crop = np.where((np.diff(np.convolve(np.ones(20),raw._data[channel_idx,:]==0)))==1)[0][0]
         return idx_crop/raw.info['sfreq']
     except:
         return False
 
-fname_in = 'test1'
-fname_out = 'test2'
-crop_time = 100
-crop_time = str(crop_time)
+def return_cropped_ds(fname):
+    '''
+    Load the raw dataset, check the time where a set of zeros are present
+    Pass the time to newDs to crop the datset into a temp subfolder in the 
+    directory of the original file.
 
-cmd = f'newDs -f -time 0 {crop_time} {fname_in} {fname_out}'
+    Parameters
+    ----------
+    fname : str
+        Path String.
 
-subprocess.run(cmd.split())
+    Raises
+    ------
+    RuntimeError
+        If it cannot find a termination point to the scan it returns error.
+
+    Returns
+    -------
+    fname_out : str
+        Path to new cropped dataset.
+
+    '''
+    assert fname.endswith('.ds')
+    install_check()
+    raw = mne.io.read_raw_ctf(fname, system_clock='ignore', preload=True)
+    
+    crop_time = get_term_time(raw)
+    if endtime == False:
+        raise RuntimeError('Could not find a terminated timepoint')
+    base = op.dirname(fname)
+    f_ = op.basename(fname)
+    outdir = op.join(base, 'tmp_cropped')
+    if not op.exists(outdir): os.mkdir(outdir)
+    fname_out = op.join(outdir, fname) 
+    cmd = f'newDs -f -time 0 {str(crop_time)} {fname} {fname_out}'
+    subprocess.run(cmd)
+    return fname_out
+    
+
+def install_check():
+    try:
+        assert shutil.which('newDs') != None
+    except:
+        raise BaseException('''The CTF tools are not installed on this system
+                            if on biowulf do module load ctf and rerun''')
+    
+
