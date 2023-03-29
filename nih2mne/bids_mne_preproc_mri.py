@@ -69,6 +69,7 @@ trans_fname = deriv_path.copy().update(suffix='trans',extension='.fif')
 subjects_dir = mne_bids.read.get_subjects_dir()
 fs_subject = 'sub-'+bids_path.subject
 if not bem_fname.fpath.exists():
+    mne.make_watershed_bem(fs_subject, subjects_dir=subjects_dir)
     bem = mne.make_bem_model(fs_subject, subjects_dir=f'{subjects_dir}', 
                              conductivity=[0.3])
     bem_sol = mne.make_bem_solution(bem)
