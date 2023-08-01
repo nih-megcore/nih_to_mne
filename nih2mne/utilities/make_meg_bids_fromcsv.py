@@ -98,7 +98,7 @@ def make_cmd(row):
     tmp.rename(csv_cmdline_mapping, inplace=True) 
     tmp.dropna(inplace=True) #First round cleaning  
     cmd = ['make_meg_bids.py']
-    for option,value in tmp.iteritems():
+    for option,value in tmp.items():
         cmd.append(f'-{option} {value}')
     cmd = ' '.join(cmd)
     return cmd.replace('"','') 
