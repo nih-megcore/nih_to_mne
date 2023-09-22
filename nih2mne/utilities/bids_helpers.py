@@ -10,6 +10,7 @@ import mne
 import mne_bids
 import os.path as op
 from functools import partial
+import glob
 
 def get_project(bids_root, project=None):
     '''
