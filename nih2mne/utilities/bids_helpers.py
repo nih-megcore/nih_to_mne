@@ -65,34 +65,16 @@ def get_project(bids_root, project=None):
 class data_getter():
     def __init__(
             self, 
-            subject=None, 
             bids_path=None, 
             ):
         '''
         Find BIDS derivatives in project folder.  Project will be guessed if 
         not provided (also assumes only 1 project present beyond freesurfer).
         
-        Use with either filename to assess OR search type.  Will return the
-        path and data loader.
-
         Parameters
         ----------
-        subject : TYPE, optional
+        bids_path : TYPE, optional
             DESCRIPTION. The default is None.
-        bids_root : TYPE, optional
-            DESCRIPTION. The default is None.
-        session : TYPE, optional
-            DESCRIPTION. The default is '01'.
-        run : TYPE, optional
-            DESCRIPTION. The default is '01'.
-        project : TYPE, optional
-            DESCRIPTION. The default is None.
-        filename : TYPE, optional
-            DESCRIPTION. The default is None.
-        search_type : TYPE, optional
-            DESCRIPTION. The default is None.
-         : TYPE
-            DESCRIPTION.
 
         Returns
         -------
@@ -100,14 +82,15 @@ class data_getter():
 
         '''
         
-        # self.subject=subject.replace('sub-','')  # Strip sub- if present
         self.bids_path=bids_path
-        self._determine_type()
+        self._determine_type()  #set the self.type
         
     def _determine_type(self):
         tmp_ = op.splitext(self.bids_path.fpath)[0].split('_')[-1]
         if tmp_ in ['bem','fwd','trans','stc','cov','src']:
             self.type = tmp_
+        else:
+            self.type = False
     def _get_loader(self):
         if self.type == 'bem':
             self.loader = mne.bem.read_bem_solution
@@ -118,22 +101,18 @@ class data_getter():
         if self.type == 'trans':
             self.loader = mne.read_trans
     def load(self):
-        self._get_loader()
-        self.data = self.loader(self.bids_path.fpath)
-        
-#%%
-
+        self._get_loader()  #Set the self.loader
+        return self.loader(self.bids_path.fpath)
 
 def get_mri_dict(subject, bids_root=None, project=None, session='01', task=None):
     project_root = get_project(bids_root, project)
-    subj_deriv = op.join(bids_root, 'derivatives',project, 'sub-'+subject)
-    tmp=mne_bids.find_matching_paths(project_root, ['ON02811'], tasks=[task], datatypes='meg')
-    data_getter(tmp)
-    # ['bem','fwd','src','trans'
+    subj_deriv = op.join(bids_root, 'derivatives',project_root, 'sub-'+subject)
+    deriv_bids_paths=mne_bids.find_matching_paths(project_root, ['ON02811'], tasks=[task], datatypes='meg')
+    data_dict={}
+    for bids_path in deriv_bids_paths:
+        tmp_ = data_getter(bids_path)
+        if tmp_.type != False:
+            data_dict[tmp_.type]=tmp_
+    return data_dict
     
-    
-# =============================================================================
-#   
-# =============================================================================
-test = data_getter(subject='ON02811', bids_path = tmp[0])
-test.load()
+# data_dict = get_mri_dict(subject, bids_root=os.getcwd(), task='airpuff')
