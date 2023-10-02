@@ -109,7 +109,7 @@ class data_getter():
 def get_mri_dict(subject, bids_root=None, project=None, session='01', task=None):
     project_root = get_project(bids_root, project)
     subj_deriv = op.join(bids_root, 'derivatives',project_root, 'sub-'+subject)
-    deriv_bids_paths=mne_bids.find_matching_paths(project_root, ['ON02811'], tasks=[task], datatypes='meg')
+    deriv_bids_paths=mne_bids.find_matching_paths(project_root, [subject], tasks=[task], datatypes='meg')
     data_dict={}
     for bids_path in deriv_bids_paths:
         tmp_ = data_getter(bids_path)
