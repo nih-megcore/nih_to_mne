@@ -51,6 +51,7 @@ def get_project(bids_root, project=None):
         project_root = op.join(deriv_root, project)
         if not op.exists(project_root):
             raise ValueError(f"Can't find the folder: {project_root}")
+        return project_root
     #Check for possible project folders
     tmp_=glob.glob(op.join(deriv_root, '*'))
     _=[tmp_.remove(i) for i in tmp_ if op.basename(i) == 'freesurfer']
