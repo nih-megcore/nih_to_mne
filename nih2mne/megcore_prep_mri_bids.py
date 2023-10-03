@@ -9,6 +9,7 @@ Created on Thu Sep 21 10:58:05 2023
 import mne, mne_bids
 from mne_bids import BIDSPath
 import os, os.path as op, glob
+# from nih2mne import get_njobs
 
 n_jobs=10  #<<<<<<<<Fix 
 
@@ -37,7 +38,8 @@ def check_mri(t1_bids_path):
 
 def mripreproc(bids_path=None,
                t1_bids_path=None, 
-               deriv_path=None):
+               deriv_path=None, 
+               surf=True):
     '''
     Generate the typical MRI inputs for processing MEG and saved to the 
     derivatives folder:
@@ -51,6 +53,9 @@ def mripreproc(bids_path=None,
         bids_path for anatomy. The default is None.
     deriv_path : mne_bids.BIDSpath, required
         Output derivatives bids_path. The default is None.
+    surf : Boolean
+        If True (default), use the cortical surface.  Else use the volumetric
+        sampling at 5mm
 
     Returns
     -------
@@ -61,8 +66,13 @@ def mripreproc(bids_path=None,
 
         
     bem_fname = deriv_path.copy().update(suffix='bem', extension='.fif')
-    fwd_fname = deriv_path.copy().update(suffix='fwd', extension='.fif')
-    src_fname = deriv_path.copy().update(suffix='src', extension='.fif')
+    if surf==True:
+        fwd_fname = deriv_path.copy().update(suffix='fwd', extension='.fif')
+        src_fname = deriv_path.copy().update(suffix='src', extension='.fif')
+    else:
+        fwd_fname = deriv_path.copy().update(suffix='volfwd', extension='.fif')
+        src_fname = deriv_path.copy().update(suffix='volsrc', extension='.fif')
+    
     trans_fname = deriv_path.copy().update(suffix='trans',extension='.fif')
     
     raw_fname = bids_path.copy().update(suffix='meg')
@@ -84,12 +94,20 @@ def mripreproc(bids_path=None,
     else:
         bem_sol = mne.read_bem_solution(bem_fname)
         
-    if not src_fname.fpath.exists():
-        src = mne.setup_source_space(fs_subject, spacing='oct6', add_dist='patch',
-                             subjects_dir=subjects_dir)
-        src.save(src_fname.fpath, overwrite=True)
+    if surf==True:
+        if not src_fname.fpath.exists():
+            src = mne.setup_source_space(fs_subject, spacing='oct6', add_dist='patch',
+                                 subjects_dir=subjects_dir)
+            src.save(src_fname.fpath, overwrite=True)
+        else:
+            src = mne.read_source_spaces(src_fname.fpath)
     else:
-        src = mne.read_source_spaces(src_fname.fpath)
+        if not src_fname.fpath.exists():
+            src = mne.setup_volume_source_space(fs_subject, pos=5.0, bem=bem_sol,
+                                 subjects_dir=subjects_dir)
+            src.save(src_fname.fpath, overwrite=True)
+        else:
+            src = mne.read_source_spaces(src_fname.fpath)        
     
     if not trans_fname.fpath.exists():
         trans = mne_bids.read.get_head_mri_trans(bids_path, extra_params=dict(system_clock='ignore'),
@@ -163,9 +181,14 @@ if __name__=='__main__':
                         help='''Output folder name.  This will be generated in the
                         bids derivatives folder''',
                         default='nihmeg')
+    parser.add_argument('-volume',
+                        help='''Perform the MRI processing in volume space''',
+                        action='store_true',
+                        default=False)
     args = parser.parse_args()
     filename = args.filename
     project_name = args.project
+    proc_surf = not args.volume
     
     bids_path = mne_bids.get_bids_path_from_fname(filename)
     deriv_path = bids_path.copy().update(root=op.join(bids_path.root, 'derivatives', project_name), check=False)
@@ -181,4 +204,4 @@ if __name__=='__main__':
                       extension='.nii.gz',
                       check=True)    
     t1_bids_path = check_mri(tmp_t1_path)
-    mripreproc(bids_path, t1_bids_path, deriv_path)
+    mripreproc(bids_path, t1_bids_path, deriv_path, surf=proc_surf)
