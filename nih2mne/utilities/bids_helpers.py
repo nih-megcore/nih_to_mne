@@ -89,7 +89,7 @@ class data_getter():
         
     def _determine_type(self):
         tmp_ = op.splitext(self.bids_path.fpath)[0].split('_')[-1]
-        if tmp_ in ['bem','fwd','trans','stc','cov','src']:
+        if tmp_ in ['bem','fwd','volfwd','trans','stc','cov','src']:
             self.type = tmp_
         else:
             self.type = False
@@ -97,6 +97,8 @@ class data_getter():
         if self.type == 'bem':
             self.loader = mne.bem.read_bem_solution
         if self.type == 'fwd':
+            self.loader = mne.read_forward_solution
+        if self.type == 'volfwd':
             self.loader = mne.read_forward_solution
         if self.type == 'src':
             self.loader = mne.read_source_spaces
