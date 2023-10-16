@@ -90,8 +90,31 @@ def sessdir2taskrundict(session_dir=None):
     
     return out_dict
         
+def anonymize_meg(meg_fname, tmpdir=None):
+    '''
+    
 
-def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1):
+    Parameters
+    ----------
+    meg_input_dir : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    '''
+    if tmpdir == None:
+        raise ValueError
+    out_fname = op.join(tmpdir, meg_fname)
+    cmd = f'newDs -anon {meg_fname} {out_fname}'
+    subprocess.run(cmd.split())
+    return out_fname
+    
+    
+
+def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1, 
+                     anonymize=False):
     '''
     Process the MEG component of the data into bids.
     Calls sessdir2taskrundict to get the task IDs and sort according to run #
@@ -129,6 +152,9 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1):
         for run, base_meg_fname in enumerate(task_sublist, start=1):
             meg_fname = op.join(input_path, base_meg_fname) 
             
+            if anonymize==True:
+                meg_fname = anonymize_meg(meg_fname) #Reference off of the output fname
+            
             #Special case for pre/post intervention in same session
             testval_case = base_meg_fname.replace('.ds','').split('_')[-1]
             if testval_case.lower() == 'pre':
@@ -139,8 +165,8 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1):
                 logging.info(f'Special case post assigned to run2: {meg_fname}')
             
             try:
-                # subject = op.basename(meg_fname).split('_')[0]
-                raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore')  
+                raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore', 
+                                          clean_names=True)  
                 raw.info['line_freq'] = 60 
                 
                 ses = session
@@ -331,13 +357,20 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('''
         Convert MEG dataset to default Bids format using the MEG hash ID or 
         entered subject ID as the bids ID.        
-        \n\nWARNING: This does NOT anonymize the data!!!
+        \n\nWARNING: Must use the -anonymize flag to anonymize otherwise 
+        this does NOT anonymize the data!!!
         ''')
     parser.add_argument('-bids_dir', help='Output bids_dir path', 
                         default=op.join(os.getcwd(),'bids_dir'))
     parser.add_argument('-meg_input_dir', 
-                        help=''''Acquisition directory - typically designated
+                        help='''Acquisition directory - typically designated
                         by the acquisition date''', required=True)
+    parser.add_argument('-anonymize', 
+                        help='''Strip out subject ID information from the MEG
+                        data.  Currently this does not anonymize the MRI.
+                        Requires the CTF tools.''',
+                        default=False,
+                        action='store_true')
     group1 = parser.add_argument_group('Afni Coreg')
     group1.add_argument('-mri_brik', 
                         help='''Afni coregistered MRI''')
@@ -370,12 +403,19 @@ if __name__ == '__main__':
     args=parser.parse_args()
     if (not args.mri_brik) and (not args.mri_bsight):
         raise ValueError('Must supply afni or brainsight coregistration')
-    
+        
     #Initialize
     if not op.exists(args.bids_dir): os.mkdir(args.bids_dir)
-    notanon_fname = op.join(args.bids_dir, 'NOT_ANONYMIZED!!!.txt')
-    with open(notanon_fname, 'a') as w:
-        w.write(args.meg_input_dir + '\n')
+    if args.anonymize==True:
+        try:
+            assert shutil.which('newDs') is not None  #Check for CTF tools
+        except ProcessLookupError as e:
+            print('''CTF tools are not detected on this system.  These are required
+                  to anonymize the data''')
+    else:
+        notanon_fname = op.join(args.bids_dir, 'NOT_ANONYMIZED!!!.txt')
+        with open(notanon_fname, 'a') as w:
+            w.write(args.meg_input_dir + '\n')
 
     #Establish Logging
     # global logger
@@ -388,21 +428,36 @@ if __name__ == '__main__':
         subjid = _check_multiple_subjects(args.meg_input_dir)
     logger = get_subj_logger(subjid, log_dir=logger_dir, loglevel=logging.DEBUG)
     
+    #Create temporary directories at the parent directory of the bids dir
+    global temp_dir
+    temp_dir=Path(args.bids_dir).parent / 'bids_prep_temp'
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    
     #
     #   Process MEG
     #
+    if args.anonymize:
+        #Create temp dir for MEG anonymization
+        temp_meg_dir = temp_dir / 'meg_tmp' 
+        temp_meg_dir.mkdir(parents=True, exist_ok=True)
+        temp_meg_prep = temp_dir / 'meg_tmp' / subjid
+        if op.exists(temp_meg_prep): shutil.rmtree(temp_meg_prep)
+        temp_meg_prep.mkdir(parents=True)
+        kwargs={'tmpdir':temp_meg_prep}
+    else:
+        kwargs={}
+    
     process_meg_bids(input_path=args.meg_input_dir,
                      subject=subjid,
                       bids_dir=args.bids_dir, 
-                      session=args.bids_session)
+                      session=args.bids_session, 
+                      anonymize=args.anonymize, 
+                      **kwargs)
     
     #
     #   Prep MRI
     #
-    #Create temporary MRI directories at the parent directory of the bids dir
-    global temp_dir
-    temp_dir=Path(args.bids_dir).parent / 'bids_prep_temp'
-    temp_dir.mkdir(parents=True, exist_ok=True)
+    #Create temp dir for MRI
     temp_subjects_dir = temp_dir / 'subjects_tmp' 
     temp_subjects_dir.mkdir(parents=True, exist_ok=True)
     temp_mri_prep = temp_dir / 'mri_tmp' / subjid
