@@ -114,7 +114,7 @@ def anonymize_meg(meg_fname, tmpdir=None):
     
 
 def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1, 
-                     anonymize=False):
+                     anonymize=False, tmpdir=None):
     '''
     Process the MEG component of the data into bids.
     Calls sessdir2taskrundict to get the task IDs and sort according to run #
@@ -153,7 +153,7 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1,
             meg_fname = op.join(input_path, base_meg_fname) 
             
             if anonymize==True:
-                meg_fname = anonymize_meg(meg_fname) #Reference off of the output fname
+                meg_fname = anonymize_meg(meg_fname, tmpdir=tmpdir) #Reference off of the output fname
             
             #Special case for pre/post intervention in same session
             testval_case = base_meg_fname.replace('.ds','').split('_')[-1]
