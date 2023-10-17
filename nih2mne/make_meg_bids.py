@@ -385,8 +385,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('''
         Convert MEG dataset to default Bids format using the MEG hash ID or 
         entered subject ID as the bids ID.        
-        \n\nWARNING: Must use the -anonymize flag to anonymize otherwise 
-        this does NOT anonymize the data!!!
+        \n\nWARNING: Must use the -anonymize flag to anonymize otherwise this does NOT anonymize the data!!!
         ''')
     parser.add_argument('-bids_dir', help='Output bids_dir path', 
                         default=op.join(os.getcwd(),'bids_dir'))
@@ -420,7 +419,8 @@ if __name__ == '__main__':
                         required=False)
     parser.add_argument('-subjid',
                         help='''The default subject ID is given by the MEG hash.
-                        To override the default subject ID, use this flag'''
+                        To override the default subject ID, use this flag.\n\n                        
+                        If -anonymize is used, you must set the subjid'''
                         )
     parser.add_argument('-autocrop_zeros',
                         help='''If files are terminated early, leaving zeros
@@ -434,6 +434,9 @@ if __name__ == '__main__':
         
     #Initialize
     if not op.exists(args.bids_dir): os.mkdir(args.bids_dir)
+    if args.anonymize==True and args.subjid is None:
+        parser.error("-anonymize requires -subjid")
+    
     if args.anonymize==True:
         try:
             assert shutil.which('newDs') is not None  #Check for CTF tools
