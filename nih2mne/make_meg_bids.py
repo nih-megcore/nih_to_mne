@@ -28,6 +28,10 @@ from mne_bids import write_anat, BIDSPath, write_raw_bids
 from nih2mne.calc_mnetrans import write_mne_fiducials 
 from nih2mne.calc_mnetrans import write_mne_trans
 
+from nih2mne.utilities.clear_mrk_path import (calc_extra_mark_filelist,
+                                              remove_extra_mrk_files, 
+                                              clean_filepath_header)
+
 global logger
 logger = logging.getLogger('__main__')
 
@@ -92,16 +96,20 @@ def sessdir2taskrundict(session_dir=None):
         
 def anonymize_meg(meg_fname, tmpdir=None):
     '''
+    Run the standard anonymization from the CTF tools
     
 
     Parameters
     ----------
     meg_input_dir : TYPE
         DESCRIPTION.
+    tmpdir : str
+        Path to the temporary directory.  Should be automatically generated
+        by input function
 
     Returns
     -------
-    None.
+    anonymized meg path : str
 
     '''
     if tmpdir == None:
@@ -110,6 +118,24 @@ def anonymize_meg(meg_fname, tmpdir=None):
     cmd = f'newDs -anon {meg_fname} {out_fname}'
     subprocess.run(cmd.split())
     return out_fname
+
+def anonymize_finalize(meg_fname):
+    '''This is assumed to be the tempdir directory of the meg
+    Clean up extra text files that may have IDs in the history or path etc'''
+    remove_files=[]
+    remove_files.extend(glob.glob(os.path.join(meg_fname, '*.bak')))
+    remove_files.extend(glob.glob(os.path.join(meg_fname, '*.hist')))
+    for rem_file in remove_files:
+        os.remove(rem_file)
+    
+    #Scrub the path information from the header of the mark file
+    mrk_file = os.path.join(meg_fname, 'MarkerFile.mrk')
+    if os.path.exists(mrk_file):
+        clean_filepath_header(mrk_file)
+    # Remove extra mark files that may be present
+    extra_mrk_files=calc_extra_mark_filelist(meg_fname)
+    if extra_mrk_files==[]:
+        remove_extra_mrk_files(extra_mrk_files)
     
     
 
@@ -153,7 +179,9 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1,
             meg_fname = op.join(input_path, base_meg_fname) 
             
             if anonymize==True:
-                meg_fname = anonymize_meg(meg_fname, tmpdir=tmpdir) #Reference off of the output fname
+                #Anonymize file and ref new dset off of the output fname
+                meg_fname = anonymize_meg(meg_fname, tmpdir=tmpdir) 
+                anonymize_finalize(meg_fname) #Scrub or remove extra text files
             
             #Special case for pre/post intervention in same session
             testval_case = base_meg_fname.replace('.ds','').split('_')[-1]

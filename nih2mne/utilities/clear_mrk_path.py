@@ -36,9 +36,10 @@ def calc_extra_mark_filelist(filename, mrk_outfile='MarkerFile.mrk'):
     extra_mrk_files = glob.glob(os.path.join(filename,'*.mrk')) + \
         glob.glob(os.path.join(filename, '*.mrk.bak')) + \
         glob.glob(os.path.join(filename, '*.mrkBAK'))
-    extra_mrk_files_basename=[os.path.basename(name) for name in extra_mrk_files]
-    outfile_idx = extra_mrk_files_basename.index(mrk_outfile)
-    _ = extra_mrk_files.pop(outfile_idx) #discard outfile from deletion
+    if extra_mrk_files != []:
+        extra_mrk_files_basename=[os.path.basename(name) for name in extra_mrk_files]
+        outfile_idx = extra_mrk_files_basename.index(mrk_outfile)
+        _ = extra_mrk_files.pop(outfile_idx) #discard outfile from deletion
     return extra_mrk_files
 
 
