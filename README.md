@@ -1,9 +1,14 @@
 [![nih2mne-tests](https://github.com/nih-megcore/nih_to_mne/actions/workflows/nih2mne-actions.yml/badge.svg?branch=master)](https://github.com/nih-megcore/nih_to_mne/actions/workflows/nih2mne-actions.yml)
 
-Create MNE transformation matrix from NIMH MEG datasets <br>
-Create tag files from Brainsight electrode files for use with AFNI/SAM processing <br>
-Create BIDS data from the default acquisition file naming from the NIMH CTF scanner <br>
-Preprocess eyetracking data <br>
+## Major Components
+```
+  calc_mnetrans.py - extract the transformation matrix (used under the hood in other processes)
+  make_meg_bids.py - perform the whole bids conversion of the CTF folder
+  make_bid_fs_swarm.sh - On biowulf create the swarm file for the freesurfer processing
+  megcore_prep_mri_bids.py - perform all of the standard MRI processing for datasets
+  eyetracking_preprocessing.py - identify eyetracking position from UADC channels
+  print_bids_table.py - make a csv file that lists all the contents of your bids tree
+```
 
 ## Install:
 ```pip install git+https://github.com/nih-megcore/nih_to_mne```
