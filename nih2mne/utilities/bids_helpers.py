@@ -12,6 +12,8 @@ import os.path as op
 from functools import partial
 import glob
 
+search_list = ['bem','fwd','volfwd','trans','stc','cov','src']
+
 def get_project(bids_root, project=None):
     '''
     Simple search and check for the project root
@@ -89,7 +91,7 @@ class data_getter():
         
     def _determine_type(self):
         tmp_ = op.splitext(self.bids_path.fpath)[0].split('_')[-1]
-        if tmp_ in ['bem','fwd','volfwd','trans','stc','cov','src']:
+        if tmp_ in search_list:
             self.type = tmp_
         else:
             self.type = False
@@ -111,7 +113,7 @@ class data_getter():
 def get_mri_dict(subject, bids_root=None, project=None, session='01', task=None):
     project_root = get_project(bids_root, project)
     subj_deriv = op.join(bids_root, 'derivatives',project_root, 'sub-'+subject)
-    deriv_bids_paths=mne_bids.find_matching_paths(project_root, [subject], tasks=[task], datatypes='meg')
+    deriv_bids_paths = mne_bids.find_matching_paths(project_root, [subject], tasks=[task], datatypes='meg', sessions=session, suffixes=search_list)
     data_dict={}
     for bids_path in deriv_bids_paths:
         tmp_ = data_getter(bids_path)
