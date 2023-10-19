@@ -43,8 +43,11 @@ logger = logging.getLogger('__main__')
 # Assume no repeats
 # =============================================================================
 
-
-
+#Set some parameters for anonmizing the MEG data
+scrub_list_general = ['MarkerFile.mrk', 'ClassFile.cls', '*.xml']
+include_list_general = ['BadChannels', 'ClassFile.cls', 'MarkerFile.mrk', 'params.dsc', 
+                'processing.cfg','*.acq', '*.hc', '*.res4', '*.meg4', '*.xml', 
+                '*.infods']
 
 def sessdir2taskrundict(session_dir=None):
     '''
@@ -122,21 +125,31 @@ def anonymize_meg(meg_fname, tmpdir=None):
 def anonymize_finalize(meg_fname):
     '''This is assumed to be the tempdir directory of the meg
     Clean up extra text files that may have IDs in the history or path etc'''
-    remove_files=[]
-    remove_files.extend(glob.glob(os.path.join(meg_fname, '*.bak')))
-    remove_files.extend(glob.glob(os.path.join(meg_fname, '*.hist')))
+    include_list = []
+    scrub_list = []
+    # Fill out lists with wildcards
+    all_files = set(glob.glob(op.join(meg_fname, '*')))
+    for fname in include_list_general:
+        tmp_ = glob.glob(op.join(meg_fname, fname))
+        if (tmp_ != []) | ('*' not in tmp_):
+            include_list.extend(tmp_)
+    for fname in scrub_list_general:
+        tmp_ = glob.glob(op.join(meg_fname, fname))
+        if (tmp_ != []) | ('*' not in tmp_):
+            scrub_list.extend(tmp_)    
+    
+    #Remove extra files
+    remove_files = all_files.difference(set(include_list))
     for rem_file in remove_files:
-        os.remove(rem_file)
+        if op.isdir(rem_file):
+            shutil.rmtree(rem_file)
+        else:
+            os.remove(rem_file)
     
-    #Scrub the path information from the header of the mark file
-    mrk_file = os.path.join(meg_fname, 'MarkerFile.mrk')
-    if os.path.exists(mrk_file):
-        clean_filepath_header(mrk_file)
-    # Remove extra mark files that may be present
-    extra_mrk_files=calc_extra_mark_filelist(meg_fname)
-    if extra_mrk_files==[]:
-        remove_extra_mrk_files(extra_mrk_files)
-    
+    #Scrub path info from the header of scrub files (could potentially have date info)
+    for scrub_file in scrub_list:
+        clean_filepath_header(scrub_file)
+    logger.info('Completed Scrubbing MEG files')
     
 
 def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1, 
