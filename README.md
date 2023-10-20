@@ -53,36 +53,38 @@ usage:
         entered subject ID as the bids ID.        
         
 
-WARNING: This does NOT anonymize the data!!!
+WARNING: Must use the -anonymize flag to anonymize otherwise this does NOT anonymize the data!!!
         
-       [-h] [-bids_dir BIDS_DIR] -meg_input_dir MEG_INPUT_DIR [-mri_brik MRI_BRIK]
-       [-mri_bsight MRI_BSIGHT] [-mri_bsight_elec MRI_BSIGHT_ELEC]
-       [-bids_session BIDS_SESSION] [-subjid SUBJID]
+       [-h] [-bids_dir BIDS_DIR] -meg_input_dir MEG_INPUT_DIR [-anonymize] [-mri_brik MRI_BRIK]
+       [-mri_bsight MRI_BSIGHT] [-mri_bsight_elec MRI_BSIGHT_ELEC] [-bids_session BIDS_SESSION]
+       [-subjid SUBJID] [-autocrop_zeros]
 
 options:
   -h, --help            show this help message and exit
   -bids_dir BIDS_DIR    Output bids_dir path
   -meg_input_dir MEG_INPUT_DIR
-                        Acquisition directory - typically designated by the
-                        acquisition date
+                        Acquisition directory - typically designated by the acquisition date
+  -anonymize            Strip out subject ID information from the MEG data. Currently this does not
+                        anonymize the MRI. Requires the CTF tools.
   -bids_session BIDS_SESSION
-                        Data acquisition session. This is set to 1 by default. If
-                        the same subject had multiple sessions this must be set
-                        manually
-  -subjid SUBJID        The default subject ID is given by the MEG hash. To override
-                        the default subject ID, use this flag
+                        Data acquisition session. This is set to 1 by default. If the same subject had
+                        multiple sessions this must be set manually
+  -subjid SUBJID        The default subject ID is given by the MEG hash. To override the default
+                        subject ID, use this flag. If -anonymize is used, you must set the subjid
+  -autocrop_zeros       If files are terminated early, leaving zeros at the end of the file - this
+                        will detect and remove the trailing zeros
 
 Afni Coreg:
   -mri_brik MRI_BRIK    Afni coregistered MRI
 
 Brainsight Coreg:
   -mri_bsight MRI_BSIGHT
-                        Brainsight mri. This should be a .nii file. The exported
-                        electrodes text file must be in the same folder and end in
-                        .txt. Otherwise, provide the mri_sight_elec flag
+                        Brainsight mri. This should be a .nii file. The exported electrodes text file
+                        must be in the same folder and end in .txt. Otherwise, provide the
+                        mri_sight_elec flag
   -mri_bsight_elec MRI_BSIGHT_ELEC
-                        Exported electrodes file from brainsight. This has the
-                        locations of the fiducials
+                        Exported electrodes file from brainsight. This has the locations of the
+                        fiducials
 ```
 ### make_bid_fs_swarm.sh
 From the bids folder - will create derivatives folder for freesurfer/subjects; write out the swarm file; and submit to swarm (with confirmation)
