@@ -247,6 +247,29 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1,
             except BaseException as e:
                 logger.exception('MEG BIDS PROCESSING:', e)
                 error_count+=1
+    #
+    #Include the emptyroom dataset   
+    #
+    try:
+        tmp_ = str(int(np.random.uniform(0, 1e10)))  #Make a random name
+        tmpdir=op.join(temp_dir, f'er_{tmp_}')
+        if not op.exists(tmpdir): os.mkdir(tmpdir)
+        er_fname = get_eroom(meg_fname, tmpdir=tmpdir) 
+        raw = mne.io.read_raw_ctf(er_fname, system_clock='ignore', 
+                                  clean_names=True)  
+        raw.info['line_freq'] = 60 
+        
+        ses = session
+        task = 'noise'
+        run = '01'
+        bids_path = BIDSPath(subject=subject, session=ses, task=task,
+                              run=run, root=bids_dir, suffix='meg')
+        write_raw_bids(raw, bids_path, overwrite=True)
+        logger.info(f'Successful MNE BIDS: {er_fname} to {bids_path}')
+    except BaseException as e:
+        logger.exception('MEG BIDS PROCESSING EMPTY ROOM:', e)
+        error_count+=1
+
     if error_count > 0:
         logger.info(f'There were {error_count} errors in your processing, \
                     check the error log for more information')  #!!! print the error log location
