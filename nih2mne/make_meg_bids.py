@@ -116,10 +116,12 @@ def get_eroom(meg_fname, tmpdir=None):
         Path to emptyroom file.
 
     '''
-    from nih2mne.utilities.emptyroom_utilies import get_closest_eroom, pull_eroom
+    from nih2mne.utilities.emptyroom_utilities import get_closest_eroom, pull_eroom
     er_fname = get_closest_eroom(meg_fname)
+    print('Pulling and untar/unzip emptyroom')
     pull_eroom(er_fname, tmpdir=tmpdir)
     er_fname = op.join(tmpdir, op.basename(er_fname))
+    print(f'Using {er_fname} for emptyroom')
     return er_fname   
         
 def anonymize_meg(meg_fname, tmpdir=None):

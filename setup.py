@@ -26,6 +26,7 @@ setuptools.setup(
         'nih2mne/make_meg_bids.py',
         'nih2mne/utilities/make_meg_bids_fromcsv.py',
         'nih2mne/utilities/print_bids_table.py',
+        'nih2mne/utilities/fix_dsname.py',
         'nih2mne/eyetracking_preprocessing.py',
         'nih2mne/megcore_prep_mri_bids.py'],
 )

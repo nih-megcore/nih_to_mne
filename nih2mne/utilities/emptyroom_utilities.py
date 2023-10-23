@@ -9,7 +9,7 @@ import datetime
 import os, os.path as op
 import glob
 import subprocess
-
+import copy
 
 def compile_erooms(eroom_location='/data/MEGmodules/extras/EmptyRoom'):
     '''Simple list of files in the eroom_location folder and converts these
@@ -64,12 +64,12 @@ def get_closest_eroom(meg_fname, eroom_dict=None, eroom_location=None):
         else:
             eroom_dict = compile_erooms(eroom_location)
     megdate = convert_meg_datetime(meg_fname)
-    res = min(eroom_dates, key=lambda curr: abs(curr - megdate))
+    res = min(eroom_dict.keys(), key=lambda curr: abs(curr - megdate))
     closest_eroom = eroom_dict[res]
     return closest_eroom
 
-def pull_eroom(eroom_fname, tempdir=None):
-    cmd=f'tar -xf {eroom_fname} -C {tempdir}'
+def pull_eroom(eroom_fname, tmpdir=None):
+    cmd=f'tar -xf {eroom_fname} -C {tmpdir}'
     subprocess.run(cmd.split())
 
 
