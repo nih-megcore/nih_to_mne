@@ -96,6 +96,31 @@ def sessdir2taskrundict(session_dir=None):
         out_dict[key]=sublist
     
     return out_dict
+
+def get_eroom(meg_fname, tmpdir=None):
+    '''
+    Find the closest emptyroom.  
+    Download it to a local temp folder.  
+    Untar/zip the file and return the new emptyroom for BIDS
+
+    Parameters
+    ----------
+    meg_fname : str
+        Path to MEG file.
+    tmpdir : str, optional
+        Tempdir to download the emptyroom file.  Default is None.
+
+    Returns
+    -------
+    er_fname : str
+        Path to emptyroom file.
+
+    '''
+    from nih2mne.utilities.emptyroom_utilies import get_closest_eroom, pull_eroom
+    er_fname = get_closest_eroom(meg_fname)
+    pull_eroom(er_fname, tmpdir=tmpdir)
+    er_fname = op.join(tmpdir, op.basename(er_fname))
+    return er_fname   
         
 def anonymize_meg(meg_fname, tmpdir=None):
     '''

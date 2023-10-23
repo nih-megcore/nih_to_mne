@@ -68,7 +68,7 @@ def get_closest_eroom(meg_fname, eroom_dict=None, eroom_location=None):
     closest_eroom = eroom_dict[res]
     return closest_eroom
 
-def get_eroom(eroom_fname, tempdir=None):
+def pull_eroom(eroom_fname, tempdir=None):
     cmd=f'tar -xf {eroom_fname} -C {tempdir}'
     subprocess.run(cmd.split())
 
