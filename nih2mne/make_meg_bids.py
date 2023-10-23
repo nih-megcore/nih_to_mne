@@ -121,7 +121,7 @@ def get_eroom(meg_fname, tmpdir=None):
     print('Pulling and untar/unzip emptyroom')
     pull_eroom(er_fname, tmpdir=tmpdir)
     er_fname = op.join(tmpdir, op.basename(er_fname))
-    print(f'Using {er_fname} for emptyroom')
+    logger.info(f'Using {er_fname} for emptyroom')
     return er_fname   
         
 def anonymize_meg(meg_fname, tmpdir=None):

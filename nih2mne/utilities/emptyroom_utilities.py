@@ -59,10 +59,14 @@ def get_closest_eroom(meg_fname, eroom_dict=None, eroom_location=None):
 
     '''
     if eroom_dict==None:
-        if eroom_location==None:
+        if (eroom_location==None) and ('eroom_location' in os.environ):
+            eroom_location=os.environ['eroom_location']
+            eroom_dict = compile_erooms(eroom_location)
+        elif(eroom_location==None) and ('eroom_location' not in os.environ):
             eroom_dict = compile_erooms()
         else:
             eroom_dict = compile_erooms(eroom_location)
+    assert len(eroom_dict) > 0
     megdate = convert_meg_datetime(meg_fname)
     res = min(eroom_dict.keys(), key=lambda curr: abs(curr - megdate))
     closest_eroom = eroom_dict[res]
