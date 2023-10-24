@@ -120,7 +120,7 @@ def get_eroom(meg_fname, tmpdir=None):
     er_fname = get_closest_eroom(meg_fname)
     print('Pulling and untar/unzip emptyroom')
     pull_eroom(er_fname, tmpdir=tmpdir)
-    er_fname = op.join(tmpdir, op.basename(er_fname))
+    er_fname = op.join(tmpdir, op.basename(er_fname)).replace('.tgz','.ds')
     logger.info(f'Using {er_fname} for emptyroom')
     return er_fname   
         
