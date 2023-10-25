@@ -49,7 +49,7 @@ include_list_general = ['BadChannels', 'ClassFile.cls', 'MarkerFile.mrk', 'param
                 'processing.cfg','*.acq', '*.hc', '*.res4', '*.meg4', '*.xml', 
                 '*.infods']
 
-def sessdir2taskrundict(session_dir=None):
+def sessdir2taskrundict(session_dir=None, subject_in=None):
     '''
     Convert a subject session to a dictionary with each run input name
     as the dict key and the bids task and run as values
@@ -79,6 +79,8 @@ def sessdir2taskrundict(session_dir=None):
     for dset in dsets:
         if not dset.endswith('.ds'):
             logger.warning(f'{dset} does not end in .ds and will be ignored')
+        elif subject_in not in dset:
+            continue  #Ignore datasets that are not this subjects
         else:
             tmp_.append(dset)
     dsets = sorted(tmp_)
@@ -179,7 +181,8 @@ def anonymize_finalize(meg_fname):
     logger.info('Completed Scrubbing MEG files')
     
 
-def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1, 
+def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
+                     bids_dir=None, session=1, 
                      anonymize=False, tmpdir=None):
     '''
     Process the MEG component of the data into bids.
@@ -195,8 +198,10 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1,
         Path to the MEG folder - typically designated by a Date.
     bids_dir : str, optional
         Output path for your bids data.
-    subject : str, 
-        Bids subject ID
+    bids_id : str, optional 
+        BIDS subject ID
+    subject_in : str, 
+        MEG subject ID to search for if multiples in folder
     session : int
         Session number for data acquisition.  Defaults to 1 if not set
 
@@ -208,7 +213,7 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1,
     if bids_dir==None:
         raise ValueError('No bids_dir output directory given')
     if not os.path.exists(bids_dir): os.mkdir(bids_dir)
-    dset_dict = sessdir2taskrundict(session_dir=input_path)
+    dset_dict = sessdir2taskrundict(session_dir=input_path, subject_in=subject_in)
     
     session = str(int(session)) #Confirm no leading zeros
     #if len(session)==1: session = '0'+session
@@ -240,7 +245,7 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1,
                 ses = session
                 run = str(run) 
                 if len(run)==1: run='0'+run
-                bids_path = BIDSPath(subject=subject, session=ses, task=task,
+                bids_path = BIDSPath(subject=bids_id, session=ses, task=task,
                                       run=run, root=bids_dir, suffix='meg')
                 write_raw_bids(raw, bids_path, overwrite=True)
                 logger.info(f'Successful MNE BIDS: {meg_fname} to {bids_path}')
@@ -262,7 +267,7 @@ def process_meg_bids(input_path=None, subject=None, bids_dir=None, session=1,
         ses = session
         task = 'noise'
         run = '01'
-        bids_path = BIDSPath(subject=subject, session=ses, task=task,
+        bids_path = BIDSPath(subject=bids_id, session=ses, task=task,
                               run=run, root=bids_dir, suffix='meg')
         write_raw_bids(raw, bids_path, overwrite=True)
         logger.info(f'Successful MNE BIDS: {er_fname} to {bids_path}')
@@ -307,7 +312,7 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
     tmp_ = tmp_subjects_dir.parent / 'trans_mats'
     if not os.path.exists(tmp_): os.mkdir(tmp_)
     trans_dir = tmp_subjects_dir.parent / 'trans_mats' / subjid
-    trans_dir.mkdir()
+    if not os.path.exists(trans_dir): trans_dir.mkdir()
     fid_path = trans_dir / f'{subjid}-fiducials.fif'
     if (afni_fname is not None) and (bsight_elec is not None):
         logger.error(f'''Brainsight and Afni Brik Coreg can not both be chosen:
@@ -325,6 +330,7 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
         # continue  #No need to write trans if fiducials can't be written
     try:              
         trans_fname=trans_dir / (subjid +'-trans.fif')
+        if op.exists(trans_fname): os.remove(trans_fname)
         write_mne_trans(mne_fids_path=str(fid_path),
                         dsname=meg_fname, 
                         output_name=str(trans_fname),
@@ -480,7 +486,14 @@ if __name__ == '__main__':
                         this must be set manually''',
                         default=1,
                         required=False)
-    parser.add_argument('-subjid',
+    parser.add_argument('-subjid_input',
+                        help='''The default subject ID is given by the MEG hash.
+                        If more than one subject is present in a folder, this
+                        option can be set to select a single subjects dataset.
+                        ''',
+                        required=False
+                        )
+    parser.add_argument('-bids_id',
                         help='''The default subject ID is given by the MEG hash.
                         To override the default subject ID, use this flag.\n\n                        
                         If -anonymize is used, you must set the subjid'''
@@ -497,8 +510,8 @@ if __name__ == '__main__':
         
     #Initialize
     if not op.exists(args.bids_dir): os.mkdir(args.bids_dir)
-    if args.anonymize==True and args.subjid is None:
-        parser.error("-anonymize requires -subjid")
+    if args.anonymize==True and args.bids_id is None:
+        parser.error("-anonymize requires -bids_id")
     
     if args.anonymize==True:
         try:
@@ -507,6 +520,8 @@ if __name__ == '__main__':
             print('''CTF tools are not detected on this system.  These are required
                   to anonymize the data''')
     else:
+        if (args.subjid_input != None) and (args.bids_id == None):
+            args.bids_id = args.subjid_input
         notanon_fname = op.join(args.bids_dir, 'NOT_ANONYMIZED!!!.txt')
         with open(notanon_fname, 'a') as w:
             w.write(args.meg_input_dir + '\n')
@@ -516,8 +531,8 @@ if __name__ == '__main__':
     logger_dir = Path(args.bids_dir).parent / 'bids_prep_logs'
     logger_dir.mkdir(exist_ok=True)
     
-    if args.subjid:
-        subjid=args.subjid
+    if args.subjid_input:
+        subjid=args.subjid_input
     else:
         subjid = _check_multiple_subjects(args.meg_input_dir)
     logger = get_subj_logger(subjid, log_dir=logger_dir, loglevel=logging.DEBUG)
@@ -542,8 +557,9 @@ if __name__ == '__main__':
         kwargs={}
     
     process_meg_bids(input_path=args.meg_input_dir,
-                     subject=subjid,
-                      bids_dir=args.bids_dir, 
+                     subject_in=subjid,
+                      bids_dir=args.bids_dir,
+                      bids_id = args.bids_id, 
                       session=args.bids_session, 
                       anonymize=args.anonymize, 
                       **kwargs)
