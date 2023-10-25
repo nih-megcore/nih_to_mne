@@ -292,6 +292,8 @@ def freesurfer_import(mri=None, subjid=None, tmp_subjects_dir=None,
     
     '''
     os.environ['SUBJECTS_DIR']=str(tmp_subjects_dir)
+    tmp_ = op.join(tmp_subjects_dir, subjid)
+    if op.exists(tmp_): shutil.rmtree(tmp_)
     
     try:
         subprocess.run(f'recon-all -i {mri} -s {subjid}'.split(),
