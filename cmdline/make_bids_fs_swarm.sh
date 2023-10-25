@@ -18,8 +18,9 @@ fi
 subj_paths=$(ls -d $(pwd)/sub-*)
 
 #Create the swarm file - may want to put tests for multiple T1w.nii.gz
-for i in ${subj_paths}; do subjid=$(basename $i); echo recon-all -all -i ${subjid}/ses-01/anat/*T1w.nii.gz -s ${subjid} >> swarm_fs.sh; done
-tail swarm_fs.sh
+for i in ${subj_paths}; do subjid=$(basename $i); echo recon-all -all -i ${subjid}/ses-1/anat/*T1w.nii.gz -s ${subjid} >> swarm_fs.sh; done
+echo Here are the last 5 entries:
+tail -5 swarm_fs.sh
 
 read -p "Check the swarm_fs.sh file.  Press y to run and n to exit" quit_val
 if [ ${quit_val} == y ] 
