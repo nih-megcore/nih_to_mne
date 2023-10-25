@@ -16,7 +16,7 @@ n_jobs=10  #<<<<<<<<Fix
 desc = '''Preprocess all MRI related processing.  \
     To process the whole bids tree, run the following command from the bids_root.  \
         
-        for dset in $(find sub-* -name '*.ds'); do megprep.py -filename $(pwd)/${dset}; done
+        for dset in $(find sub-* -name '*.ds'); do megcore_prep_mri_bids.py -filename $(pwd)/${dset}; done
         
 '''
 
@@ -76,7 +76,7 @@ def mripreproc(bids_path=None,
     trans_fname = deriv_path.copy().update(suffix='trans',extension='.fif')
     
     raw_fname = bids_path.copy().update(suffix='meg')
-    raw = mne_bids.read_raw_bids(raw_fname, extra_params=dict(system_clock='ignore'))
+    raw = mne.io.read_raw_ctf(raw_fname, system_clock='ignore')
     subjects_dir = mne_bids.read.get_subjects_dir()
     fs_subject = 'sub-'+bids_path.subject
     
