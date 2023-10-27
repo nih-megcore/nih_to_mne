@@ -67,7 +67,7 @@ def sessdir2taskrundict(session_dir=None, subject_in=None):
     '''
     #Test for correct input type
     if (type(session_dir) is str) or (type(session_dir) is os.path):
-        dsets=os.listdir(session_dir)
+        dsets=glob.glob(op.join(session_dir, '*ds'))
     elif type(session_dir) is list:
         dsets=session_dir
     else:
@@ -673,7 +673,7 @@ if __name__ == '__main__':
         #Loop over all filenames in bids path and generate forward model in 
         #the project derivatives folder
         filenames=glob.glob(op.join(bids_path.root, 'sub-'+bids_id,
-                                    'ses-'+args.session, '*.ds')
+                                    'ses-'+args.session, '*.ds'))
         for filename in filenames:
             bids_path = mne_bids.get_bids_path_from_fname(filename)
             deriv_path = bids_path.copy().update(root=op.join(bids_path.root, 
