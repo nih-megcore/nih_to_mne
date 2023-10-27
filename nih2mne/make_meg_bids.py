@@ -506,6 +506,24 @@ if __name__ == '__main__':
                         the trailing zeros''',
                         action='store_true'
                         )
+    group3 = parser.add_argument_group('UNDER Construction - BIDS MRI PostProcessing - CURRENTLY NOT ANONYMIZED')
+    group3.add_argument('-freesurfer',
+                        help='''Perform recon-all pipeline on the T1w.
+                        This is required for the mri_prep portions below''', 
+                        action='store_true'
+                        )
+    group3.add_argument('-mri_prep_s',
+                        help='''Perform the standard SURFACE processing for
+                        meg analysis (watershed/bem/src/fwd)''', 
+                        action='store_true'
+                        )
+    group3.add_argument('-mri_prep_v',
+                        help='''Perform the standard VOLUME processing for
+                        meg analysis (watershed/bem/src/fwd)''', 
+                        action='store_true'
+                        )
+    
+    
     args=parser.parse_args()
     if (not args.mri_brik) and (not args.mri_bsight):
         raise ValueError('Must supply afni or brainsight coregistration')
@@ -623,31 +641,67 @@ if __name__ == '__main__':
                      meg_fname=template_meg,
                      session=args.bids_session)
     
+    #
+    # Downstream Processing
+    #
+    #%% This is probably preferable to use simple_slurm - will look into it
+    if args.freesurfer:
+        nii_fnames = glob.glob(op.join(args.bids_dir, args.bids_id, 'ses-1','anat','*T1w.nii'))
+        nii_fnames += glob.glob(op.join(args.bids_dir, args.bids_id, 'ses-1','anat','*T1w.nii.gz'))
+        nii_fnames = [i for i in nii_fnames if len(i) != 0]
+        assert len(nii_fnames)==1
+        nii_fname=nii_fnames[0]
+        fs_subjects_dir=op.join(args.bids_dir, 'derivatives','freesurfer','subjects')
+        os.makedirs(fs_subjects_dir, exist_ok=True)
+        cmd = f"echo -e '#!/bin/bash\nexport SUBJECTS_DIR={fs_subjects_dir}\nrecon-all -all  -i ' ${nii_fname} -s ${subjid} | sbatch  --mem=6g --time=24:00:00"                            
+        
+        
+        # mri=          #Set MRI Name - must be a nifti file NOT BRIK/HEAD
+        # export SUBJECTS_DIR=      #Set output folder, Make sure this directory exists
+        # module load freesurfer
+        # echo -e '#!/bin/bash\nrecon-all -all  -i ' ${mri} -s ${subjid} | sbatch  --mem=3g --time=24:00:00     #SUBMITS JOB TO SBATCH
     
+    if (args.mri_prep_s) or (args.mri_prep_v):
+        from nih2mne.megcore_prep_mri_bids import mripreproc
+        subjects_dir=op.join(bids_path.root, 'derivatives', 'freesurfer', 'subjects')
+        os.environ['SUBJECTS_DIR']=subjects_dir
+        if args.mri_prep_s==True:
+            surf=True
+        if args.mri_prep_v==True:
+            surf=False
+        
+        #Loop over all filenames in bids path and generate forward model in 
+        #the project derivatives folder
+        filenames=glob.glob(op.join(bids_path.root, 'sub-'+bids_id,
+                                    'ses-'+args.session, '*.ds')
+        for filename in filenames:
+            bids_path = mne_bids.get_bids_path_from_fname(filename)
+            deriv_path = bids_path.copy().update(root=op.join(bids_path.root, 
+                                                              'derivatives', 
+                                                              project_name), 
+                                                 check=False)
+            deriv_path.directory.mkdir(parents=True, exist_ok=True)    
+            tmp_t1_path = BIDSPath(root=bids_path.root,
+                              session=bids_path.session,
+                              subject=bids_path.subject,
+                              datatype='anat',
+                              suffix='T1w',
+                              extension='.nii.gz',
+                              check=True)    
+            t1_bids_path = check_mri(tmp_t1_path)
+            mri_preproc(bids_path=bids_path, 
+                        t1_bids_path=tmp_t1_path, 
+                        deriv_path=deriv_path, 
+                        surf=surf)
+        
+ 
     
     
 
 
 
          
-        
-'''
 
-If 2 subjects in 1 folder - still writes out 2 subjects of MEGdata even if
-only 1 subject chosen
-
-If successful clean up bids_prep folder
-
-Still need to make tests for 
-copy afni and convert to nii
-check for multiple subjects in folder
-
-
-
-'''
-    
-    
-    
                         
 
 
