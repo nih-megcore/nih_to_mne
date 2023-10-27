@@ -142,7 +142,7 @@ def preproc(bids_path=None,
         Standard and Deviant stim epochs (also saved to deriv_path).
 
     '''
-    raw = read_raw_bids(bids_path=bids_path, extra_params={'system_clock':'ignore'})
+    raw = mne.io.read_raw_ctf(bids_path, system_clock='ignore')
     raw.load_data()
     raw.filter(30, 50, n_jobs=n_jobs)
     raw.notch_filter([60], n_jobs=n_jobs)
