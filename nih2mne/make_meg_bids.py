@@ -652,8 +652,8 @@ if __name__ == '__main__':
         nii_fname=nii_fnames[0]
         fs_subjects_dir=op.join(args.bids_dir, 'derivatives','freesurfer','subjects')
         os.makedirs(fs_subjects_dir, exist_ok=True)
-        cmd = f"'recon-all -all  -i {nii_fname} -s {subjid}'"                            
-        script = f'#! /bin/bash\necho {cmd}\n'
+        cmd = f"export SUBJECTS_DIR={fs_subjects_dir}; recon-all -all  -i {nii_fname} -s {subjid}"                            
+        script = f'#! /bin/bash\n {cmd}\n'
         submission = subprocess.run(["sbatch", "--mem=6g", "--time=24:00:00"],
                                     input=script,
                                     capture_output=True,
@@ -664,11 +664,6 @@ if __name__ == '__main__':
         else:
             print(f"sbatch error: {submission.stderr}")
         
-        # mri=          #Set MRI Name - must be a nifti file NOT BRIK/HEAD
-        # export SUBJECTS_DIR=      #Set output folder, Make sure this directory exists
-        # module load freesurfer
-        # echo -e '#!/bin/bash\nrecon-all -all  -i ' ${mri} -s ${subjid} | sbatch  --mem=3g --time=24:00:00     #SUBMITS JOB TO SBATCH
-    
     if (args.mri_prep_s) or (args.mri_prep_v):
         from nih2mne.megcore_prep_mri_bids import mripreproc
         subjects_dir=op.join(bids_path.root, 'derivatives', 'freesurfer', 'subjects')
