@@ -512,6 +512,10 @@ if __name__ == '__main__':
                         This is required for the mri_prep portions below''', 
                         action='store_true'
                         )
+    group3.add_argument('-project',
+                        help='''Output project name for the mri processing from mri_prep''', 
+                        default='megprocessing'
+                        )
     group3.add_argument('-mri_prep_s',
                         help='''Perform the standard SURFACE processing for
                         meg analysis (watershed/bem/src/fwd)''', 
@@ -644,13 +648,13 @@ if __name__ == '__main__':
     #
     # Downstream Processing
     #
+    fs_subjects_dir=op.join(args.bids_dir, 'derivatives','freesurfer','subjects')
     if args.freesurfer:
         nii_fnames = glob.glob(op.join(args.bids_dir, args.bids_id, 'ses-1','anat','*T1w.nii'))
         nii_fnames += glob.glob(op.join(args.bids_dir, args.bids_id, 'ses-1','anat','*T1w.nii.gz'))
         nii_fnames = [i for i in nii_fnames if len(i) != 0]
         assert len(nii_fnames)==1
         nii_fname=nii_fnames[0]
-        fs_subjects_dir=op.join(args.bids_dir, 'derivatives','freesurfer','subjects')
         os.makedirs(fs_subjects_dir, exist_ok=True)
         cmd = f"export SUBJECTS_DIR={fs_subjects_dir}; recon-all -all  -i {nii_fname} -s {subjid}"                            
         script = f'#! /bin/bash\n {cmd}\n'
@@ -661,22 +665,22 @@ if __name__ == '__main__':
                                     encoding="utf-8")
         if submission.returncode == 0:
             print(f"slurm job id: {submission.stdout}")
+            sbatch1_ID=submission.stdout
         else:
             print(f"sbatch error: {submission.stderr}")
         
     if (args.mri_prep_s) or (args.mri_prep_v):
         from nih2mne.megcore_prep_mri_bids import mripreproc
-        subjects_dir=op.join(bids_path.root, 'derivatives', 'freesurfer', 'subjects')
-        os.environ['SUBJECTS_DIR']=subjects_dir
         if args.mri_prep_s==True:
             surf=True
         if args.mri_prep_v==True:
             surf=False
-        
+        project_name=args.project
         #Loop over all filenames in bids path and generate forward model in 
         #the project derivatives folder
         filenames=glob.glob(op.join(bids_path.root, 'sub-'+bids_id,
                                     'ses-'+args.session, '*.ds'))
+        cmd = f"export SUBJECTS_DIR={fs_subjects_dir}; "                            
         for filename in filenames:
             bids_path = mne_bids.get_bids_path_from_fname(filename)
             deriv_path = bids_path.copy().update(root=op.join(bids_path.root, 
@@ -692,10 +696,26 @@ if __name__ == '__main__':
                               extension='.nii.gz',
                               check=True)    
             t1_bids_path = check_mri(tmp_t1_path)
-            mri_preproc(bids_path=bids_path, 
-                        t1_bids_path=tmp_t1_path, 
-                        deriv_path=deriv_path, 
-                        surf=surf)
+            if surf:
+                cmd += f'megcore_prep_mri_bids.py -filename {filename} -project {project_name} ; '
+            else:
+                cmd += f'megcore_prep_mri_bids.py -filename {filename} -project {project_name} -volume ; '
+        
+        #Submit the sbatch script
+        script = f'#! /bin/bash\n {cmd}\n'
+        submission = subprocess.run(["sbatch", "--mem=6g", "--time=06:00:00",f"--dependency=afterok:{sbatch1_ID}"],
+                                    input=script,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8")
+        if submission.returncode == 0:
+            print(f"slurm job id: {submission.stdout}")
+        else:
+            print(f"sbatch error: {submission.stderr}")
+        #mri_preproc(bids_path=bids_path, 
+        #            t1_bids_path=tmp_t1_path, 
+        #            deriv_path=deriv_path, 
+        #            surf=surf)
         
  
     
