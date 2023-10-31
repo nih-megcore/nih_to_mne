@@ -644,7 +644,6 @@ if __name__ == '__main__':
     #
     # Downstream Processing
     #
-    #%% This is probably preferable to use simple_slurm - will look into it
     if args.freesurfer:
         nii_fnames = glob.glob(op.join(args.bids_dir, args.bids_id, 'ses-1','anat','*T1w.nii'))
         nii_fnames += glob.glob(op.join(args.bids_dir, args.bids_id, 'ses-1','anat','*T1w.nii.gz'))
@@ -653,8 +652,17 @@ if __name__ == '__main__':
         nii_fname=nii_fnames[0]
         fs_subjects_dir=op.join(args.bids_dir, 'derivatives','freesurfer','subjects')
         os.makedirs(fs_subjects_dir, exist_ok=True)
-        cmd = f"echo -e '#!/bin/bash\nexport SUBJECTS_DIR={fs_subjects_dir}\nrecon-all -all  -i ' ${nii_fname} -s ${subjid} | sbatch  --mem=6g --time=24:00:00"                            
-        
+        cmd = f"'recon-all -all  -i {nii_fname} -s {subjid}'"                            
+        script = f'#! /bin/bash\necho {cmd}\n'
+        submission = subprocess.run(["sbatch", "--mem=6g", "--time=24:00:00"],
+                                    input=script,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8")
+        if submission.returncode == 0:
+            print(f"slurm job id: {submission.stdout}")
+        else:
+            print(f"sbatch error: {submission.stderr}")
         
         # mri=          #Set MRI Name - must be a nifti file NOT BRIK/HEAD
         # export SUBJECTS_DIR=      #Set output folder, Make sure this directory exists
@@ -704,16 +712,6 @@ if __name__ == '__main__':
 
                         
 
-
-
-# =============================================================================
-# TESTS - move these to another file
-# =============================================================================
-def test_check_multiple_subjects():
-    #Make this extensible - currently limited
-    #Make a temp dir and link together the files from two different folders
-    indir='/fast/oberman_test/TEMP'
-    _check_multiple_subjects(indir)
 
 
 def test_bsight():
