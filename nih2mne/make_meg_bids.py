@@ -650,13 +650,13 @@ if __name__ == '__main__':
     #
     fs_subjects_dir=op.join(args.bids_dir, 'derivatives','freesurfer','subjects')
     if args.freesurfer:
-        nii_fnames = glob.glob(op.join(args.bids_dir, args.bids_id, 'ses-1','anat','*T1w.nii'))
-        nii_fnames += glob.glob(op.join(args.bids_dir, args.bids_id, 'ses-1','anat','*T1w.nii.gz'))
+        nii_fnames = glob.glob(op.join(args.bids_dir, 'sub-'+args.bids_id, 'ses-1','anat','*T1w.nii'))
+        nii_fnames += glob.glob(op.join(args.bids_dir, 'sub-'+args.bids_id, 'ses-1','anat','*T1w.nii.gz'))
         nii_fnames = [i for i in nii_fnames if len(i) != 0]
         assert len(nii_fnames)==1
         nii_fname=nii_fnames[0]
         os.makedirs(fs_subjects_dir, exist_ok=True)
-        cmd = f"export SUBJECTS_DIR={fs_subjects_dir}; recon-all -all  -i {nii_fname} -s {subjid}"                            
+        cmd = f"export SUBJECTS_DIR={fs_subjects_dir}; recon-all -all  -i {nii_fname} -s  sub-{subjid}"                            
         script = f'#! /bin/bash\n {cmd}\n'
         submission = subprocess.run(["sbatch", "--mem=6g", "--time=24:00:00"],
                                     input=script,
@@ -678,7 +678,7 @@ if __name__ == '__main__':
         project_name=args.project
         #Loop over all filenames in bids path and generate forward model in 
         #the project derivatives folder
-        filenames=glob.glob(op.join(bids_path.root, 'sub-'+bids_id,
+        filenames=glob.glob(op.join(args.bids_dir, 'sub-'+args.bids_id,
                                     'ses-'+args.session, '*.ds'))
         cmd = f"export SUBJECTS_DIR={fs_subjects_dir}; "                            
         for filename in filenames:
