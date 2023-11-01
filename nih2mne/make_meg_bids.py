@@ -679,7 +679,7 @@ if __name__ == '__main__':
         #Loop over all filenames in bids path and generate forward model in 
         #the project derivatives folder
         filenames=glob.glob(op.join(args.bids_dir, 'sub-'+args.bids_id,
-                                    'ses-'+args.session, '*.ds'))
+                                    'ses-'+str(args.bids_session),'meg', '*.ds'))
         cmd = f"export SUBJECTS_DIR={fs_subjects_dir}; "                            
         for filename in filenames:
             bids_path = mne_bids.get_bids_path_from_fname(filename)
@@ -695,6 +695,7 @@ if __name__ == '__main__':
                               suffix='T1w',
                               extension='.nii.gz',
                               check=True)    
+            from nih2mne.megcore_prep_mri_bids import check_mri
             t1_bids_path = check_mri(tmp_t1_path)
             if surf:
                 cmd += f'megcore_prep_mri_bids.py -filename {filename} -project {project_name} ; '
