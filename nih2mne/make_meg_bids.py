@@ -68,6 +68,7 @@ def sessdir2taskrundict(session_dir=None, subject_in=None):
     #Test for correct input type
     if (type(session_dir) is str) or (type(session_dir) is os.path):
         dsets=glob.glob(op.join(session_dir, '*ds'))
+        dsets=[op.basename(i) for i in dsets]
     elif type(session_dir) is list:
         dsets=session_dir
     else:
