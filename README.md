@@ -69,7 +69,11 @@ options:
   -bids_session BIDS_SESSION
                         Data acquisition session. This is set to 1 by default. If the same subject had
                         multiple sessions this must be set manually
-  -subjid SUBJID        The default subject ID is given by the MEG hash. To override the default
+  -subjid_input SUBJID_INPUT
+                        The default subject ID is given by the MEG hash. If more than one subject is
+                        present in a folder, this option can be set to select a single subjects
+                        dataset.
+  -bids_id BIDS_ID      The default subject ID is given by the MEG hash. To override the default
                         subject ID, use this flag. If -anonymize is used, you must set the subjid
   -autocrop_zeros       If files are terminated early, leaving zeros at the end of the file - this
                         will detect and remove the trailing zeros
@@ -85,6 +89,13 @@ Brainsight Coreg:
   -mri_bsight_elec MRI_BSIGHT_ELEC
                         Exported electrodes file from brainsight. This has the locations of the
                         fiducials
+
+Additional Options:
+  -freesurfer           Perform recon-all pipeline on the T1w. This is required for the mri_prep
+                        portions below
+  -project PROJECT      Output project name for the mri processing from mri_prep
+
+
 ```
 ### make_bid_fs_swarm.sh
 From the bids folder - will create derivatives folder for freesurfer/subjects; write out the swarm file; and submit to swarm (with confirmation)
