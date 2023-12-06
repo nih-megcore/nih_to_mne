@@ -76,7 +76,7 @@ def mripreproc(bids_path=None,
     trans_fname = deriv_path.copy().update(suffix='trans',extension='.fif')
     
     raw_fname = bids_path.copy().update(suffix='meg')
-    raw = mne.io.read_raw_ctf(raw_fname, system_clock='ignore')
+    raw = mne.io.read_raw_ctf(raw_fname, system_clock='ignore', clean_names=True)
     subjects_dir = mne_bids.read.get_subjects_dir()
     fs_subject = 'sub-'+bids_path.subject
     
@@ -142,7 +142,7 @@ def preproc(bids_path=None,
         Standard and Deviant stim epochs (also saved to deriv_path).
 
     '''
-    raw = mne.io.read_raw_ctf(bids_path, system_clock='ignore')
+    raw = mne.io.read_raw_ctf(bids_path, system_clock='ignore', clean_names=True)
     raw.load_data()
     raw.filter(30, 50, n_jobs=n_jobs)
     raw.notch_filter([60], n_jobs=n_jobs)
