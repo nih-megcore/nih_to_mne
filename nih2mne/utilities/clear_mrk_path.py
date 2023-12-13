@@ -13,8 +13,9 @@ def clean_filepath_header(mrk_file):
     '''Find the PATH OF DATASET flag and remove the next entry'''
     tmp=open(mrk_file, 'r')
     data=tmp.readlines()
-    path_idx=data.index('PATH OF DATASET:\n')+1
-    data[path_idx]='#Cleared_Path\n'
+    if '#Cleared_Path\n' not in data:
+        path_idx=data.index('PATH OF DATASET:\n')+1
+        data[path_idx]='#Cleared_Path\n'
     tmp.close()
     
     #Write the augmented data

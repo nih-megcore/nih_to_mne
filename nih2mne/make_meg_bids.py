@@ -44,10 +44,10 @@ logger = logging.getLogger('__main__')
 # =============================================================================
 
 #Set some parameters for anonmizing the MEG data
-scrub_list_general = ['MarkerFile.mrk', 'ClassFile.cls', '*.xml']
+scrub_list_general = ['MarkerFile.mrk', 'ClassFile.cls']
 include_list_general = ['BadChannels', 'ClassFile.cls', 'MarkerFile.mrk', 'params.dsc', 
-                'processing.cfg','*.acq', '*.hc', '*.res4', '*.meg4', '*.xml', 
-                '*.infods']
+                'processing.cfg', '*.hc', '*.res4', '*.meg4',  
+                '*.infods']  #'*.acq' -- this contains redundant info
 
 def sessdir2taskrundict(session_dir=None, subject_in=None):
     '''
@@ -147,7 +147,7 @@ def anonymize_meg(meg_fname, tmpdir=None):
     '''
     if tmpdir == None:
         raise ValueError
-    out_fname = op.join(tmpdir, meg_fname)
+    out_fname = op.join(tmpdir, op.basename(meg_fname))
     cmd = f'newDs -anon {meg_fname} {out_fname}'
     subprocess.run(cmd.split())
     return out_fname
