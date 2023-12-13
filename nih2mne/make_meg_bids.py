@@ -375,7 +375,8 @@ def convert_brik(mri_fname, outdir=None):
     
 #Currently only supports 1 session of MRI
 def process_mri_bids(bids_dir=None,
-                     subjid=None, 
+                     subjid=None,
+                     bids_id=None, 
                      trans_fname=None,
                      meg_fname=None,
                      session=None):
@@ -387,7 +388,7 @@ def process_mri_bids(bids_dir=None,
         trans = mne.read_trans(trans_fname)
         
         t1w_bids_path = \
-            BIDSPath(subject=subjid, session=ses, root=bids_dir, suffix='T1w')
+            BIDSPath(subject=bids_id, session=ses, root=bids_dir, suffix='T1w')
     
         landmarks = mne_bids.get_anat_landmarks(
             image=op.join(temp_subjects_dir, subjid, 'mri','T1.mgz'),
@@ -578,8 +579,10 @@ if __name__ == '__main__':
         if op.exists(temp_meg_prep): shutil.rmtree(temp_meg_prep)
         temp_meg_prep.mkdir(parents=True)
         kwargs={'tmpdir':temp_meg_prep}
+        bids_id = args.bids_id
     else:
         kwargs={}
+        bids_id = subjid
     
     process_meg_bids(input_path=args.meg_input_dir,
                      subject_in=subjid,
@@ -641,7 +644,8 @@ if __name__ == '__main__':
                       meg_fname=template_meg)
     
     process_mri_bids(bids_dir=args.bids_dir,
-                     subjid=subjid, 
+                     subjid=subjid,
+                     bids_id=bids_id,  
                      trans_fname=trans_fname,
                      meg_fname=template_meg,
                      session=args.bids_session)
