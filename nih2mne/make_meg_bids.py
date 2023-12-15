@@ -582,7 +582,10 @@ if __name__ == '__main__':
         bids_id = args.bids_id
     else:
         kwargs={}
-        bids_id = subjid
+        if hasattr('bids_id',args):
+            bids_id = args.bids_id
+        else:
+            bids_id = subjid
     
     process_meg_bids(input_path=args.meg_input_dir,
                      subject_in=subjid,
