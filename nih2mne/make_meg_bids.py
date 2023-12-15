@@ -582,7 +582,7 @@ if __name__ == '__main__':
         bids_id = args.bids_id
     else:
         kwargs={}
-        if hasattr('bids_id',args):
+        if hasattr(args, 'bids_id'):
             bids_id = args.bids_id
         else:
             bids_id = subjid
