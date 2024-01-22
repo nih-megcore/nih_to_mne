@@ -515,7 +515,8 @@ if __name__ == '__main__':
     group3.add_argument('-ignore_eroom', '''If you are Not on Biowulf, use this option
                         to prevent an error. Or if you collected your own empty
                         room data with your dataset''',
-                        action='store_true')
+                        action='store_true', 
+                        default=False)
     group4 = parser.add_argument_group('UNDER Construction - BIDS MRI PostProcessing - CURRENTLY NOT ANONYMIZED')
     group4.add_argument('-freesurfer',
                         help='''Perform recon-all pipeline on the T1w.
