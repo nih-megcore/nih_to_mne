@@ -184,7 +184,7 @@ def anonymize_finalize(meg_fname):
 
 def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
                      bids_dir=None, session=1, 
-                     anonymize=False, tmpdir=None):
+                     anonymize=False, tmpdir=None, ignore_eroom=None):
     '''
     Process the MEG component of the data into bids.
     Calls sessdir2taskrundict to get the task IDs and sort according to run #
@@ -256,25 +256,28 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
     #
     #Include the emptyroom dataset   
     #
-    try:
-        tmp_ = str(int(np.random.uniform(0, 1e10)))  #Make a random name
-        tmpdir=op.join(temp_dir, f'er_{tmp_}')
-        if not op.exists(tmpdir): os.mkdir(tmpdir)
-        er_fname = get_eroom(meg_fname, tmpdir=tmpdir) 
-        raw = mne.io.read_raw_ctf(er_fname, system_clock='ignore', 
-                                  clean_names=True)  
-        raw.info['line_freq'] = 60 
-        
-        ses = session
-        task = 'noise'
-        run = '01'
-        bids_path = BIDSPath(subject=bids_id, session=ses, task=task,
-                              run=run, root=bids_dir, suffix='meg')
-        write_raw_bids(raw, bids_path, overwrite=True)
-        logger.info(f'Successful MNE BIDS: {er_fname} to {bids_path}')
-    except BaseException as e:
-        logger.exception('MEG BIDS PROCESSING EMPTY ROOM:', e)
-        error_count+=1
+    if ignore_eroom != True:
+        try:
+            tmp_ = str(int(np.random.uniform(0, 1e10)))  #Make a random name
+            tmpdir=op.join(temp_dir, f'er_{tmp_}')
+            if not op.exists(tmpdir): os.mkdir(tmpdir)
+            er_fname = get_eroom(meg_fname, tmpdir=tmpdir) 
+            raw = mne.io.read_raw_ctf(er_fname, system_clock='ignore', 
+                                      clean_names=True)  
+            raw.info['line_freq'] = 60 
+            
+            ses = session
+            task = 'noise'
+            run = '01'
+            bids_path = BIDSPath(subject=bids_id, session=ses, task=task,
+                                  run=run, root=bids_dir, suffix='meg')
+            write_raw_bids(raw, bids_path, overwrite=True)
+            logger.info(f'Successful MNE BIDS: {er_fname} to {bids_path}')
+        except BaseException as e:
+            logger.exception('MEG BIDS PROCESSING EMPTY ROOM:', e)
+            error_count+=1
+    else:
+        logger.info('Ignore ERoom set -- not finding emptyroom')
 
     if error_count > 0:
         logger.info(f'There were {error_count} errors in your processing, \
@@ -508,22 +511,27 @@ if __name__ == '__main__':
                         the trailing zeros''',
                         action='store_true'
                         )
-    group3 = parser.add_argument_group('UNDER Construction - BIDS MRI PostProcessing - CURRENTLY NOT ANONYMIZED')
-    group3.add_argument('-freesurfer',
+    group3 = parser.add_argument_group('Optional Overrides')
+    group3.add_argument('-ignore_eroom', '''If you are Not on Biowulf, use this option
+                        to prevent an error. Or if you collected your own empty
+                        room data with your dataset''',
+                        action='store_true')
+    group4 = parser.add_argument_group('UNDER Construction - BIDS MRI PostProcessing - CURRENTLY NOT ANONYMIZED')
+    group4.add_argument('-freesurfer',
                         help='''Perform recon-all pipeline on the T1w.
                         This is required for the mri_prep portions below''', 
                         action='store_true'
                         )
-    group3.add_argument('-project',
+    group4.add_argument('-project',
                         help='''Output project name for the mri processing from mri_prep''', 
                         default='megprocessing'
                         )
-    group3.add_argument('-mri_prep_s',
+    group4.add_argument('-mri_prep_s',
                         help='''Perform the standard SURFACE processing for
                         meg analysis (watershed/bem/src/fwd)''', 
                         action='store_true'
                         )
-    group3.add_argument('-mri_prep_v',
+    group4.add_argument('-mri_prep_v',
                         help='''Perform the standard VOLUME processing for
                         meg analysis (watershed/bem/src/fwd)''', 
                         action='store_true'
@@ -592,7 +600,8 @@ if __name__ == '__main__':
                       bids_dir=args.bids_dir,
                       bids_id = args.bids_id, 
                       session=args.bids_session, 
-                      anonymize=args.anonymize, 
+                      anonymize=args.anonymize,
+                      ignore_eroom=args.ignore_eroom,
                       **kwargs)
     
     #
