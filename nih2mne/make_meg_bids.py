@@ -579,6 +579,17 @@ if __name__ == '__main__':
     temp_dir.mkdir(parents=True, exist_ok=True)
     
     #
+    #   Data Check
+    #
+    assert op.exists(args.meg_input_dir)
+    if 'mri_brik' in args:
+        assert op.exists(args.mri_brik)
+    if 'mri_bsight' in args:
+        assert op.exists(args.mri_bsight)
+    if 'mri_bsight_elec' in args:
+        assert op.exists(args.mri_bsight_elec)
+    
+    #
     #   Process MEG
     #
     if args.anonymize:
