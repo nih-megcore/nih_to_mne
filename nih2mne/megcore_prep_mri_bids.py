@@ -9,17 +9,81 @@ Created on Thu Sep 21 10:58:05 2023
 import mne, mne_bids
 from mne_bids import BIDSPath
 import os, os.path as op, glob
+from pathlib import Path
 # from nih2mne import get_njobs
 
-n_jobs=10  #<<<<<<<<Fix 
+n_jobs=4 
 
-desc = '''Preprocess all MRI related processing.  \
-    To process the whole bids tree, run the following command from the bids_root.  \
-        
-        for dset in $(find sub-* -name '*.ds'); do megcore_prep_mri_bids.py -filename $(pwd)/${dset}; done
-        
+desc = '''Preprocess all MRI related processing.  To generate a swarmfile, 
+use the swarmfile specific options (without setting filename).
 '''
 
+def get_dset_list(bids_root=None, src_type='surf', task=None, session=None, 
+                  subject=None, run=None):
+    search_str = f'{op.abspath(bids_root)}/sub-{subject}/ses-{session}/meg/sub-{subject}_*task-{task}_run-{run}.ds'
+    search_str = search_str.replace('None', '*')
+    return glob.glob(search_str) 
+    
+
+def make_swarm(bids_root=None, src_type='surf', project=None, 
+               task=None, session=None, subject=None, run=None,
+               out_fname='swarm_mriprep.sh'):
+    '''
+    Make a swarm file to process all of the bids datasets
+
+    Parameters
+    ----------
+    bids_root : str,
+        top level path to the bids directory. The default is None.
+    task : str, 
+        DESCRIPTION. The default is None.
+    src_type : str, optional
+        either vol or surf. The default is 'surf'.
+    subject : str
+        
+
+    Returns
+    -------
+    None.
+
+    '''
+    ## This would be the optimal answer - but not working currently (mne-bids issue)
+    # entities = {'datatypes':'meg', 'extensions':['.ds']}
+    # ent_type = {'tasks':task, 'sessions':session, 'runs':run}
+    # for tmp, func_input in ent_type.items():
+    #     if func_input!=None:
+    #         entities[tmp]=func_input
+    # bids_paths = mne_bids.find_matching_paths(bids_root, **entities)
+    dsets = get_dset_list(bids_root, task=task, session=session, subject=subject, run=run)
+    swarm_dict = {}
+    swarm_list = []
+    for dset in dsets:
+        bids_path = mne_bids.get_bids_path_from_fname(dset)
+        cmd_str = f'megcore_prep_mri_bids.py -filename {str(bids_path.fpath)} -project {project}'
+        if src_type=='vol':
+            cmd_str += ' -volume'
+        if bids_path.subject in swarm_dict.keys():
+            #Subject level data needs to be on the same line so BEM proc conflicts do not occur
+            swarm_dict[bids_path.subject] += f'; {cmd_str}' 
+        else:
+            swarm_dict[bids_path.subject] = cmd_str
+    
+    for subjid, cmd in swarm_dict.items():
+        cmd +=' \n' #Enter a new line
+        swarm_list.append(cmd)
+    
+    with open(out_fname, 'w') as f:
+        f.writelines(swarm_list)
+    print('')
+    print('')
+    print(f'''Wrote {len(dsets)} files to process for {len(swarm_list)} subjects into the swarmfile: {out_fname}''')
+    print('This text file can be edited before submitting.')
+    print('')
+    print('To run on biowulf:')
+    print('    module purge ') 
+    print('    module load mne')
+    print(f'    swarm -f {out_fname} -t 4 -g 6 --logdir=logdir')
+    
     
 def check_mri(t1_bids_path):
     for acq in ['MPRAGE', None]:
@@ -172,36 +236,87 @@ def preproc(bids_path=None,
     return epo
 
 
+#%% Commandline Options parsing
 if __name__=='__main__':
     import argparse
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('-filename',
-                        help='CTF dataset path.')
-    parser.add_argument('-project',
+    single_parser = parser.add_argument_group('Single File only')
+    single_parser.add_argument('-filename',
+                        help='CTF dataset path.', 
+                        default=None)
+    general_parser = parser.add_argument_group('General Options')
+    general_parser.add_argument('-project',
                         help='''Output folder name.  This will be generated in the
-                        bids derivatives folder''',
+                        bids derivatives folder. (default=nihmeg)''',
                         default='nihmeg')
-    parser.add_argument('-volume',
-                        help='''Perform the MRI processing in volume space''',
+    general_parser.add_argument('-volume',
+                        help='''Perform the MRI processing in volume space (default=False / surface-based)''',
                         action='store_true',
                         default=False)
+    
+    swarm_parser = parser.add_argument_group(
+    '''Inputs for swarmfile generation.''',
+    '''Not setting the following flags will find all possible combinations (subject/session/run/task)'''
+        )
+    swarm_parser.add_argument('-gen_swarmfile', action='store_true',
+                              default=False
+                              )
+    swarm_parser.add_argument('-bids_root', default=os.getcwd(),
+                              help='Top level bids folder'
+                              )
+    swarm_parser.add_argument('-swarm_fname', default='swarm_mriprep.sh', 
+                              help='(default=swarm_mriprep.sh)'
+                              )
+    swarm_parser.add_argument('-subject', default=None,
+                              help='Subject ID'
+                              )
+    swarm_parser.add_argument('-run', default=None, 
+                              help='''Run number (NOTE: 01 and 1 are different)'''
+                              )
+    swarm_parser.add_argument('-session', default=None,
+                              help='''Session ID'''
+                              )
+    swarm_parser.add_argument('-task', default=None, 
+                              help='''Task ID'''
+                              )
+    
     args = parser.parse_args()
     filename = args.filename
     project_name = args.project
     proc_surf = not args.volume
     
-    bids_path = mne_bids.get_bids_path_from_fname(filename)
+    if args.filename!=None:
+        bids_path = mne_bids.get_bids_path_from_fname(filename)
+    else:
+        bids_path = mne_bids.BIDSPath(root=args.bids_root)
     deriv_path = bids_path.copy().update(root=op.join(bids_path.root, 'derivatives', project_name), check=False)
     deriv_path.directory.mkdir(parents=True, exist_ok=True)
     subjects_dir=op.join(bids_path.root, 'derivatives', 'freesurfer', 'subjects')
     os.environ['SUBJECTS_DIR']=subjects_dir
+    
+    if args.volume == True:
+        src_type = 'vol'
+    else:
+        src_type = 'surf'
+            
+    #%% The main processing component 
+    if args.gen_swarmfile ==True:
+        make_swarm(bids_root=args.bids_root, src_type=src_type, project=args.project, 
+                       task=args.task, session=args.session, subject=args.subject, 
+                       run=args.run, out_fname=args.swarm_fname)
+    else:  #The Main Processing Occurs here
+        tmp_t1_path = BIDSPath(root=bids_path.root,
+                          session=bids_path.session,
+                          subject=bids_path.subject,
+                          datatype='anat',
+                          suffix='T1w',
+                          extension='.nii.gz',
+                          check=True)    
+        t1_bids_path = check_mri(tmp_t1_path)
+        mripreproc(bids_path, t1_bids_path, deriv_path, surf=proc_surf)
+        
+        
+    
+#%% Some minimal tests
+#$(pwd)/nih2mne/megcore_prep_mri_bids.py -gen_swarmfile -swarm_fname TEST.sh -bids_root /fast/BIDS_HV_V1/bids/
 
-    tmp_t1_path = BIDSPath(root=bids_path.root,
-                      session=bids_path.session,
-                      subject=bids_path.subject,
-                      datatype='anat',
-                      suffix='T1w',
-                      extension='.nii.gz',
-                      check=True)    
-    t1_bids_path = check_mri(tmp_t1_path)
-    mripreproc(bids_path, t1_bids_path, deriv_path, surf=proc_surf)
