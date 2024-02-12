@@ -184,7 +184,8 @@ def anonymize_finalize(meg_fname):
 
 def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
                      bids_dir=None, session=1, 
-                     anonymize=False, tmpdir=None, ignore_eroom=None):
+                     anonymize=False, tmpdir=None, ignore_eroom=None, 
+                     crop_trailing_zeros=False):
     '''
     Process the MEG component of the data into bids.
     Calls sessdir2taskrundict to get the task IDs and sort according to run #
@@ -205,6 +206,11 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
         MEG subject ID to search for if multiples in folder
     session : int
         Session number for data acquisition.  Defaults to 1 if not set
+    crop_trailing_zeros: BOOL
+        Some sessions are terminated early, leaving a sizeable amount of zeroed
+        data at the end.  This will determine the stop time and crop out the rest.
+        Leaving the zero data at the end will cause some issues in the data 
+        processing.
 
     Returns
     -------
@@ -222,7 +228,12 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
     error_count=0
     for task, task_sublist in dset_dict.items():
         for run, base_meg_fname in enumerate(task_sublist, start=1):
-            meg_fname = op.join(input_path, base_meg_fname) 
+            meg_fname = op.join(input_path, base_meg_fname)
+            
+            if crop_trailing_zeros==True:
+                # This is necessary for trial based acq that is terminated early
+                from nih2mne.utilities.data_crop_wrapper import return_cropped_ds
+                meg_fname = return_cropped_ds(meg_fname)
             
             if anonymize==True:
                 #Anonymize file and ref new dset off of the output fname
@@ -597,6 +608,7 @@ if __name__ == '__main__':
         else:
             bids_id = subjid
     
+    
     process_meg_bids(input_path=args.meg_input_dir,
                      subject_in=subjid,
                       bids_dir=args.bids_dir,
@@ -604,6 +616,7 @@ if __name__ == '__main__':
                       session=args.bids_session, 
                       anonymize=args.anonymize,
                       ignore_eroom=args.ignore_eroom,
+                      crop_trailing_zeros=args.autocrop_zeros,
                       **kwargs)
     
     #
