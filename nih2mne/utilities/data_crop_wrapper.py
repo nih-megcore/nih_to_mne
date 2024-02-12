@@ -49,13 +49,13 @@ def return_cropped_ds(fname):
     raw = mne.io.read_raw_ctf(fname, system_clock='ignore', preload=True)
     
     crop_time = get_term_time(raw)
-    if endtime == False:
+    if crop_time == False:
         raise RuntimeError('Could not find a terminated timepoint')
-    base = op.dirname(fname)
+    base = op.abspath(op.dirname(fname))
     f_ = op.basename(fname)
-    outdir = op.join(base, 'tmp_cropped')
+    outdir = op.join(base, 'bids_prep_temp','tmp_cropped')
     if not op.exists(outdir): os.mkdir(outdir)
-    fname_out = op.join(outdir, fname) 
+    fname_out = op.join(outdir, f_) 
     cmd = f'newDs -f -time 0 {str(crop_time)} {fname} {fname_out}'
     subprocess.run(cmd)
     return fname_out

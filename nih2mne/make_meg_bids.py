@@ -519,7 +519,7 @@ if __name__ == '__main__':
     parser.add_argument('-autocrop_zeros',
                         help='''If files are terminated early, leaving zeros
                         at the end of the file - this will detect and remove
-                        the trailing zeros''',
+                        the trailing zeros.  !!!Files larger than 2G will Fail!!!''',
                         action='store_true'
                         )
     group3 = parser.add_argument_group('Optional Overrides')
