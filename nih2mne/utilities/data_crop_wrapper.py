@@ -9,6 +9,7 @@ import os, os.path as op
 import mne
 import numpy as np
 import subprocess
+import shutil
 
 def get_term_time(raw, channel_idx=100):
     '''
