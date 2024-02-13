@@ -564,7 +564,7 @@ if __name__ == '__main__':
     
     
     args=parser.parse_args()
-    if (not args.mri_brik) and (not args.mri_bsight):
+    if (not args.mri_brik) and (not args.mri_bsight) and (not args.ignore_mri_checks):
         raise ValueError('Must supply afni or brainsight coregistration')
         
     #Initialize
