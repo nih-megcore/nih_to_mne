@@ -509,6 +509,7 @@ if __name__ == '__main__':
                        help='''Exported electrodes file from brainsight.
                        This has the locations of the fiducials''', 
                        required=False)
+    group2.add_argument('-ignore_mri_checks', action='store_true', default=False)
     parser.add_argument('-bids_session',
                         help='''Data acquisition session.  This is set to 1
                         by default.  If the same subject had multiple sessions
@@ -603,7 +604,8 @@ if __name__ == '__main__':
     #
     #   Input Checks
     #
-    _input_checks(args)
+    if args.ignore_mri_checks==False:
+        _input_checks(args)
     
     #
     #   Process MEG
