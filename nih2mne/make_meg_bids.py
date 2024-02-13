@@ -463,6 +463,17 @@ def get_subj_logger(subjid, log_dir=None, loglevel=logging.INFO):
     fileHandle.setFormatter(fmt=fmt) 
     logger.addHandler(fileHandle)
     return logger
+
+def _input_checks(args):
+    '''Perform minimal checks of existing data to fail early before starting 
+    the processing'''
+    assert op.exists(args.meg_input_dir)
+    if args.mri_bsight !=None:
+        assert op.exists(args.mri_bsight_elec)
+        assert op.exists(args.mri_bsight)
+    else:
+        assert op.exists(args.mri_brik)
+    
             
 # =============================================================================
 # Commandline Options
@@ -588,6 +599,11 @@ if __name__ == '__main__':
     global temp_dir
     temp_dir=Path(args.bids_dir).parent / 'bids_prep_temp'
     temp_dir.mkdir(parents=True, exist_ok=True)
+    
+    #
+    #   Input Checks
+    #
+    _input_checks(args)
     
     #
     #   Process MEG
