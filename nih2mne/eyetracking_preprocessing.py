@@ -137,7 +137,7 @@ def madspeedfilter(tv,dia,is_valid):
     fwd_dilation                                = np.pad(cur_dia_speed,(0,1),constant_values=np.nan)
     back_fwd_dilation                           = np.vstack([back_dilation,fwd_dilation])
 
-    max_dilation_speed                          = np.empty_like(dia)
+    max_dilation_speed                          = np.full_like(dia,np.nan)
     max_dilation_speed[is_valid]                = np.nanmax(np.abs(back_fwd_dilation),axis=0)
     max_dilation_speed
 
