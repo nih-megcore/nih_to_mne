@@ -19,7 +19,7 @@ setuptools.setup(
         "Operating System :: Linux/Unix",
     ],
     python_requires='>=3.6',
-    install_requires=['mne', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'pyctf-lite @ git+https://github.com/nih-megcore/pyctf-lite@v1.0#egg=pyctf-lite'],
+    install_requires=['mne', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'pyctf-lite @ git+https://github.com/nih-megcore/pyctf-lite@v1.0#egg=pyctf-lite', 'wget'],
     scripts=['cmdline/make_bids_fs_swarm.sh',
         'nih2mne/bstags.py',
         'nih2mne/calc_mnetrans.py',

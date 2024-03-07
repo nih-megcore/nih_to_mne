@@ -31,6 +31,7 @@ from nih2mne.calc_mnetrans import write_mne_trans
 from nih2mne.utilities.clear_mrk_path import (calc_extra_mark_filelist,
                                               remove_extra_mrk_files, 
                                               clean_filepath_header)
+from nih2mne.utilities.mri_defacing import mri_deface
 
 global logger
 logger = logging.getLogger('__main__')
@@ -646,7 +647,7 @@ if __name__ == '__main__':
     temp_mri_prep = temp_dir / 'mri_tmp' / subjid
     if op.exists(temp_mri_prep): shutil.rmtree(temp_mri_prep)
     temp_mri_prep.mkdir(parents=True)
-
+    
     #    
     #Check for Afni and convert the mri to nifti
     #
@@ -667,13 +668,22 @@ if __name__ == '__main__':
         #Convert the mri to nifti
         nii_mri = convert_brik(args.mri_brik, outdir=temp_mri_prep)
         logger.info(f'Converted {args.mri_brik} to {nii_mri}')
-        
+          
     #
     # Proc Brainsight Data
     #
     if args.mri_bsight:
         assert op.splitext(args.mri_bsight)[-1] in ['.nii','.nii.gz']
         nii_mri = args.mri_bsight
+    
+    #
+    #   Anonymize/Deface MRI if set
+    #
+    nii_mri = mri_deface(nii_mri, topdir=temp_mri_prep)
+  
+    #
+    # Finish MRI prep
+    #
         
     template_meg = glob.glob(op.join(args.meg_input_dir, '*.ds'))[0]
     freesurfer_import(mri=nii_mri, 
