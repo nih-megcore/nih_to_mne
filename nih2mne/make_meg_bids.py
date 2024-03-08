@@ -126,7 +126,29 @@ def get_eroom(meg_fname, tmpdir=None):
     pull_eroom(er_fname, tmpdir=tmpdir)
     er_fname = op.join(tmpdir, op.basename(er_fname)).replace('.tgz','.ds')
     logger.info(f'Using {er_fname} for emptyroom')
-    return er_fname   
+    return er_fname 
+
+def _check_markerfile(ds_fname):
+    '''
+    CTF newDs software (as of 03/08/2024) will not create a new anonymized 
+    dataset if there is not a Markerfile present.  This will create a null 
+    Markerfile to prevent CTF issues.
+    
+    Parameters
+    ----------
+    ds_fname : str
+        Path to CTF ds file.
+
+    Returns
+    -------
+    None.
+
+    '''
+    mrk_fname = op.join(ds_fname, 'MarkerFile.mrk')
+    if not op.exists(mrk_fname):
+        mrk_template = op.join(__file__, 'templates', 'MarkerFile.mrk')
+        import shutil
+        shutil.copy(mrk_template, mrk_fname)
         
 def anonymize_meg(meg_fname, tmpdir=None):
     '''
@@ -237,6 +259,7 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
                 meg_fname = return_cropped_ds(meg_fname)
             
             if anonymize==True:
+                _check_markerfile(meg_fname)
                 #Anonymize file and ref new dset off of the output fname
                 meg_fname = anonymize_meg(meg_fname, tmpdir=tmpdir) 
                 anonymize_finalize(meg_fname) #Scrub or remove extra text files
@@ -542,12 +565,12 @@ if __name__ == '__main__':
                         room data with your dataset''',
                         action='store_true', 
                         default=False)
-    group4 = parser.add_argument_group('UNDER Construction - BIDS MRI PostProcessing - CURRENTLY NOT ANONYMIZED')
-    group4.add_argument('-freesurfer',
+    group3.add_argument('-freesurfer',
                         help='''Perform recon-all pipeline on the T1w.
                         This is required for the mri_prep portions below''', 
                         action='store_true'
-                        )
+                        )    
+    group4 = parser.add_argument_group('UNDER Construction - BIDS PostProcessing')
     group4.add_argument('-project',
                         help='''Output project name for the mri processing from mri_prep''', 
                         default='megprocessing'
@@ -716,7 +739,7 @@ if __name__ == '__main__':
         assert len(nii_fnames)==1
         nii_fname=nii_fnames[0]
         os.makedirs(fs_subjects_dir, exist_ok=True)
-        cmd = f"export SUBJECTS_DIR={fs_subjects_dir}; recon-all -all  -i {nii_fname} -s  sub-{subjid}"                            
+        cmd = f"export SUBJECTS_DIR={fs_subjects_dir}; recon-all -all  -i {nii_mri} -s  sub-{subjid}"                            
         script = f'#! /bin/bash\n {cmd}\n'
         submission = subprocess.run(["sbatch", "--mem=6g", "--time=24:00:00"],
                                     input=script,
