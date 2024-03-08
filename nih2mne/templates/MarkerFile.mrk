@@ -1,0 +1,26 @@
+PATH OF DATASET:
+/home/None/None.ds
+
+
+NUMBER OF MARKERS:
+1
+
+
+CLASSGROUPID:
+3
+NAME:
+trigger
+COMMENT:
+Trigger Marker corresponding to trigger (CondBitPattern=0x80, CondBitMask=0x80, Flag0to1Only=1,MinStableLength=0,TransientSearchMask=0x0)
+COLOR:
+red
+EDITABLE:
+No
+CLASSID:
+1
+NUMBER OF SAMPLES:
+0
+LIST OF SAMPLES:
+TRIAL NUMBER		TIME FROM SYNC POINT (in seconds)
+
+
