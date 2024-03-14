@@ -119,7 +119,7 @@ def return_cropped_ds(fname):
     try:
         subprocess.run(cmd)
     except:
-        from pyctf.util import *
+        from pyctf.util import run
         print(run(cmd, raw=True).decode())
     if op.exists(op.join(fname,'ClassFile.cls')): renameClassFile(fname) 
     return fname_out
