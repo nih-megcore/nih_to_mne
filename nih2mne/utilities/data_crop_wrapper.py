@@ -116,7 +116,11 @@ def return_cropped_ds(fname):
     fname_out = op.join(outdir, f_)
     if op.exists(op.join(fname,'ClassFile.cls')): checkClassFile(fname) 
     cmd = f'newDs -f -time 0 {str(crop_time)} {fname} {fname_out}'
-    subprocess.run(cmd)
+    try:
+        subprocess.run(cmd)
+    except:
+        from pyctf.util import *
+        print(run(cmd, raw=True).decode())
     if op.exists(op.join(fname,'ClassFile.cls')): renameClassFile(fname) 
     return fname_out
     
