@@ -13,8 +13,8 @@ import shutil
 import pyctf
 from pyctf.ctf_res4 import *
 from pyctf.util import *
+from pyctf.classfileFunc import * # load checkClassFile, writeClassFile
 from struct import Struct
-import textwrap
 
 def get_term_time(data, sfreq):
     '''
@@ -27,49 +27,6 @@ def get_term_time(data, sfreq):
     except:
         return False
     
-
-def checkClassFile(fname):
-
-    ''' 
-    Load ClassFile.cls. 
-    If "Aborted" class is found in file, 
-    temporarily rename file so newDs does not use it
-    
-    Parameters
-    ----------
-    fname : str
-        Path String.
-
-    '''
-
-    # Open the file
-    with open(os.path.join(fname,'ClassFile.cls'), "r") as file:
-        # Initialize variables to store class information
-        number_of_class = None
-        names = []
-
-        # Read the file line by line
-        for line in file:
-            # Strip whitespace characters from the beginning and end of each line
-            line = line.strip()
-
-            # Check if the line contains "NUMBER OF CLASSES"
-            if line.startswith("NUMBER OF CLASSES:"):
-                # The actual number is on the next line
-                number_of_class = int(next(file).strip())
-            # Check if the line contains "NAME"
-            elif line.startswith("NAME:"):
-                # The actual name is on the next line
-                names.append(next(file).strip())
-                if "Aborted" in names:
-                    to_rename = True
-                # Break the loop if all names are collected
-                if len(names) == number_of_class:
-                    break
-
-    return to_rename 
-
-
 def return_cropped_ds(fname):
     '''
     Load the raw dataset, check the time where a set of zeros are present
@@ -113,7 +70,7 @@ def return_cropped_ds(fname):
             os.rename(os.path.join(fname,'ClassFile.cls'), os.path.join(fname,'__ClassFile.cls'))
 
     cmd = f'newDs -f -time 0 {str(crop_time)} {fname} {fname_out}'
-    subprocess.run(cmd, shell=True)
+    subprocess.run(cmd.split())
 
     if op.exists(op.join(fname,'__ClassFile.cls')): 
         os.rename(os.path.join(fname,'__ClassFile.cls'), os.path.join(fname,'ClassFile.cls'))
@@ -128,46 +85,6 @@ def install_check():
         raise BaseException('''The CTF tools are not installed on this system
                             if on biowulf do module load ctf and rerun''')
     
-
-
-def writeClassFile(fname_out):       
-
-    file_content = f"""\
-    PATH OF DATASET:
-    {fname_out}
-
-    
-    NUMBER OF CLASSES:
-    1
-
-
-    CLASSGROUPID:
-    3
-    NAME:
-    BAD
-    COMMENT:
-
-    COLOR:
-    Red
-    EDITABLE:
-    Yes
-    CLASSID:
-    1
-    NUMBER OF TRIALS:
-    0
-    LIST OF TRIALS:
-    TRIAL NUMBER
-
-
-    """
-
-    file_content = textwrap.dedent(file_content)
-
-    # Write the file content to a file
-    with open(f"{fname_out}/ClassFile.cls", "w") as file:
-        file.write(file_content)
-
-
 
 def crop_ds(fname):
 
@@ -195,6 +112,7 @@ def crop_ds(fname):
     and crops the dataset accordingly. The cropped data is then written to new .res4 and .meg4 files, along with 
     any additional files from the original dataset directory. The output dataset is stored in a temporary 
     subfolder within the directory of the original file.
+    This function is based on Tom Holroyd's fif2ctf.py script
 
     '''
 
