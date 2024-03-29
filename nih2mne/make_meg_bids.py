@@ -27,7 +27,7 @@ from multiprocessing import Pool
 from mne_bids import write_anat, BIDSPath, write_raw_bids
 from nih2mne.calc_mnetrans import write_mne_fiducials 
 from nih2mne.calc_mnetrans import write_mne_trans
-
+import nih2mne
 from nih2mne.utilities.clear_mrk_path import (calc_extra_mark_filelist,
                                               remove_extra_mrk_files, 
                                               clean_filepath_header)
@@ -146,7 +146,8 @@ def _check_markerfile(ds_fname):
     '''
     mrk_fname = op.join(ds_fname, 'MarkerFile.mrk')
     if not op.exists(mrk_fname):
-        mrk_template = op.join(__file__, 'templates', 'MarkerFile.mrk')
+        
+        mrk_template = op.join(nih2mne.__path__[0], 'templates', 'MarkerFile.mrk')
         import shutil
         shutil.copy(mrk_template, mrk_fname)
         
