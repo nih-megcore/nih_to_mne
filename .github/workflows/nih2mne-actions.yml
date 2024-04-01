@@ -4,9 +4,20 @@ jobs:
   pytest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v2
-      - run: git submodule update --init --recursive
-      - run: pip install gdown pytest install git+https://github.com/nih-megcore/nih_to_mne
-      - run: gdown --folder ${{ secrets.GDRIVE_MRI }}
-      - run: pytest -vv
+      - name: Setup git repo python
+        run: pip install pytest git+https://github.com/nih-megcore/nih_to_mne
+      - name: Install MEG data git submodules
+        run: git submodule update --init --recursive
+      - name: Check FS Cache
+        id: cache-fsdownload
+        uses: actions/cache@v3
+        with:
+          path: ~/FSData
+          key:
+            FSData.tar.gz
+      - if: ${{ steps.cache-fsdownload.outputs.cache-hit != 'true' }}
+        run: pip install gdown; gdown --folder ${{ secrets.GDRIVE_MRI }} -O ~/FSData
+      - name: Pytest
+        run: pytest -vv
