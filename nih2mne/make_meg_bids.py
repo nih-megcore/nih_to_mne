@@ -33,6 +33,8 @@ from nih2mne.utilities.clear_mrk_path import (calc_extra_mark_filelist,
                                               clean_filepath_header)
 from nih2mne.utilities.mri_defacing import mri_deface
 
+global logger
+global err_logger
 
 # logger = logging.getLogger('__main__')
 
@@ -644,8 +646,6 @@ if __name__ == '__main__':
     else:
         subjid = _check_multiple_subjects(args.meg_input_dir)
     
-    global logger
-    global err_logger
     logger = get_subj_logger(subjid, log_dir=logger_dir, loglevel=logging.INFO)
     err_logger = get_subj_logger(subjid+'_err', log_dir=logger_dir, loglevel=logging.WARN)
     
