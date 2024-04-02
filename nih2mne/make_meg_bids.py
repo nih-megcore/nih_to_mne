@@ -17,7 +17,7 @@ import numpy as np
 import logging
 import subprocess
 from pathlib import Path
-
+import sys
 
 import shutil
 import matplotlib
@@ -33,8 +33,8 @@ from nih2mne.utilities.clear_mrk_path import (calc_extra_mark_filelist,
                                               clean_filepath_header)
 from nih2mne.utilities.mri_defacing import mri_deface
 
-global logger
-logger = logging.getLogger('__main__')
+
+# logger = logging.getLogger('__main__')
 
 # =============================================================================
 # make_meg_bids.py
@@ -73,7 +73,9 @@ def sessdir2taskrundict(session_dir=None, subject_in=None):
     elif type(session_dir) is list:
         dsets=session_dir
     else:
-        logger.exception(f'session_dir variable is not a valid path or \
+        logger.error(f'session_dir variable is not a valid path or \
+                          dataset list: {session_dir}')
+        err_logger.exception(f'session_dir variable is not a valid path or \
                           dataset list: {session_dir}')
     
     #Verify that these are meg datasets
@@ -146,10 +148,10 @@ def _check_markerfile(ds_fname):
     '''
     mrk_fname = op.join(ds_fname, 'MarkerFile.mrk')
     if not op.exists(mrk_fname):
-        
         mrk_template = op.join(nih2mne.__path__[0], 'templates', 'MarkerFile.mrk')
         import shutil
         shutil.copy(mrk_template, mrk_fname)
+        logger.info(f'Using template markerfile for {ds_fname}')
         
 def anonymize_meg(meg_fname, tmpdir=None):
     '''
@@ -173,7 +175,11 @@ def anonymize_meg(meg_fname, tmpdir=None):
         raise ValueError
     out_fname = op.join(tmpdir, op.basename(meg_fname))
     cmd = f'newDs -anon {meg_fname} {out_fname}'
-    subprocess.run(cmd.split())
+    try:
+        subprocess.run(cmd.split(), check=True)
+    except BaseException as e:
+        logger.error(f'Error with CTF tools anonymization')
+        err_logger.exception(f'Error with CTF tools anonymization: {str(e)}')
     return out_fname
 
 def anonymize_finalize(meg_fname):
@@ -287,7 +293,8 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
                 write_raw_bids(raw, bids_path, overwrite=True)
                 logger.info(f'Successful MNE BIDS: {meg_fname} to {bids_path}')
             except BaseException as e:
-                logger.exception('MEG BIDS PROCESSING:', e)
+                logger.error(f'MEG BIDS PROCESSING: {meg_fname}')
+                err_logger.exception('MEG BIDS PROCESSING:', e)
                 error_count+=1
     #
     #Include the emptyroom dataset   
@@ -310,7 +317,8 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
             write_raw_bids(raw, bids_path, overwrite=True)
             logger.info(f'Successful MNE BIDS: {er_fname} to {bids_path}')
         except BaseException as e:
-            logger.exception('MEG BIDS PROCESSING EMPTY ROOM:', e)
+            logger.error('MEG BIDS PROCESSING EMPTY ROOM') 
+            err_logger.exception('MEG BIDS PROCESSING EMPTY ROOM:', e)
             error_count+=1
     else:
         logger.info('Ignore ERoom set -- not finding emptyroom')
@@ -338,12 +346,18 @@ def freesurfer_import(mri=None, subjid=None, tmp_subjects_dir=None,
     try:
         subprocess.run(f'recon-all -i {mri} -s {subjid}'.split(),
                         check=True)
-        subprocess.run(f'recon-all -autorecon1 -noskullstrip -s {subjid}'.split(),
-                        check=True)
         logger.info('RECON_ALL IMPORT FINISHED')
     except BaseException as e:
-        logger.error('RECON_ALL IMPORT')
-        logger.error(e)
+        logger.error('RECON_ALL IMPORT: {mri}') 
+        err_logger.exception(f'RECONALL_IMPORT: {str(e)}')
+        raise
+    try:
+        subprocess.run(f'recon-all -autorecon1 -noskullstrip -s {subjid}'.split(),
+                        check=True)
+    except BaseException as e:
+        logger.error('RECON_ALL T1 Processing Error')
+        err_logger.exception(f'RECON_ALL T1 Processing Error {str(e)}')
+        raise
     return op.join(tmp_subjects_dir, subjid)
 
 
@@ -359,6 +373,8 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
     if (afni_fname is not None) and (bsight_elec is not None):
         logger.error(f'''Brainsight and Afni Brik Coreg can not both be chosen:
                      AFNI: {afni_fname}  Brainsight: {bsight_elec}''')
+        err_logger.exception(f'''Brainsight and Afni Brik Coreg can not both be chosen:
+                     AFNI: {afni_fname}  Brainsight: {bsight_elec}''')                 
     #Now that either afni_fname or bsight_elec is None
     #Both can be passed into the function
     try:
@@ -368,7 +384,9 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
                             bsight_txt_fname=bsight_elec,
                             output_fid_path=str(fid_path))
     except BaseException as e:
-        logger.error('Error in write_mne_fiducials', e)
+        logger.error('Error in write_mne_fiducials')
+        err_logger.exception(f'Error in write_mne_fiducials: {str(e)}')
+        raise
         # continue  #No need to write trans if fiducials can't be written
     try:              
         trans_fname=trans_dir / (subjid +'-trans.fif')
@@ -378,7 +396,8 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
                         output_name=str(trans_fname),
                         subjects_dir=str(tmp_subjects_dir))
     except BaseException as e:
-        logger.error('Error in write_mne_trans', e)
+        logger.error('Error in write_mne_trans')
+        err_logger.exception(f'Error in write_mne_trans: {str(e)}')
         print(f'error in trans calculation {subjid}')
     return str(trans_fname)
     
@@ -447,7 +466,8 @@ def process_mri_bids(bids_dir=None,
             )
         
     except BaseException as e:
-        logger.exception('MRI BIDS PROCESSING', e)
+        logger.error('MRI BIDS PROCESSING')
+        err_logger.exception(f'MRI BIDS PROCESSING: {str(e)}')
 
 def _check_multiple_subjects(meg_input_dir):
     '''Checks to see if multiple subjects were acquired in teh same dated 
@@ -487,6 +507,10 @@ def get_subj_logger(subjid, log_dir=None, loglevel=logging.INFO):
     fmt = logging.Formatter(fmt=f'%(asctime)s - %(levelname)s - {subjid} - %(message)s')
     fileHandle.setFormatter(fmt=fmt) 
     logger.addHandler(fileHandle)
+    streamHandle=logging.StreamHandler(sys.stdout)
+    streamHandle.setFormatter(fmt=fmt)
+    logger.addHandler(streamHandle)
+    logger.info('Initializing subject level HV log')
     return logger
 
 def _input_checks(args):
@@ -619,7 +643,11 @@ if __name__ == '__main__':
         subjid=args.subjid_input
     else:
         subjid = _check_multiple_subjects(args.meg_input_dir)
-    logger = get_subj_logger(subjid, log_dir=logger_dir, loglevel=logging.DEBUG)
+    
+    global logger
+    global err_logger
+    logger = get_subj_logger(subjid, log_dir=logger_dir, loglevel=logging.INFO)
+    err_logger = get_subj_logger(subjid+'_err', log_dir=logger_dir, loglevel=logging.WARN)
     
     #Create temporary directories at the parent directory of the bids dir
     global temp_dir
