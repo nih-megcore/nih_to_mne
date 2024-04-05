@@ -297,6 +297,13 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
     for task, task_sublist in dset_dict.items():
         for run, base_meg_fname in enumerate(task_sublist, start=1):
             meg_fname = op.join(input_path, base_meg_fname)
+            try:
+                _clear_ClassFile(meg_fname) #Remove Trials that fail CTFtools
+            except:
+                logger.warn(f'''Could not clear the Classfile, this may cause
+                             issues with processing.  If so, change the following
+                             file to write permissions and retry: 
+                                 {str(op.join(meg_fname, 'ClassFile.cls'))}''')
             
             if crop_trailing_zeros==True:
                 # This is necessary for trial based acq that is terminated early
