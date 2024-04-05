@@ -154,6 +154,42 @@ def _check_markerfile(ds_fname):
         import shutil
         shutil.copy(mrk_template, mrk_fname)
         logger.info(f'Using template markerfile for {ds_fname}')
+
+def _clear_ClassFile(meg_fname):
+    '''
+    The MEG file gets populated with a BAD Trial number that needs to be cleared
+    out.  Check if there are trials listed and clear this entry.
+    
+    Nothing will change if the Classfile doesnt have an entry in this position
+
+    Parameters
+    ----------
+    meg_fname : path str
+        CTF dataset.
+
+    Returns
+    -------
+    None.
+
+    '''
+    class_file = op.join(meg_fname, 'ClassFile.cls')
+    with open(class_file, 'r') as f:
+        lines = f.readlines()
+    abort_idx = [j for j,i in enumerate(lines) if i=='Aborted\n']
+    if len(abort_idx)>0:
+        new_lines = lines[abort_idx[0]:]
+    else:
+        return
+    trialN_list_idx = new_lines.index('TRIAL NUMBER\n')
+    clear_idx = abort_idx[0] + trialN_list_idx + 1
+    if clear_idx == '\n':
+        return
+    else:
+        lines.pop(clear_idx)
+    print('Clearing trail number issue from ClassFile')
+    with open(class_file, 'w') as f:
+        f.writelines(lines)
+
         
 def anonymize_meg(meg_fname, tmpdir=None):
     '''
