@@ -788,8 +788,11 @@ if __name__ == '__main__':
     #
     # Finish MRI prep
     #
-        
-    template_meg = glob.glob(op.join(args.meg_input_dir, '*.ds'))[0]
+    # Get a template MEG dataset by filtering out noise and emptyroom datasets
+    _dsets = glob.glob(op.join(args.meg_input_dir, f'{args.subjid_input}*.ds'))
+    _dsets = [i for i in _dsets if (('noise' not in op.basename(i).lower()) and ('empty' not in op.basename(i).lower())) ]
+    template_meg = _dsets[0]
+    
     freesurfer_import(mri=nii_mri, 
                       subjid=subjid, 
                       tmp_subjects_dir=temp_subjects_dir, 
