@@ -282,7 +282,8 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
 
     Returns
     -------
-    None.
+    conversion_dict: dictionary
+        Input output mapping for later QA-ing
 
     '''
     if bids_dir==None:
@@ -294,6 +295,7 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
     #if len(session)==1: session = '0'+session
     
     error_count=0
+    conversion_dict={} #Populated during the loop to map input to output for later checking
     for task, task_sublist in dset_dict.items():
         for run, base_meg_fname in enumerate(task_sublist, start=1):
             meg_fname = op.join(input_path, base_meg_fname)
@@ -337,6 +339,7 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
                                       run=run, root=bids_dir, suffix='meg')
                 write_raw_bids(raw, bids_path, overwrite=True)
                 logger.info(f'Successful MNE BIDS: {meg_fname} to {bids_path}')
+                conversion_dict[meg_fname] = bids_path.fpath
             except BaseException as e:
                 logger.error(f'MEG BIDS PROCESSING: {meg_fname}')
                 err_logger.exception('MEG BIDS PROCESSING:', e)
@@ -373,6 +376,7 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
                     check the error log for more information')  #!!! print the error log location
     else:
         logger.info('SUCCESS: There were no errors!')
+    return conversion_dict
     
 
 def freesurfer_import(mri=None, subjid=None, tmp_subjects_dir=None,
@@ -568,9 +572,21 @@ def _input_checks(args):
     else:
         assert op.exists(args.mri_brik)
         
-def _output_checks():
+def _output_checks(args, meg_conv_dict):
     '''Check that all of the datasets have been converted and mri+json w/Fids'''
-    
+    input_dsets = sessdir2taskrundict(session_dir=args.meg_input_dir, 
+                                      subject_in=args.subjid_input)
+    _errs = {}
+    _goods = {}
+    for task, in_dset in input_dsets.iteritems():
+        if in_dset not in output_dsets.keys():
+            _errs[in_dset]='Not procced succesfully'
+        elif not op.exists(output_dsets[in_dset]):
+            _errs[in_dset]='No output file'
+        else:
+            _goods[in_dset]=output_dsets[in_dset]
+    #! TODO check for the MRI outputs
+    return {'errors':_errs, 'good':_goods}
             
 # =============================================================================
 # Commandline Options
@@ -731,15 +747,15 @@ if __name__ == '__main__':
             bids_id = subjid
     
     
-    process_meg_bids(input_path=args.meg_input_dir,
-                     subject_in=subjid,
-                      bids_dir=args.bids_dir,
-                      bids_id = args.bids_id, 
-                      session=args.bids_session, 
-                      anonymize=args.anonymize,
-                      ignore_eroom=args.ignore_eroom,
-                      crop_trailing_zeros=args.autocrop_zeros,
-                      **kwargs)
+    meg_conv_dict=process_meg_bids(input_path=args.meg_input_dir,
+                                 subject_in=subjid,
+                                  bids_dir=args.bids_dir,
+                                  bids_id = args.bids_id, 
+                                  session=args.bids_session, 
+                                  anonymize=args.anonymize,
+                                  ignore_eroom=args.ignore_eroom,
+                                  crop_trailing_zeros=args.autocrop_zeros,
+                                  **kwargs)
     
     #
     #   Prep MRI
@@ -811,6 +827,18 @@ if __name__ == '__main__':
                      trans_fname=trans_fname,
                      meg_fname=template_meg,
                      session=args.bids_session)
+    
+    #
+    # Check results
+    #
+    _tmp = _output_checks(args, meg_conv_dict)
+    errors = _tmp['errors']
+    good = _tmp['goods']
+    logger.info('########### SUMMARY #################')
+    for key in good.keys():
+        logger.info(f'SUCCESS :: {key} converted to {good[key]}')
+    for key in errors.keys():
+        logger.warn(f'ERROR :: {key} did not convert : {errors[key]}')
     
     #
     # Downstream Processing
