@@ -567,6 +567,9 @@ def _input_checks(args):
         assert op.exists(args.mri_bsight)
     else:
         assert op.exists(args.mri_brik)
+        
+def _output_checks():
+    '''Check that all of the datasets have been converted and mri+json w/Fids'''
     
             
 # =============================================================================
@@ -634,6 +637,11 @@ if __name__ == '__main__':
                         to prevent an error. Or if you collected your own empty
                         room data with your dataset''',
                         action='store_true', 
+                        default=False)
+    group3.add_argument('-supplement_eroom', 
+                        help='''If emptyroom present - ignore, else add emptyroom
+                        from the biowulf repository.''',
+                        action='store_true',
                         default=False)
     group3.add_argument('-freesurfer',
                         help='''Perform recon-all pipeline on the T1w.
@@ -774,7 +782,8 @@ if __name__ == '__main__':
     #
     #   Anonymize/Deface MRI if set
     #
-    nii_mri = mri_deface(nii_mri, topdir=temp_mri_prep)
+    if args.anonymize==True:
+        nii_mri = mri_deface(nii_mri, topdir=temp_mri_prep)
   
     #
     # Finish MRI prep
@@ -873,52 +882,4 @@ if __name__ == '__main__':
         #            deriv_path=deriv_path, 
         #            surf=surf)
         
- 
-    
-    
-
-
-
-         
-
-                        
-
-
-
-def test_bsight():
-    subjid = 'APBWVFAR'
-    mr_dir = '/fast/OPEN/APBWVFAR'
-    nii_mri = f'{mr_dir}/APBWVFAR.nii'
-    mri_bsight_elec = f'{mr_dir}/APBWVFAR.txt'
-    meg_input_dir = '/fast/OPEN/20200122'
-    
-    global temp_dir
-    temp_dir=Path(f'{mr_dir}').parent / 'bids_prep_temp'
-    if op.exists(temp_dir): shutil.rmtree(temp_dir)
-    temp_dir.mkdir()
-    temp_subjects_dir = temp_dir / 'subjects_tmp'
-    temp_subjects_dir.mkdir()
-    temp_mri_prep = temp_dir / 'mri_tmp'
-    temp_mri_prep.mkdir()
-
-
-    
-    template_meg = glob.glob(op.join(meg_input_dir, subjid+'*.ds'))[0]
-    freesurfer_import(mri=nii_mri, 
-                      subjid=subjid, 
-                      tmp_subjects_dir=temp_subjects_dir, 
-                      bsight_elec=mri_bsight_elec, 
-                      meg_fname=template_meg)
-    
-    trans_fname = make_trans_mat(mri=nii_mri, subjid=subjid, 
-                                 tmp_subjects_dir=temp_subjects_dir,
-                      afni_fname=None,
-                      bsight_elec=mri_bsight_elec, 
-                      meg_fname=template_meg)
-    
-    process_mri_bids(bids_dir='./bids_dir',
-                     subjid=subjid, 
-                     trans_fname=trans_fname,
-                     meg_fname=template_meg)
-
  
