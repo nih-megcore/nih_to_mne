@@ -762,73 +762,74 @@ if __name__ == '__main__':
     #
     #   Prep MRI
     #
-    #Create temp dir for MRI
-    temp_subjects_dir = temp_dir / 'subjects_tmp' 
-    temp_subjects_dir.mkdir(parents=True, exist_ok=True)
-    temp_mri_prep = temp_dir / 'mri_tmp' / subjid
-    if op.exists(temp_mri_prep): shutil.rmtree(temp_mri_prep)
-    temp_mri_prep.mkdir(parents=True)
-    
-    #    
-    #Check for Afni and convert the mri to nifti
-    #
-    if args.mri_brik:
-        host = os.uname().nodename
+    if args.ignore_mri_checks != True:
+        #Create temp dir for MRI
+        temp_subjects_dir = temp_dir / 'subjects_tmp' 
+        temp_subjects_dir.mkdir(parents=True, exist_ok=True)
+        temp_mri_prep = temp_dir / 'mri_tmp' / subjid
+        if op.exists(temp_mri_prep): shutil.rmtree(temp_mri_prep)
+        temp_mri_prep.mkdir(parents=True)
         
-        #Determine if on a biowulf node
-        if (host[0:2]=='cn') and (len(host)==6):
-            if 'LOADEDMODULES' in os.environ: lmods=os.environ['LOADEDMODULES']
+        #    
+        #Check for Afni and convert the mri to nifti
+        #
+        if args.mri_brik:
+            host = os.uname().nodename
             
-            lmods = lmods.split(':')
-            lmods = [i.split('/')[0] for i in lmods]
-            if 'afni' not in lmods:
-                raise ValueError('Load the afni module before performing')
-        elif not shutil.which('afni'):
-            raise ValueError('It does not look like Afni can be found')
+            #Determine if on a biowulf node
+            if (host[0:2]=='cn') and (len(host)==6):
+                if 'LOADEDMODULES' in os.environ: lmods=os.environ['LOADEDMODULES']
+                
+                lmods = lmods.split(':')
+                lmods = [i.split('/')[0] for i in lmods]
+                if 'afni' not in lmods:
+                    raise ValueError('Load the afni module before performing')
+            elif not shutil.which('afni'):
+                raise ValueError('It does not look like Afni can be found')
+            
+            #Convert the mri to nifti
+            nii_mri = convert_brik(args.mri_brik, outdir=temp_mri_prep)
+            logger.info(f'Converted {args.mri_brik} to {nii_mri}')
+              
+        #
+        # Proc Brainsight Data
+        #
+        if args.mri_bsight:
+            assert op.splitext(args.mri_bsight)[-1] in ['.nii','.nii.gz']
+            nii_mri = args.mri_bsight
         
-        #Convert the mri to nifti
-        nii_mri = convert_brik(args.mri_brik, outdir=temp_mri_prep)
-        logger.info(f'Converted {args.mri_brik} to {nii_mri}')
-          
-    #
-    # Proc Brainsight Data
-    #
-    if args.mri_bsight:
-        assert op.splitext(args.mri_bsight)[-1] in ['.nii','.nii.gz']
-        nii_mri = args.mri_bsight
-    
-    #
-    #   Anonymize/Deface MRI if set
-    #
-    if args.anonymize==True:
-        nii_mri = mri_deface(nii_mri, topdir=temp_mri_prep)
-  
-    #
-    # Finish MRI prep
-    #
-    # Get a template MEG dataset by filtering out noise and emptyroom datasets
-    _dsets = glob.glob(op.join(args.meg_input_dir, f'{args.subjid_input}*.ds'))
-    _dsets = [i for i in _dsets if (('noise' not in op.basename(i).lower()) and ('empty' not in op.basename(i).lower())) ]
-    template_meg = _dsets[0]
-    
-    freesurfer_import(mri=nii_mri, 
-                      subjid=subjid, 
-                      tmp_subjects_dir=temp_subjects_dir, 
-                      afni_fname=args.mri_brik, 
-                      meg_fname=template_meg)
-    
-    trans_fname = make_trans_mat(mri=nii_mri, subjid=subjid, 
-                                 tmp_subjects_dir=temp_subjects_dir,
-                      afni_fname=args.mri_brik,
-                      bsight_elec=args.mri_bsight_elec, 
-                      meg_fname=template_meg)
-    
-    process_mri_bids(bids_dir=args.bids_dir,
-                     subjid=subjid,
-                     bids_id=bids_id,  
-                     trans_fname=trans_fname,
-                     meg_fname=template_meg,
-                     session=args.bids_session)
+        #
+        #   Anonymize/Deface MRI if set
+        #
+        if args.anonymize==True:
+            nii_mri = mri_deface(nii_mri, topdir=temp_mri_prep)
+      
+        #
+        # Finish MRI prep
+        #
+        # Get a template MEG dataset by filtering out noise and emptyroom datasets
+        _dsets = glob.glob(op.join(args.meg_input_dir, f'{args.subjid_input}*.ds'))
+        _dsets = [i for i in _dsets if (('noise' not in op.basename(i).lower()) and ('empty' not in op.basename(i).lower())) ]
+        template_meg = _dsets[0]
+        
+        freesurfer_import(mri=nii_mri, 
+                          subjid=subjid, 
+                          tmp_subjects_dir=temp_subjects_dir, 
+                          afni_fname=args.mri_brik, 
+                          meg_fname=template_meg)
+        
+        trans_fname = make_trans_mat(mri=nii_mri, subjid=subjid, 
+                                     tmp_subjects_dir=temp_subjects_dir,
+                          afni_fname=args.mri_brik,
+                          bsight_elec=args.mri_bsight_elec, 
+                          meg_fname=template_meg)
+        
+        process_mri_bids(bids_dir=args.bids_dir,
+                         subjid=subjid,
+                         bids_id=bids_id,  
+                         trans_fname=trans_fname,
+                         meg_fname=template_meg,
+                         session=args.bids_session)
     
     #
     # Check results
