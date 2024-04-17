@@ -78,7 +78,7 @@ def sessdir2taskrundict(session_dir=None, subject_in=None):
     else:
         logger.error(f'session_dir variable is not a valid path or \
                           dataset list: {session_dir}')
-        err_logger.exception(f'session_dir variable is not a valid path or \
+        err_logger.error(f'session_dir variable is not a valid path or \
                           dataset list: {session_dir}')
     
     #Verify that these are meg datasets
@@ -218,7 +218,7 @@ def anonymize_meg(meg_fname, tmpdir=None):
         subprocess.run(cmd.split(), check=True)
     except BaseException as e:
         logger.error(f'Error with CTF tools anonymization')
-        err_logger.exception(f'Error with CTF tools anonymization: {str(e)}')
+        err_logger.error(f'Error with CTF tools anonymization: {str(e)}')
     return out_fname
 
 def anonymize_finalize(meg_fname):
@@ -343,7 +343,7 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
                 conversion_dict[meg_fname] = bids_path.fpath
             except BaseException as e:
                 logger.error(f'MEG BIDS PROCESSING: {meg_fname}')
-                err_logger.exception('MEG BIDS PROCESSING:', e)
+                err_logger.error('MEG BIDS PROCESSING:', e)
                 error_count+=1
     #
     #Include the emptyroom dataset   
@@ -367,7 +367,7 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
             logger.info(f'Successful MNE BIDS: {er_fname} to {bids_path}')
         except BaseException as e:
             logger.error('MEG BIDS PROCESSING EMPTY ROOM') 
-            err_logger.exception('MEG BIDS PROCESSING EMPTY ROOM:', e)
+            err_logger.error('MEG BIDS PROCESSING EMPTY ROOM:', e)
             error_count+=1
     else:
         logger.info('Ignore ERoom set -- not finding emptyroom')
@@ -399,14 +399,14 @@ def freesurfer_import(mri=None, subjid=None, tmp_subjects_dir=None,
         logger.info('RECON_ALL IMPORT FINISHED')
     except BaseException as e:
         logger.error('RECON_ALL IMPORT: {mri}') 
-        err_logger.exception(f'RECONALL_IMPORT: {str(e)}')
+        err_logger.error(f'RECONALL_IMPORT: {str(e)}')
         raise
     try:
         subprocess.run(f'recon-all -autorecon1 -noskullstrip -s {subjid}'.split(),
                         check=True)
     except BaseException as e:
         logger.error('RECON_ALL T1 Processing Error')
-        err_logger.exception(f'RECON_ALL T1 Processing Error {str(e)}')
+        err_logger.error(f'RECON_ALL T1 Processing Error {str(e)}')
         raise
     return op.join(tmp_subjects_dir, subjid)
 
@@ -423,7 +423,7 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
     if (afni_fname is not None) and (bsight_elec is not None):
         logger.error(f'''Brainsight and Afni Brik Coreg can not both be chosen:
                      AFNI: {afni_fname}  Brainsight: {bsight_elec}''')
-        err_logger.exception(f'''Brainsight and Afni Brik Coreg can not both be chosen:
+        err_logger.error(f'''Brainsight and Afni Brik Coreg can not both be chosen:
                      AFNI: {afni_fname}  Brainsight: {bsight_elec}''')                 
     #Now that either afni_fname or bsight_elec is None
     #Both can be passed into the function
@@ -435,7 +435,7 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
                             output_fid_path=str(fid_path))
     except BaseException as e:
         logger.error('Error in write_mne_fiducials')
-        err_logger.exception(f'Error in write_mne_fiducials: {str(e)}')
+        err_logger.error(f'Error in write_mne_fiducials: {str(e)}')
         raise
         # continue  #No need to write trans if fiducials can't be written
     try:              
@@ -447,7 +447,7 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
                         subjects_dir=str(tmp_subjects_dir))
     except BaseException as e:
         logger.error('Error in write_mne_trans')
-        err_logger.exception(f'Error in write_mne_trans: {str(e)}')
+        err_logger.error(f'Error in write_mne_trans: {str(e)}')
         print(f'error in trans calculation {subjid}')
     return str(trans_fname)
     
@@ -517,7 +517,7 @@ def process_mri_bids(bids_dir=None,
         
     except BaseException as e:
         logger.error('MRI BIDS PROCESSING')
-        err_logger.exception(f'MRI BIDS PROCESSING: {str(e)}')
+        err_logger.error(f'MRI BIDS PROCESSING: {str(e)}')
 
 def _check_multiple_subjects(meg_input_dir):
     '''Checks to see if multiple subjects were acquired in teh same dated 
