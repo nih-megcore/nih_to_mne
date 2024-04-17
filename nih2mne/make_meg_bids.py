@@ -578,7 +578,9 @@ def _output_checks(args, meg_conv_dict):
                                       subject_in=args.subjid_input)
     _errs = {}
     _goods = {}
-    for task, in_dset in input_dsets.iteritems():
+    _tmp = glob.glob(f'{args.bids_dir}/sub-{args.subjid_input}/ses-{args.session}/meg/*.ds')
+    output_dset = [op.basename(i) for i in _tmp]
+    for task, in_dset in input_dsets.items():
         if in_dset not in output_dsets.keys():
             _errs[in_dset]='Not procced succesfully'
         elif not op.exists(output_dsets[in_dset]):
