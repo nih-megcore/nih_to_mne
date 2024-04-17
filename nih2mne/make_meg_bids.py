@@ -36,7 +36,8 @@ from nih2mne.utilities.mri_defacing import mri_deface
 global logger
 global err_logger
 
-# logger = logging.getLogger('__main__')
+root_logger = logging.getLogger()
+
 
 # =============================================================================
 # make_meg_bids.py
@@ -578,15 +579,16 @@ def _output_checks(args, meg_conv_dict):
                                       subject_in=args.subjid_input)
     _errs = {}
     _goods = {}
-    _tmp = glob.glob(f'{args.bids_dir}/sub-{args.subjid_input}/ses-{args.session}/meg/*.ds')
-    output_dset = [op.basename(i) for i in _tmp]
+    _tmp = glob.glob(op.join(args.bids_dir, 'sub-'+args.bids_id,
+                                    'ses-'+str(args.bids_session),'meg', '*.ds'))
+    output_dsets = [op.basename(i) for i in _tmp]
     for task, in_dset in input_dsets.items():
-        if in_dset not in output_dsets.keys():
+        if in_dset not in meg_conv_dict.keys():
             _errs[in_dset]='Not procced succesfully'
-        elif not op.exists(output_dsets[in_dset]):
+        elif not op.exists(meg_conv_dict[in_dset]):
             _errs[in_dset]='No output file'
         else:
-            _goods[in_dset]=output_dsets[in_dset]
+            _goods[in_dset]=meg_conv_dict[in_dset]
     #! TODO check for the MRI outputs
     return {'errors':_errs, 'good':_goods}
             
