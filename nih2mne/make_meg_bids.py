@@ -575,15 +575,15 @@ def _input_checks(args):
         
 def _output_checks(args, meg_conv_dict):
     '''Check that all of the datasets have been converted and mri+json w/Fids'''
-    input_dsets = sessdir2taskrundict(session_dir=args.meg_input_dir, 
-                                      subject_in=args.subjid_input)
-    _errs = {}
-    _goods = {}
+    input_dsets = glob.glob(op.join(args.meg_input_dir, args.subjid_input +'*.ds'))
+    # input_dsets = [ename(i) for i in _tmp]
     _tmp = glob.glob(op.join(args.bids_dir, 'sub-'+args.bids_id,
                                     'ses-'+str(args.bids_session),'meg', '*.ds'))
-    output_dsets = [op.basename(i) for i in _tmp]
-    for task, in_dset in input_dsets.items():
-        if in_dset not in meg_conv_dict.keys():
+    output_dsets = [op.basename(i) for i in _tmp]    
+    _errs = {}
+    _goods = {}
+    for in_dset in input_dsets:
+        if in_dset not in list(meg_conv_dict.keys()):
             _errs[in_dset]='Not procced succesfully'
         elif not op.exists(meg_conv_dict[in_dset]):
             _errs[in_dset]='No output file'
@@ -838,12 +838,12 @@ if __name__ == '__main__':
     #
     _tmp = _output_checks(args, meg_conv_dict)
     errors = _tmp['errors']
-    good = _tmp['goods']
+    good = _tmp['good']
     logger.info('########### SUMMARY #################')
     for key in good.keys():
         logger.info(f'SUCCESS :: {key} converted to {good[key]}')
     for key in errors.keys():
-        logger.warn(f'ERROR :: {key} did not convert : {errors[key]}')
+        logger.warning(f'ERROR :: {key} did not convert : {errors[key]}')
     
     #
     # Downstream Processing
