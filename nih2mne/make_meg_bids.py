@@ -566,7 +566,7 @@ def _input_checks(args):
     else:
         assert op.exists(args.mri_brik)
         
-def _output_checks(args, meg_conv_dict):
+def _output_checks(meg_conv_dict):
     '''Check that all of the datasets have been converted and mri+json w/Fids'''
     _errs = {}
     _goods = {}
@@ -868,8 +868,11 @@ if __name__ == '__main__':
     #
     # Check results
     #
-    meg_conv_dict = _get_conversion_dict()
-    _tmp = _output_checks(args, meg_conv_dict)
+    meg_conv_dict = _get_conversion_dict(input_path=args.meg_input_dir, 
+                                         subject_in=args.subjid_input,
+                                         bids_id=args.bids_id,
+                                         bids_dir=args.bids_dir)
+    _tmp = _output_checks(meg_conv_dict)
     errors = _tmp['errors']
     good = _tmp['good']
     logger.info('########### SUMMARY #################')
