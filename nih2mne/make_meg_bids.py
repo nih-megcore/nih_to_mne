@@ -539,22 +539,22 @@ def get_subj_logger(subjid, log_dir=None, loglevel=logging.INFO):
     '''Return the subject specific logger.
     This is particularly useful in the multiprocessing where logging is not
     necessarily in order'''
-    logger = logging.getLogger(subjid)
-    logger.setLevel(level=loglevel)
-    if logger.handlers != []:
+    _logger = logging.getLogger(subjid)
+    _logger.setLevel(level=loglevel)
+    if _logger.handlers != []:
         # Check to make sure that more than one file handler is not added
-        tmp_ = [type(i) for i in logger.handlers ]
+        tmp_ = [type(i) for i in _logger.handlers ]
         if logging.FileHandler in tmp_:
-            return logger
+            return _logger
     fileHandle = logging.FileHandler(f'{log_dir}/{subjid}_log.txt')
     fmt = logging.Formatter(fmt=f'%(asctime)s - %(levelname)s - {subjid} - %(message)s')
     fileHandle.setFormatter(fmt=fmt) 
-    logger.addHandler(fileHandle)
+    _logger.addHandler(fileHandle)
     streamHandle=logging.StreamHandler(sys.stdout)
     streamHandle.setFormatter(fmt=fmt)
-    logger.addHandler(streamHandle)
-    logger.info('Initializing subject level HV log')
-    return logger
+    _logger.addHandler(streamHandle)
+    _logger.info('Initializing subject level HV log')
+    return _logger
 
 def _input_checks(args):
     '''Perform minimal checks of existing data to fail early before starting 
