@@ -281,11 +281,6 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
         Leaving the zero data at the end will cause some issues in the data 
         processing.
 
-    Returns
-    -------
-    conversion_dict: dictionary
-        Input output mapping for later QA-ing
-
     '''
     if bids_dir==None:
         raise ValueError('No bids_dir output directory given')
@@ -296,7 +291,6 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
     #if len(session)==1: session = '0'+session
     
     error_count=0
-    conversion_dict={} #Populated during the loop to map input to output for later checking
     for task, task_sublist in dset_dict.items():
         for run, base_meg_fname in enumerate(task_sublist, start=1):
             meg_fname = op.join(input_path, base_meg_fname)
@@ -340,7 +334,6 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
                                       run=run, root=bids_dir, suffix='meg')
                 write_raw_bids(raw, bids_path, overwrite=True)
                 logger.info(f'Successful MNE BIDS: {meg_fname} to {bids_path}')
-                conversion_dict[meg_fname] = bids_path.fpath
             except BaseException as e:
                 logger.error(f'MEG BIDS PROCESSING: {meg_fname}')
                 err_logger.error('MEG BIDS PROCESSING:', e)
@@ -377,7 +370,7 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
                     check the error log for more information')  #!!! print the error log location
     else:
         logger.info('SUCCESS: There were no errors!')
-    return conversion_dict
+    
     
 
 def freesurfer_import(mri=None, subjid=None, tmp_subjects_dir=None,
@@ -575,22 +568,61 @@ def _input_checks(args):
         
 def _output_checks(args, meg_conv_dict):
     '''Check that all of the datasets have been converted and mri+json w/Fids'''
-    input_dsets = glob.glob(op.join(args.meg_input_dir, args.subjid_input +'*.ds'))
-    # input_dsets = [ename(i) for i in _tmp]
-    _tmp = glob.glob(op.join(args.bids_dir, 'sub-'+args.bids_id,
-                                    'ses-'+str(args.bids_session),'meg', '*.ds'))
-    output_dsets = [op.basename(i) for i in _tmp]    
     _errs = {}
     _goods = {}
-    for in_dset in input_dsets:
-        if in_dset not in list(meg_conv_dict.keys()):
-            _errs[in_dset]='Not procced succesfully'
-        elif not op.exists(meg_conv_dict[in_dset]):
-            _errs[in_dset]='No output file'
+    for input_meg, output_meg in meg_conv_dict.items():
+        if not op.exists(output_meg):
+            _errs[input_meg]=str(output_meg) #f'No output file: {output_meg}'
         else:
-            _goods[in_dset]=meg_conv_dict[in_dset]
+            _goods[input_meg]=output_meg
     #! TODO check for the MRI outputs
     return {'errors':_errs, 'good':_goods}
+
+#!!! TODO - integrate this into the meg bids conversion so there isn't redundant code
+def _get_conversion_dict(input_path=None, subject_in=None, bids_id=None,
+                     bids_dir=None, session=1, 
+                     ignore_eroom=None, 
+                     ):
+    '''
+    Provides the conversion information for later checks.  
+    
+
+    Parameters
+    ----------
+    input_path : str,
+        MEG directory (typically a date). 
+    subject_in : str,
+        MEGHASH ID typically. 
+    bids_id : str,
+        BIDS output ID
+    bids_dir : str,
+        BIDS output directory
+    session : str | int 
+        BIDS session
+    ignore_eroom : TYPE, optional
+        DESCRIPTION. The default is None.
+
+    Returns
+    -------
+    conversion_dict : dict
+        Dictionary of inputs to outputs
+
+    '''
+    dset_dict = sessdir2taskrundict(session_dir=input_path, subject_in=subject_in)
+    session = str(int(session)) #Confirm no leading zeros
+    conversion_dict={} 
+    for task, task_sublist in dset_dict.items():
+        for run, base_meg_fname in enumerate(task_sublist, start=1):
+            print(run, base_meg_fname)
+            meg_fname = op.join(input_path, base_meg_fname)
+            ses = session
+            run = str(run) 
+            if len(run)==1: run='0'+run
+            bids_path = BIDSPath(subject=bids_id, session=ses, task=task,
+                                  run=run, root=bids_dir, suffix='meg')
+            conversion_dict[meg_fname] = bids_path.fpath
+    return conversion_dict
+
             
 # =============================================================================
 # Commandline Options
@@ -751,15 +783,15 @@ if __name__ == '__main__':
             bids_id = subjid
     
     
-    meg_conv_dict=process_meg_bids(input_path=args.meg_input_dir,
-                                 subject_in=subjid,
-                                  bids_dir=args.bids_dir,
-                                  bids_id = args.bids_id, 
-                                  session=args.bids_session, 
-                                  anonymize=args.anonymize,
-                                  ignore_eroom=args.ignore_eroom,
-                                  crop_trailing_zeros=args.autocrop_zeros,
-                                  **kwargs)
+    process_meg_bids(input_path=args.meg_input_dir,
+                                subject_in=subjid,
+                                 bids_dir=args.bids_dir,
+                                 bids_id = args.bids_id, 
+                                 session=args.bids_session, 
+                                 anonymize=args.anonymize,
+                                 ignore_eroom=args.ignore_eroom,
+                                 crop_trailing_zeros=args.autocrop_zeros,
+                                 **kwargs)
     
     #
     #   Prep MRI
@@ -836,6 +868,7 @@ if __name__ == '__main__':
     #
     # Check results
     #
+    meg_conv_dict = _get_conversion_dict()
     _tmp = _output_checks(args, meg_conv_dict)
     errors = _tmp['errors']
     good = _tmp['good']
