@@ -86,11 +86,11 @@ def make_swarm(bids_root=None, src_type='surf', project=None,
     
     
 def check_mri(t1_bids_path):
-    for acq in ['MPRAGE', None]:
+    for acq in ['MPRAGE', 'FSPGR', None]:
         t1_bids_path.update(acquisition=acq, extension='.nii')
         if op.exists(t1_bids_path.fpath):
             break
-        t1_bids_path.update(extension='.nii.gz')
+        t1_bids_path.update(acquisition=acq, extension='.nii.gz')
         if op.exists(t1_bids_path.fpath):
             break
     #Redundant test possibly
