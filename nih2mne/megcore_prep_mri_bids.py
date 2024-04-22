@@ -145,7 +145,7 @@ def mripreproc(bids_path=None,
     fs_subject = 'sub-'+bids_path.subject
     
     if not op.exists(op.join(subjects_dir, 'sub-'+bids_path.subject, 'bem','watershed')):
-        mne.bem.make_watershed_bem(fs_subject, subjects_dir=subjects_dir)    
+        mne.bem.make_watershed_bem(fs_subject, subjects_dir=subjects_dir, gcaatlas = True)  #gcaatlas added to prevent cerebellum cropping  
     if fwd_fname.fpath.exists():
         fwd = mne.read_forward_solution(fwd_fname)
         return fwd
