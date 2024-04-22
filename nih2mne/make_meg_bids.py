@@ -130,8 +130,15 @@ def get_eroom(meg_fname, tmpdir=None):
     print('Pulling and untar/unzip emptyroom')
     pull_eroom(er_fname, tmpdir=tmpdir)
     er_fname = op.join(tmpdir, op.basename(er_fname)).replace('.tgz','.ds')
-    logger.info(f'Using {er_fname} for emptyroom')
-    return er_fname 
+    #Sometimes the compiled emptyroom file is not a functional file - add failover
+    if op.exists(er_fname):
+        logger.info(f'Using {er_fname} for emptyroom')
+        return er_fname
+    else:
+        er_fname = get_closest_eroom(meg_fname, failover=True)
+        pull_eroom(er_fname, tmpdir=tmpdir)
+        er_fname = op.join(tmpdir, op.basename(er_fname)).replace('.tgz','.ds')
+        return er_fname 
 
 def _check_markerfile(ds_fname):
     '''

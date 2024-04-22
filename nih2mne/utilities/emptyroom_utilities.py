@@ -38,7 +38,8 @@ def convert_meg_datetime(meg_fname):
     i=meg_fname.split('_')[2]
     return datetime.datetime(int(i[0:4]), int(i[4:6]), int(i[6:8]))
 
-def get_closest_eroom(meg_fname, eroom_dict=None, eroom_location=None):
+def get_closest_eroom(meg_fname, eroom_dict=None, eroom_location=None, 
+                      failover=False):
     '''
     Return the path of the emptyroom file that matches closest the date of 
     your current meg file.
@@ -51,6 +52,8 @@ def get_closest_eroom(meg_fname, eroom_dict=None, eroom_location=None):
         Override if not using biowulf. The default is None.
     eroom_location : TYPE, optional
         Override if not using biowulf. The default is None.
+    failover : BOOL
+        Use this option to try an alternative (if the pulled tarfile doesnt unpack)
 
     Returns
     -------
@@ -69,12 +72,15 @@ def get_closest_eroom(meg_fname, eroom_dict=None, eroom_location=None):
     assert len(eroom_dict) > 0
     megdate = convert_meg_datetime(meg_fname)
     res = min(eroom_dict.keys(), key=lambda curr: abs(curr - megdate))
+    if failover==True:
+        eroom_dict.pop(res)
+        res = min(eroom_dict.keys(), key=lambda curr: abs(curr - megdate))
     closest_eroom = eroom_dict[res]
     return closest_eroom
 
 def pull_eroom(eroom_fname, tmpdir=None):
     cmd=f'tar -xf {eroom_fname} -C {tmpdir}'
-    subprocess.run(cmd.split())
+    subprocess.run(cmd.split(), check=True)
 
 
     
