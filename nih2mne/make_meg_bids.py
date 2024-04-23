@@ -32,6 +32,7 @@ from nih2mne.utilities.clear_mrk_path import (calc_extra_mark_filelist,
                                               remove_extra_mrk_files, 
                                               clean_filepath_header)
 from nih2mne.utilities.mri_defacing import mri_deface
+from nih2mne.utilities.qa_fids import plot_fids_qa
 
 global logger
 global err_logger
@@ -887,6 +888,13 @@ if __name__ == '__main__':
         logger.info(f'SUCCESS :: {key} converted to {good[key]}')
     for key in errors.keys():
         logger.warning(f'ERROR :: {key} did not convert : {errors[key]}')
+        
+    #
+    # Plot QA images
+    #
+    out_fids_qa_image = op.join(logger_dir, f'{args.subjid_input}_fids_qa.png')
+    plot_fids_qa(subjid=args.bids_id, bids_root=args.bids_dir, 
+                 outfile=out_fids_qa_image)
     
     #
     # Downstream Processing
