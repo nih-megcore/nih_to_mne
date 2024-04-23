@@ -32,13 +32,15 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None):
     '''
     if subjid[0:5]!='sub-':
         subjid='sub-'+subjid
+    if outfile == None:
+        outfile = op.join(os.getcwd(), f'{subjid}_fids_qa.png')
     tmp = glob.glob(op.join(bids_root, subjid, '**/*T1w.nii.gz'), recursive=True)
     if len(tmp) == 0:
         tmp = glob.glob(op.join(bids_root, subjid, '**/*T1w.nii'), recursive=True)
         if len(tmp) == 0:
-            print(f"Could not find T1w as a *T1w.nii or *T1w.nii.gz")
+            print(f"{subjid} :: Could not find T1w as a *T1w.nii or *T1w.nii.gz")
     if len(tmp) > 1:
-        print(f'More than one T1w files')
+        print(f'{subjid} :: More than one T1w files')
             
     t1w_bids_path = mne_bids.get_bids_path_from_fname(tmp[0])
     jsonfile = str(t1w_bids_path.copy().update(extension='.json'))
