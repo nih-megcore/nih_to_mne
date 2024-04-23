@@ -30,7 +30,7 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None):
     None.
 
     '''
-    if subjid[0:5]!='sub-':
+    if subjid[0:4]!='sub-':
         subjid='sub-'+subjid
     if outfile == None:
         outfile = op.join(os.getcwd(), f'{subjid}_fids_qa.png')
@@ -38,9 +38,9 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None):
     if len(tmp) == 0:
         tmp = glob.glob(op.join(bids_root, subjid, '**/*T1w.nii'), recursive=True)
         if len(tmp) == 0:
-            print(f"{subjid} :: Could not find T1w as a *T1w.nii or *T1w.nii.gz")
+            raise ValueError(f"{subjid} :: Could not find T1w as a *T1w.nii or *T1w.nii.gz")
     if len(tmp) > 1:
-        print(f'{subjid} :: More than one T1w files')
+        raise ValueError(f"{subjid} :: More than one T1w files")
             
     t1w_bids_path = mne_bids.get_bids_path_from_fname(tmp[0])
     jsonfile = str(t1w_bids_path.copy().update(extension='.json'))
@@ -92,17 +92,20 @@ if __name__ == '__main__':
                         subjid_fids_qa.png'''
                         )
     args = parser.parse_args()
-    if (args.subject and args.loop_all) == False:
-        raise ValueError('Need to input either a subject or loop_all flag')
-    if args.subject == True:
+    if args.subject == False:
+        if args.loop_all == False:
+            raise ValueError('Need to input either a subject or loop_all flag')
+    if args.subject != False:
         plot_fids_qa(subjid=args.subject, bids_root=args.bids_root, outfile=None)
-    if args.loop_all ==True:
-        qa_dir = op.dirname(args.bids_root)
+    elif args.loop_all == True:
+        qa_dir = op.join(op.dirname(args.bids_root), 'QA_fids')
         if not op.exists(qa_dir):
             os.mkdir(qa_dir)
         os.chdir(qa_dir)
-        subjects = glob.glob('sub-*')
+        subjects = glob.glob(op.join(args.bids_root, 'sub-*'))
+        subjects = [op.basename(i) for i in subjects]
         for subject in subjects:
+            print(f'Running subject {subject}')
             try:
                 plot_fids_qa(subjid=subject, 
                              bids_root=args.bids_root)
