@@ -168,7 +168,7 @@ def mripreproc(bids_path=None,
     else:
         if not src_fname.fpath.exists():
             src = mne.setup_volume_source_space(fs_subject, pos=5.0, bem=bem_sol,
-                                 subjects_dir=subjects_dir)
+                                 subjects_dir=subjects_dir, mindist=0.0)
             src.save(src_fname.fpath, overwrite=True)
         else:
             src = mne.read_source_spaces(src_fname.fpath)        
