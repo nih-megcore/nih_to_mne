@@ -92,23 +92,24 @@ if __name__ == '__main__':
                         subjid_fids_qa.png'''
                         )
     args = parser.parse_args()
+    bids_root = op.abspath(args.bids_root)
     if args.subject == False:
         if args.loop_all == False:
             raise ValueError('Need to input either a subject or loop_all flag')
     if args.subject != False:
-        plot_fids_qa(subjid=args.subject, bids_root=args.bids_root, outfile=None)
+        plot_fids_qa(subjid=args.subject, bids_root=bids_root, outfile=None)
     elif args.loop_all == True:
-        qa_dir = op.join(op.dirname(args.bids_root), 'QA_fids')
+        qa_dir = op.join(op.dirname(bids_root), 'QA_fids')
         if not op.exists(qa_dir):
             os.mkdir(qa_dir)
         os.chdir(qa_dir)
-        subjects = glob.glob(op.join(args.bids_root, 'sub-*'))
+        subjects = glob.glob(op.join(bids_root, 'sub-*'))
         subjects = [op.basename(i) for i in subjects]
         for subject in subjects:
             print(f'Running subject {subject}')
             try:
                 plot_fids_qa(subjid=subject, 
-                             bids_root=args.bids_root)
+                             bids_root=bids_root)
             except:
                 print(f'Failed to create QA image for {subject}')
                          
