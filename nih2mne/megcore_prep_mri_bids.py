@@ -12,6 +12,7 @@ import os, os.path as op, glob
 from pathlib import Path
 import numpy as np
 import nibabel as nib
+import subprocess
 # from nih2mne import get_njobs
 
 n_jobs=4 
@@ -141,7 +142,7 @@ def _gen_expanded_src(subject, subjects_dir, dilation_iter=4):
     out_surf = op.join(subjects_dir, subject, 'surf','expanded_brainmask_smoothed.surf')
     subprocess.run(f'mris_smooth -n 10 {in_surf} {out_surf}'.split(), check=True)
     print(f'Wrote expanded brainmask to: {mr_out_fname}')
-    return mr_out, out_surf
+    return mr_out_fname, out_surf
     
 
 def mripreproc(bids_path=None,
