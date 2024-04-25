@@ -10,6 +10,8 @@ import mne, mne_bids
 from mne_bids import BIDSPath
 import os, os.path as op, glob
 from pathlib import Path
+import numpy as np
+import nibabel as nib
 # from nih2mne import get_njobs
 
 n_jobs=4 
@@ -99,6 +101,40 @@ def check_mri(t1_bids_path):
     return t1_bids_path
 
 
+def _gen_expanded_src(subject, subjects_dir, dilation_iter=4):
+    '''
+    Expand the brainmask out to use as a source model.  This is used to 
+    prevent voxel cropping on the edges of the brain.
+
+    Parameters
+    ----------
+    subject : str
+        freesurfer subject id -- must include the sub- if using BIDS format
+    subjects_dir : str
+        freesurfer subjects dir  -- BIDS this would be bids_root/derivatives/freesurfer/subjects
+    dilation_iter : int
+        see scipy.ndimage.binary_dilation for more info.
+        The default is 4.
+
+    Returns
+    -------
+    None.
+
+    '''
+    import scipy
+    infile = op.join(subjects_dir, subject, 'mri','brainmask.mgz')
+    mr = nib.load(infile)
+    dat = mr.get_fdata()
+    mask = scipy.ndimage.binary_dilation(dat, iterations=dilation_iter)
+    
+    dat_out = np.zeros(dat.shape, dtype=np.int16)
+    dat_out[mask]=1
+    
+    mr_out = nib.MGHImage(dat_out, mr.affine) 
+    mr_out_fname = op.join(subjects_dir, subject, 'mri','expanded_brainmask.mgz')
+    mr_out.to_filename(mr_out_fname)
+    print(f'Wrote expanded brainmask to: {mr_out_fname}')
+    
 
 def mripreproc(bids_path=None,
                t1_bids_path=None, 
@@ -167,8 +203,14 @@ def mripreproc(bids_path=None,
             src = mne.read_source_spaces(src_fname.fpath)
     else:
         if not src_fname.fpath.exists():
-            src = mne.setup_volume_source_space(fs_subject, pos=5.0, bem=bem_sol,
-                                 subjects_dir=subjects_dir, mindist=0.0)
+            _gen_expanded_src(fs_subject, subjects_dir=subjects_dir)
+            src = mne.setup_volume_source_space(subject=fs_subject, pos=5.0, 
+                                          mri=op.join(subjects_dir, fs_subject, 'mri','expanded_brainmask.mgz'),
+                                          mindist=0.0, subjects_dir=subjects_dir
+                                          )
+            # BEM restricted below
+            # src = mne.setup_volume_source_space(fs_subject, pos=5.0, bem=bem_sol,
+            #                      subjects_dir=subjects_dir, mindist=0.0)
             src.save(src_fname.fpath, overwrite=True)
         else:
             src = mne.read_source_spaces(src_fname.fpath)        
