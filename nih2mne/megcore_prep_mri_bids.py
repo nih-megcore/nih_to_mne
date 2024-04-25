@@ -118,7 +118,7 @@ def _gen_expanded_src(subject, subjects_dir, dilation_iter=4):
 
     Returns
     -------
-    None.
+    mr_out, out_surf
 
     '''
     import scipy
@@ -133,7 +133,15 @@ def _gen_expanded_src(subject, subjects_dir, dilation_iter=4):
     mr_out = nib.MGHImage(dat_out, mr.affine) 
     mr_out_fname = op.join(subjects_dir, subject, 'mri','expanded_brainmask.mgz')
     mr_out.to_filename(mr_out_fname)
+    
+    in_mri = op.join(subjects_dir, subject, 'mri','expanded_brainmask.mgz')
+    out_surf = op.join(subjects_dir, subject, 'surf','expanded_brainmask.surf')
+    subprocess.run(f'mri_tessellate {in_mri} 1 {out_surf}'.split(), check=True)
+    in_surf = op.join(subjects_dir, subject, 'surf','expanded_brainmask.surf')
+    out_surf = op.join(subjects_dir, subject, 'surf','expanded_brainmask_smoothed.surf')
+    subprocess.run(f'mris_smooth -n 10 {in_surf} {out_surf}'.split(), check=True)
     print(f'Wrote expanded brainmask to: {mr_out_fname}')
+    return mr_out, out_surf
     
 
 def mripreproc(bids_path=None,
@@ -203,9 +211,9 @@ def mripreproc(bids_path=None,
             src = mne.read_source_spaces(src_fname.fpath)
     else:
         if not src_fname.fpath.exists():
-            _gen_expanded_src(fs_subject, subjects_dir=subjects_dir)
+            exp_mri, exp_surf = _gen_expanded_src(fs_subject, subjects_dir=subjects_dir)
             src = mne.setup_volume_source_space(subject=fs_subject, pos=5.0, 
-                                          mri=op.join(subjects_dir, fs_subject, 'mri','expanded_brainmask.mgz'),
+                                          mri=exp_mri, surface=exp_surf,
                                           mindist=0.0, subjects_dir=subjects_dir
                                           )
             # BEM restricted below
