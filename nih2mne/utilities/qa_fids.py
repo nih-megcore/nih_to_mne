@@ -72,8 +72,7 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None):
         )
     plt.show()
 
-
-if __name__ == '__main__':
+def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('-subject',
@@ -113,5 +112,6 @@ if __name__ == '__main__':
             except:
                 print(f'Failed to create QA image for {subject}')
                          
-    
+if __name__ == '__main__':
+    main()    
     

@@ -41,8 +41,7 @@ def get_bids_table(bids_dir, ses='1'):
     return dframe
                                      
 
-    
-if __name__ == '__main__':
+def main():    
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('-bids_dir', 
@@ -78,6 +77,7 @@ if __name__ == '__main__':
         pivot.to_csv(out_fname)
         print(f'Table saved to {out_fname}')
         
-    
+if __name__ == '__main__':
+    main()    
     
     

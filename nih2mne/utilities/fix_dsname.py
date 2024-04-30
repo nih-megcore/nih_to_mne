@@ -38,8 +38,10 @@ def fixDsName(input_name):
             # print(out_name)
             shutil.move(in_name, out_name)
         
-if __name__=='__main__':
+def main():
     input_name = sys.argv[1]
     fixDsName(input_name)
-    
+
+if __name__=='__main__':
+    main()
         

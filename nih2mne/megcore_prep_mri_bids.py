@@ -288,7 +288,7 @@ def preproc(bids_path=None,
 
 
 #%% Commandline Options parsing
-if __name__=='__main__':
+def main():
     import argparse
     parser = argparse.ArgumentParser(description=desc)
     single_parser = parser.add_argument_group('Single File only')
@@ -367,6 +367,8 @@ if __name__=='__main__':
         mripreproc(bids_path, t1_bids_path, deriv_path, surf=proc_surf)
         
         
+if __name__=='__main__':
+    main()
     
 #%% Some minimal tests
 #$(pwd)/nih2mne/megcore_prep_mri_bids.py -gen_swarmfile -swarm_fname TEST.sh -bids_root /fast/BIDS_HV_V1/bids/

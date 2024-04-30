@@ -471,8 +471,7 @@ def view_coreg(dsname=None, trans_file=None, subjects_dir=None):
                        surfaces=['head', 'white'], coord_frame='meg')
     _ = input('Press enter to close')
     
-    
-if __name__=='__main__':
+def main():    
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('-subjects_dir', help='''Set SUBJECTS_DIR different
@@ -526,7 +525,8 @@ if __name__=='__main__':
     if args.view_coreg:
         view_coreg(args.dsname, mne_trans_name, subjects_dir)
         
-        
+if __name__=='__main__':
+    main()        
     
                         
 

@@ -635,7 +635,8 @@ def _get_conversion_dict(input_path=None, subject_in=None, bids_id=None,
 # =============================================================================
 # Commandline Options
 # =============================================================================
-if __name__ == '__main__':
+
+def main():
     import argparse
     parser = argparse.ArgumentParser('''
         Convert MEG dataset to default Bids format using the MEG hash ID or 
@@ -969,4 +970,6 @@ if __name__ == '__main__':
         #            deriv_path=deriv_path, 
         #            surf=surf)
         
- 
+if __name__ == '__main__':
+    main()
+     

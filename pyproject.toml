@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nih2mne"
+description = "General integration functions for mne and mne-bids for NIH users"
+readme = "README.md"
+requires-python = "<3.12"
+#keywords = ["one", "two"]
+
+authors = [
+  { name="Jeff Stout", email="stoutjd@nih.gov" },
+]
+
+license = {text = "UNLICENSE"}
+classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: UNLICENSE",
+        "Operating System :: Linux/Unix",
+    ]
+dependencies = [
+'mne<1.7', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'wget',
+'pyctf-lite @ git+https://github.com/nih-megcore/pyctf-lite@v1.0#egg=pyctf-lite' 
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+testing = ['datalad','pytest','pygit2']
+
+[project.scripts]
+"bstags.py"='nih2mne.bstags:main'
+"calc_mnetrans.py"='nih2mne.calc_mnetrans:main'
+"make_meg_bids.py"='nih2mne.make_meg_bids:main'
+"make_meg_bids_fromcsv.py" = 'nih2mne.utilities.make_meg_bids_fromcsv:main'
+"print_bids_table.py"='nih2mne.utilities.print_bids_table:main'
+"fix_dsname.py"='nih2mne.utilities.fix_dsname:main'
+"megcore_prep_mri_bids.py"='nih2mne.megcore_prep_mri_bids:main'
+"qa_fids.py"='nih2mne.utilities.qa_fids:main'
+#'nih2mne/eyetracking_preprocessing.py',
+#'cmdline/make_bids_fs_swarm.sh',
+
+
+"process_meg.py" = "enigmeg.process_meg:main"
+"enigma_prep_QA.py" = 'enigmeg.QA.enigma_prep_QA:main'
+"Run_enigma_QA_GUI.py" = 'enigmeg.QA.Run_enigma_QA_GUI:main'
+"parse_bids.py" =  'enigmeg.parse_bids:main'
+
+
+[tool.setuptools.packages.find]
+include = ["nih2mne*"]
+#exclude = ["extras*", "conda*"]

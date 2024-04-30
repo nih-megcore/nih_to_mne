@@ -133,7 +133,7 @@ def make_serial_proc(csvfile, run=False, return_cmd=False):
         import subprocess
         subprocess.run(cmd_chain)
         
-if __name__ == '__main__':
+def main():
     import argparse
     template = op.join(op.dirname(__file__),'..', 'templates', 'bids_entry_template.csv')
     template = op.abspath(template)
@@ -161,3 +161,5 @@ if __name__ == '__main__':
     elif args.write_swarmf:
         make_swarm_file(csvfile, write=True)
                         
+if __name__ == '__main__':
+    main()
