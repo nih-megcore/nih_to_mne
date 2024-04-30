@@ -74,8 +74,7 @@ def write_tagfile(tags, out_fname=None):
     
 
 
-
-if __name__=='__main__':
+def main():
     if len(sys.argv) != 2:
         print("""usage: {} file.txt
           Where file.txt is the saved electrode location output from Brainsight.""".format(sys.argv[0]))
@@ -92,7 +91,8 @@ if __name__=='__main__':
     write_tagfile(tags, tagname)
     print('Finished tag export')
     
-
+if __name__=='__main__':
+    main()
     
     
 
