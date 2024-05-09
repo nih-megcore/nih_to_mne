@@ -17,6 +17,8 @@ jobs:
           path: ~/FSData
           key:
             FSData.tar.gz
+      - name: Install conda env
+        run: cd nih_to_mne; make install_headless_env
       - if: ${{ steps.cache-fsdownload.outputs.cache-hit != 'true' }}
         run: pip install gdown; gdown --folder ${{ secrets.GDRIVE_MRI }} -O ~/FSData
       - name: Pytest
