@@ -758,6 +758,9 @@ def main():
     else:
         subjid = _check_multiple_subjects(args.meg_input_dir)
     
+    global logger
+    global err_logger
+    
     logger = get_subj_logger(subjid, log_dir=logger_dir, loglevel=logging.INFO)
     err_logger = get_subj_logger(subjid+'_err', log_dir=logger_dir, loglevel=logging.WARN)
     
@@ -893,9 +896,10 @@ def main():
     #
     # Plot QA images
     #
-    out_fids_qa_image = op.join(logger_dir, f'{args.subjid_input}_fids_qa.png')
-    plot_fids_qa(subjid=args.bids_id, bids_root=args.bids_dir, 
-                 outfile=out_fids_qa_image)
+    if args.ignore_mri_checks != True:
+        out_fids_qa_image = op.join(logger_dir, f'{args.subjid_input}_fids_qa.png')
+        plot_fids_qa(subjid=args.bids_id, bids_root=args.bids_dir, 
+                     outfile=out_fids_qa_image)
     
     #
     # Downstream Processing
