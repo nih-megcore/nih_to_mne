@@ -20,7 +20,7 @@ classifiers=[
         "Operating System :: Linux/Unix",
     ]
 dependencies = [
-'mne<1.6', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'wget',
+'mne<1.6', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'wget','nilearn',
 'pyctf-lite @ git+https://github.com/nih-megcore/pyctf-lite@v1.0#egg=pyctf-lite' 
 ]
 dynamic = ["version"]
