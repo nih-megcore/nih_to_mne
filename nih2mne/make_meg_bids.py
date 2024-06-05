@@ -38,7 +38,8 @@ global logger
 global err_logger
 
 root_logger = logging.getLogger()
-
+logger = logging.getLogger()
+err_logger = logging.getLogger()
 
 # =============================================================================
 # make_meg_bids.py
