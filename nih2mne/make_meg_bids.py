@@ -36,6 +36,7 @@ from nih2mne.utilities.qa_fids import plot_fids_qa
 
 global logger
 global err_logger
+global temp_subjects_dir
 
 root_logger = logging.getLogger()
 logger = logging.getLogger()
@@ -816,6 +817,7 @@ def main():
     #
     if args.ignore_mri_checks != True:
         #Create temp dir for MRI
+        global temp_subjects_dir
         temp_subjects_dir = temp_dir / 'subjects_tmp' 
         temp_subjects_dir.mkdir(parents=True, exist_ok=True)
         temp_mri_prep = temp_dir / 'mri_tmp' / subjid
