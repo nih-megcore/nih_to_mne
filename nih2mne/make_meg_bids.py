@@ -356,6 +356,11 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
             tmpdir=op.join(temp_dir, f'er_{tmp_}')
             if not op.exists(tmpdir): os.mkdir(tmpdir)
             er_fname = get_eroom(meg_fname, tmpdir=tmpdir) 
+            if anonymize==True:
+                #Anonymize file and ref new dset off of the output fname
+                er_fname = anonymize_meg(er_fname, tmpdir=tmpdir) 
+                anonymize_finalize(er_fname) #Scrub or remove extra text files
+
             raw = mne.io.read_raw_ctf(er_fname, system_clock='ignore', 
                                       clean_names=True)  
             raw.info['line_freq'] = 60 
