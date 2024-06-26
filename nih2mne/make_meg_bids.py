@@ -357,9 +357,13 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
             tmpdir=op.join(temp_dir, f'er_{tmp_}')
             if not op.exists(tmpdir): os.mkdir(tmpdir)
             er_fname = get_eroom(meg_fname, tmpdir=tmpdir) 
+            
+            #Required to make a new dir for eroom anonymization
+            newtmp_ = str(int(np.random.uniform(0, 1e10)))  #Make a random name
+            newtmpdir=op.join(temp_dir, f'er_{newtmp_}') 
             if anonymize==True:
                 #Anonymize file and ref new dset off of the output fname
-                er_fname = anonymize_meg(er_fname, tmpdir=tmpdir) 
+                er_fname = anonymize_meg(er_fname, tmpdir=newtmpdir) 
                 anonymize_finalize(er_fname) #Scrub or remove extra text files
 
             raw = mne.io.read_raw_ctf(er_fname, system_clock='ignore', 
