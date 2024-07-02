@@ -264,7 +264,7 @@ def anonymize_finalize(meg_fname):
 def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
                      bids_dir=None, session=1, 
                      anonymize=False, tmpdir=None, ignore_eroom=None, 
-                     crop_trailing_zeros=False):
+                     crop_trailing_zeros=False, eventID_csv=None):
     '''
     Process the MEG component of the data into bids.
     Calls sessdir2taskrundict to get the task IDs and sort according to run #
@@ -290,6 +290,9 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
         data at the end.  This will determine the stop time and crop out the rest.
         Leaving the zero data at the end will cause some issues in the data 
         processing.
+    eventID_csv: csv file
+        Provide the eventID to event value mapping file.
+        This can be generated using standardize_eventID_list.py
 
     '''
     if bids_dir==None:
@@ -337,12 +340,22 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
                                           clean_names=True)  
                 raw.info['line_freq'] = 60 
                 
+                if eventID_csv != None:
+                    evts_dframe = pd.read_csv(eventID_csv)
+                    out_dict = {row.ID_names:row.ID_vals for idx,row in evts_dframe.iterrows()}
+                    evts_vals, evts_ids = mne.events_from_annotations(raw, event_id=out_dict)
+                    raw.annotations.delete(range(len(raw.annotations)))
+                else:
+                    evts_vals=None
+                    evts_ids=None
+                
                 ses = session
                 run = str(run) 
                 if len(run)==1: run='0'+run
                 bids_path = BIDSPath(subject=bids_id, session=ses, task=task,
                                       run=run, root=bids_dir, suffix='meg')
-                write_raw_bids(raw, bids_path, overwrite=True)
+                write_raw_bids(raw, bids_path, overwrite=True, 
+                               events=evts_vals, event_id=evts_ids)
                 logger.info(f'Successful MNE BIDS: {meg_fname} to {bids_path}')
             except BaseException as e:
                 logger.error(f'MEG BIDS PROCESSING: {meg_fname}')
@@ -719,7 +732,12 @@ def main():
                         help='''Perform recon-all pipeline on the T1w.
                         This is required for the mri_prep portions below''', 
                         action='store_true'
-                        )    
+                        )
+    group3.add_argument('-eventID_csv', 
+                        help='''Provide the standardized event IDs.
+                        This can be produced by running: standardize_eventID_list.py
+                        ''', 
+                        default=None)    
     group4 = parser.add_argument_group('UNDER Construction - BIDS PostProcessing')
     group4.add_argument('-project',
                         help='''Output project name for the mri processing from mri_prep''', 
@@ -814,6 +832,7 @@ def main():
                                  anonymize=args.anonymize,
                                  ignore_eroom=args.ignore_eroom,
                                  crop_trailing_zeros=args.autocrop_zeros,
+                                 eventID_csv=args.eventID_csv,
                                  **kwargs)
     
     #
