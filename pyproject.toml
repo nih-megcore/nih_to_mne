@@ -37,6 +37,7 @@ testing = ['datalad','pytest','pygit2']
 "fix_dsname.py"='nih2mne.utilities.fix_dsname:main'
 "megcore_prep_mri_bids.py"='nih2mne.megcore_prep_mri_bids:main'
 "qa_fids.py"='nih2mne.utilities.qa_fids:main'
+"standardize_eventID_list.py"='nih2mne.utilities.standardize_eventID_list:main_parser'
 #'nih2mne/eyetracking_preprocessing.py',
 #'cmdline/make_bids_fs_swarm.sh',
 
