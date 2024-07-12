@@ -11,7 +11,16 @@ import os,os.path as op
 font = ("Arial", 25)
 sg.set_options(font=font)
 
-
+def collapse(layout, key, visible):
+    """
+    Helper function that creates a Column that can be later made hidden, thus appearing "collapsed"
+    :param layout: The layout for the section
+    :param key: Key used to make this section visible / invisible
+    :param visible: visible determines if section is rendered visible or invisible on initialization
+    :return: A pinned column that can be placed directly into your layout
+    :rtype: sg.pin
+    """
+    return sg.pin(sg.Column(layout, key=key, visible=visible, pad=(0,0)))
 
 class window_opts:
     def __init__(self):
@@ -64,39 +73,53 @@ def make_layout(options=None):
         ]
 
     # MRI opts
+    coreg_bsight_opts = [[sg.Text('Nifti MRI', key='bsight_file')], 
+                         [sg.Text('Bsight Elec file', key='bsight_elec')]
+                        ]
+    coreg_afni_opts = [[sg.Text('Brik File', key='brik_file')]]
+    
+    
     coreg_opts = [
         [sg.Combo(['BrainSight', 'Afni', 'None'], enable_events=True, readonly=True, k='-COREG-', 
-                  default_value='BrainSight')]
+                  default_value='BrainSight')],
+        collapse(coreg_bsight_opts, '-COREG_BSIGHT-', False), 
+        collapse(coreg_afni_opts, '-COREG_AFNI-', False),
+        
         ]
          
-    coreg_afni_opts = [
-        [sg.Text('Brik File', key='brik_file')]
-        ]
+    # coreg_afni_opts = [
+    #     [sg.Text('Brik File', key='brik_file')]
+    #     ]
 
-    coreg_bsight_opts = [
-        [sg.Text('Nifti MRI', key='brik_file')]
-        ]
+    # coreg_bsight_opts = [
+    #     [sg.Text('Nifti MRI', key='brik_file')]
+    #     ]
      
     layout = init_layout
     layout.append(l_button_opts)
     layout.append(standard_opts)
-    if options.ignore_mri_checks != True:
-        layout.append(coreg_opts)
-    layout.append(coreg_afni_opts)
-    layout.append(coreg_bsight_opts)
+    # if options.ignore_mri_checks != True:
+    layout.append(coreg_opts)
     layout.append([sg.Button('EXIT')])
     return layout
         
+global size_mult, font_size, x_size, y_size
+size_mult=2
+font_size=12
+x_size = 400*size_mult
+y_size = 600*size_mult
+
 
 def get_window(options=None):
     layout = make_layout(options=options)
     window = sg.Window('MEG BIDS conversion', layout, resizable=True, auto_size_buttons=True, 
-                   scaling=True)
+                   scaling=True, size=(x_size, y_size))
     del layout
     return window
 
 opts = window_opts()
 window = get_window(opts)
+coreg_toggle = False
 
 while True:
     event, values = window.read()
@@ -109,6 +132,15 @@ while True:
             window['anonymize'].update(button_color='red')
             window['anonymize'].update(text='Anonymize: N')
             opts.anonymize = not opts.anonymize
+            
+    if event == '-COREG-':
+        if values['-COREG-'] == 'Brainsight':
+            window['-COREG_BSIGHT-'].update(visible=True)
+        elif values['-COREG-'] == 'Afni':
+            window['-COREG_AFNI-'].update(visible=True)
+        elif values['-COREG-'] == 'None':
+            window['-COREG_BSIGHT-'].update(visible=False)
+            window['-COREG_AFNI-'].update(visible=False)
         
     if event == 'set_coreg_afni':
         set_coreg_afni = True
@@ -126,58 +158,20 @@ window.close()
 
 
 
+#%%
 
+# while True:
+#     event, values = window.read()
 
-#%% 
-options:
-  -h, --help            show this help message and exit
-  -bids_dir BIDS_DIR    Output bids_dir path
-  -meg_input_dir MEG_INPUT_DIR
-                        Acquisition directory - typically designated by the acquisition date
-  -anonymize            Strip out subject ID information from the MEG data. Currently this does not
-                        anonymize the MRI. Requires the CTF tools.
-  -bids_session BIDS_SESSION
-                        Data acquisition session. This is set to 1 by default. If the same subject had
-                        multiple sessions this must be set manually
-  -subjid_input SUBJID_INPUT
-                        The default subject ID is given by the MEG hash. If more than one subject is
-                        present in a folder, this option can be set to select a single subjects
-                        dataset.
-  -bids_id BIDS_ID      The default subject ID is given by the MEG hash. To override the default
-                        subject ID, use this flag. If -anonymize is used, you must set the subjid
-  -autocrop_zeros       If files are terminated early, leaving zeros at the end of the file - this
-                        will detect and remove the trailing zeros. !!!Files larger than 2G will
-                        Fail!!!
+#     if event == 'checkbox_key':
+#         toggle_bool1 = not toggle_bool1
+#         window['section_key'].update(visible=toggle_bool1)
+    
+#     ...
 
-Afni Coreg:
-  -mri_brik MRI_BRIK    Afni coregistered MRI
+#     if event == 'Quit' or event == sg.WIN_CLOSED:
+#         break
 
-Brainsight Coreg:
-  -mri_bsight MRI_BSIGHT
-                        Brainsight mri. This should be a .nii file. The exported electrodes text file
-                        must be in the same folder and end in .txt. Otherwise, provide the
-                        mri_sight_elec flag
-  -mri_bsight_elec MRI_BSIGHT_ELEC
-                        Exported electrodes file from brainsight. This has the locations of the
-                        fiducials
-  -ignore_mri_checks
-
-Optional Overrides:
-  -ignore_eroom         If you are Not on Biowulf, use this option to prevent an error. Or if you
-                        collected your own empty room data with your dataset
-  -supplement_eroom     If emptyroom present - ignore, else add emptyroom from the biowulf repository.
-  -freesurfer           Perform recon-all pipeline on the T1w. This is required for the mri_prep
-                        portions below
-  -eventID_csv EVENTID_CSV
-                        Provide the standardized event IDs. This can be produced by running:
-                        standardize_eventID_list.py
-
-UNDER Construction - BIDS PostProcessing:
-  -project PROJECT      Output project name for the mri processing from mri_prep
-  -mri_prep_s           Perform the standard SURFACE processing for meg analysis
-                        (watershed/bem/src/fwd)
-  -mri_prep_v           Perform the standard VOLUME processing for meg analysis
-                        (watershed/bem/src/fwd)
 
 
 
