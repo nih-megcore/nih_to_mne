@@ -73,16 +73,15 @@ def make_layout(options=None):
         ]
 
     # MRI opts
-    coreg_bsight_opts = [[sg.Text('Nifti MRI', key='bsight_file')], 
-                         [sg.Text('Bsight Elec file', key='bsight_elec')]
+    coreg_bsight_opts = [[sg.Text('Nifti MRI:'), sg.InputText('', key='-BSIGHT_NII_FILE-', enable_events=True), sg.FileBrowse()], 
+                         [sg.Text('Bsight Elec file:'), sg.InputText('',key='-BSIGHT_ELEC_FILE-', enable_events=True), sg.FileBrowse()]
                         ]
-    coreg_afni_opts = [[sg.Text('Brik File', key='brik_file')]]
-    
+    coreg_afni_opts = [[sg.Text('Brik File:'), sg.InputText('', key='-BRIK_FILE-', enable_events=True), sg.FileBrowse()]] 
     
     coreg_opts = [
         [sg.Combo(['BrainSight', 'Afni', 'None'], enable_events=True, readonly=True, k='-COREG-', 
                   default_value='BrainSight')],
-        collapse(coreg_bsight_opts, '-COREG_BSIGHT-', False), 
+        collapse(coreg_bsight_opts, '-COREG_BSIGHT-', True), 
         collapse(coreg_afni_opts, '-COREG_AFNI-', False),
         
         ]
@@ -134,13 +133,24 @@ while True:
             opts.anonymize = not opts.anonymize
             
     if event == '-COREG-':
-        if values['-COREG-'] == 'Brainsight':
+        if values['-COREG-'] == 'BrainSight':
             window['-COREG_BSIGHT-'].update(visible=True)
+            window['-COREG_AFNI-'].update(visible=False)
         elif values['-COREG-'] == 'Afni':
             window['-COREG_AFNI-'].update(visible=True)
+            window['-COREG_BSIGHT-'].update(visible=False)
         elif values['-COREG-'] == 'None':
             window['-COREG_BSIGHT-'].update(visible=False)
             window['-COREG_AFNI-'].update(visible=False)
+            
+    if event == '-GET_AFNI_BRIK-':
+        opts.mri_brik = sg.popup_get_file('Afni BRIK file')
+        
+    # if event == ''
+    
+    if event == '-BSIGHT_ELEC_FILE-':
+        opts.mri_bsight_elec = values['-BSIGHT_ELEC_FILE-']
+        print(f"Bsightfile: {values['-BSIGHT_ELEC_FILE-']}")
         
     if event == 'set_coreg_afni':
         set_coreg_afni = True
