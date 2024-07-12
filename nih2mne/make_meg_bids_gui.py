@@ -68,8 +68,8 @@ def make_layout(options=None):
              
     standard_opts = [
         [sg.Text('Standard Options')], 
-        [sg.Text('BIDS Output Directory'), sg.InputText(key=options.bids_dir)],
-        [sg.Text('BIDS Session'), sg.InputText(default_text=options.bids_session)]
+        [sg.Text('BIDS Output Directory'), sg.InputText(key='-BIDS_ROOT-', enable_events=True), sg.FolderBrowse()],
+        [sg.Text('BIDS Session'), sg.InputText(default_text='-BIDS_SESSION-', enable_events=True)]
         ]
 
     # MRI opts
@@ -79,7 +79,7 @@ def make_layout(options=None):
     coreg_afni_opts = [[sg.Text('Brik File:'), sg.InputText('', key='-BRIK_FILE-', enable_events=True), sg.FileBrowse()]] 
     
     coreg_opts = [
-        [sg.Combo(['BrainSight', 'Afni', 'None'], enable_events=True, readonly=True, k='-COREG-', 
+        [sg.Text('COREG:'), sg.Combo(['BrainSight', 'Afni', 'None'], enable_events=True, readonly=True, k='-COREG-', 
                   default_value='BrainSight')],
         collapse(coreg_bsight_opts, '-COREG_BSIGHT-', True), 
         collapse(coreg_afni_opts, '-COREG_AFNI-', False),
@@ -99,7 +99,7 @@ def make_layout(options=None):
     layout.append(standard_opts)
     # if options.ignore_mri_checks != True:
     layout.append(coreg_opts)
-    layout.append([sg.Button('EXIT')])
+    layout.append([sg.Button('Print CMD', key='-PRINT_CMD-'), sg.Button('RUN'), sg.Button('EXIT')])
     return layout
         
 global size_mult, font_size, x_size, y_size
@@ -146,7 +146,15 @@ while True:
     if event == '-GET_AFNI_BRIK-':
         opts.mri_brik = sg.popup_get_file('Afni BRIK file')
         
-    # if event == ''
+    if event == '-PRINT_CMD-':
+        tmp = f'make_meg_bids.py -bids_root {opts.bids_root} -bsight_elec {opts.mri_bsight_elec}'
+        print(tmp)
+        
+    if event == '-BIDS_SESSION-':
+        opts.bids_session = values['-BIDS_SESSION-']
+    
+    if event == '-BIDS_ROOT-':
+        opts.bids_root = values['-BIDS_ROOT-']
     
     if event == '-BSIGHT_ELEC_FILE-':
         opts.mri_bsight_elec = values['-BSIGHT_ELEC_FILE-']
