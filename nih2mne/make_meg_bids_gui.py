@@ -7,9 +7,16 @@ Created on Fri Jul  5 10:50:57 2024
 """
 import PySimpleGUI as sg
 import os,os.path as op
+import glob
 
 font = ("Arial", 25)
 sg.set_options(font=font)
+
+global size_mult, font_size, x_size, y_size
+size_mult=2
+font_size=12
+x_size = 500*size_mult
+y_size = 600*size_mult
 
 def collapse(layout, key, visible):
     """
@@ -68,6 +75,10 @@ def make_layout(options=None):
              
     standard_opts = [
         [sg.Text('Standard Options')],
+        [sg.Text('MEG input DIR:'), 
+         sg.InputText(key='-MEG_INPUT_DIR-', enable_events=True),
+         sg.FolderBrowse(target='-MEG_INPUT_DIR-')
+         ],
         [sg.Text('MEG Hashcode:'),
          sg.InputText(key='-SUBJID_INPUT-', enable_events=True)
          ],
@@ -78,7 +89,8 @@ def make_layout(options=None):
          sg.InputText(key='-BIDS_DIR-', enable_events=True), 
          sg.FolderBrowse(target='-BIDS_DIR-')],
         [sg.Text('BIDS Session'), 
-         sg.InputText(default_text='-BIDS_SESSION-', enable_events=True)]
+         sg.InputText(default_text=opts.bids_session, enable_events=True, 
+                      key='-BIDS_SESSION-')]
         ]
 
     # MRI opts
@@ -114,11 +126,24 @@ def make_layout(options=None):
     layout.append([sg.Button('Print CMD', key='-PRINT_CMD-'), sg.Button('RUN'), sg.Button('EXIT')])
     return layout
         
-global size_mult, font_size, x_size, y_size
-size_mult=2
-font_size=12
-x_size = 500*size_mult
-y_size = 600*size_mult
+def subject_selector_POPUP(data):
+    layout = [
+        [sg.Text('Select a subject')],
+        [sg.Listbox(data, size=(20,5), key='SELECTED')],
+        [sg.Button('OK')],
+    ]
+    window = sg.Window('POPUP', layout).Finalize()
+    while True:
+        event, values = window.read()
+        if event == sg.WINDOW_CLOSED:
+            break
+        elif event == 'OK':
+            break
+        else:
+            print('OVER')
+    window.close()
+    if values and values['SELECTED']:
+        return values['SELECTED']
 
 
 def get_window(options=None):
@@ -130,6 +155,7 @@ def get_window(options=None):
 
 single_flag_list = ['anonymize', 'autocrop_zeros', 'freesurfer', 'ignore_eroom',
                     'ignore_mri_checks']
+drop_flag_list = ['coreg']
 def format_cmd(opts):
     '''
     Write out the commandline options from the opts object.  Special cases 
@@ -147,6 +173,8 @@ def format_cmd(opts):
     '''
     arglist = ['make_meg_bids.py']
     for i in value_writedict.values():
+        if i in drop_flag_list:
+            continue
         flag_val =  getattr(opts, i)
         if i in single_flag_list:
             if flag_val == True:
@@ -194,6 +222,20 @@ while True:
         elif values['-COREG-'] == 'None':
             window['-COREG_BSIGHT-'].update(visible=False)
             window['-COREG_AFNI-'].update(visible=False)
+    
+    # If input directory is chosen - automatically select subject id and set
+    if event == '-MEG_INPUT_DIR-':
+        search_dir = values['-MEG_INPUT_DIR-']
+        tmp = glob.glob(op.join(search_dir, '*.ds'))
+        tmp = [op.basename(i) for i in tmp]
+        tmp = list(set([i.split('_')[0] for i in tmp]))
+        if len(tmp) == 1:
+            values['-SUBJID_INPUT-']=tmp[0]
+            opts.subjid_input =tmp[0]
+            window['-SUBJID_INPUT-'].update(tmp[0])
+        if len(tmp) > 1:
+            tmp = subject_selector_POPUP(tmp)
+            window['-SUBJID_INPUT-'].update(tmp[0])
             
     if event == '-PRINT_CMD-':
         cmd = format_cmd(opts)
@@ -210,48 +252,8 @@ while True:
     
 window.close()
 
-#%%
-        self.anonymize = False
-        self.ignore_mri_checks = False
-
-        # Standard Entries
-        self.bids_dir = op.join(os.getcwd(), 'bids_dir')
-        self.meg_input_dir = None
-        self.bids_session = 1
-        self.subjid_input = None
-        self.bids_id = None
-        self.coreg = 'brainsight'
-
-        ## Afni Coreg:
-        self.mri_brik = None
-
-        ## Brainsight Coreg:
-        self.mri_bsight = None
-        self.mri_bsight_elec = None
-
-        ## Optional Overrides:
-        self.ignore_eroom = None
-        self.autocrop_zeros = None
-        self.freesurfer = None
-        self.eventID_csv = None
-        # Run standardize_eventID_list.py
 
 
-
-
-#%%
-
-# while True:
-#     event, values = window.read()
-
-#     if event == 'checkbox_key':
-#         toggle_bool1 = not toggle_bool1
-#         window['section_key'].update(visible=toggle_bool1)
-    
-#     ...
-
-#     if event == 'Quit' or event == sg.WIN_CLOSED:
-#         break
 
 
 
