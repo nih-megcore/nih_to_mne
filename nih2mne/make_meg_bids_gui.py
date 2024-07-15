@@ -52,8 +52,8 @@ class window_opts:
         self.mri_bsight_elec = None
 
         ## Optional Overrides:
-        self.ignore_eroom = None
-        self.autocrop_zeros = None
+        self.ignore_eroom = False
+        self.autocrop_zeros = False
         self.freesurfer = None
         self.eventID_csv = None
         # Run standardize_eventID_list.py
@@ -116,6 +116,16 @@ def make_layout(options=None):
         collapse(coreg_bsight_opts, '-COREG_BSIGHT-', True), 
         collapse(coreg_afni_opts, '-COREG_AFNI-', False),
         ]
+    
+    # Additional Options
+    additional_opts = [
+        [sg.Text('OPTIONAL:'),
+         sg.Checkbox('CropZeros', key='-AUTOCROP_ZEROS-', 
+                     enable_events=True, default=opts.autocrop_zeros),
+         sg.Checkbox('No_EmptyRoom', key='-IGNORE_EROOM-', 
+                     enable_events=True, default=opts.ignore_eroom)
+         ]
+        ]
          
     # -- Assemble Layout --
      
@@ -124,6 +134,7 @@ def make_layout(options=None):
     layout.append(standard_opts)
     # if options.ignore_mri_checks != True:
     layout.append(coreg_opts)
+    layout.append(additional_opts)
     layout.append([sg.Button('Print CMD', key='-PRINT_CMD-'), sg.Button('RUN', key='-RUN-'), sg.Button('EXIT')])
     return layout
         
@@ -203,6 +214,7 @@ value_writedict = {f'-{i.upper()}-':i for i in _tmp}
 
 while True:
     event, values = window.read()
+    print(event)
     if event in value_writedict.keys():
         setattr(opts, value_writedict[event], values[event])
     
