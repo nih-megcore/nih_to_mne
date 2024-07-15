@@ -67,32 +67,44 @@ def make_layout(options=None):
             ]
              
     standard_opts = [
-        [sg.Text('Standard Options')], 
-        [sg.Text('BIDS Output Directory'), sg.InputText(key='-BIDS_ROOT-', enable_events=True), sg.FolderBrowse()],
-        [sg.Text('BIDS Session'), sg.InputText(default_text='-BIDS_SESSION-', enable_events=True)]
+        [sg.Text('Standard Options')],
+        [sg.Text('MEG Hashcode:'),
+         sg.InputText(key='-SUBJID_INPUT-', enable_events=True)
+         ],
+        [sg.Text('BIDS ID:'),
+         sg.InputText(key='-BIDS_ID-', enable_events=True)
+         ],
+        [sg.Text('BIDS Output Directory'), 
+         sg.InputText(key='-BIDS_DIR-', enable_events=True), 
+         sg.FolderBrowse(target='-BIDS_DIR-')],
+        [sg.Text('BIDS Session'), 
+         sg.InputText(default_text='-BIDS_SESSION-', enable_events=True)]
         ]
 
     # MRI opts
-    coreg_bsight_opts = [[sg.Text('Nifti MRI:'), sg.InputText('', key='-BSIGHT_NII_FILE-', enable_events=True), sg.FileBrowse()], 
-                         [sg.Text('Bsight Elec file:'), sg.InputText('',key='-BSIGHT_ELEC_FILE-', enable_events=True), sg.FileBrowse()]
+    coreg_bsight_opts = [
+        [sg.Text('Nifti MRI:'), 
+         sg.InputText('', key='-MRI_BSIGHT-', enable_events=True), 
+         sg.FileBrowse(target='-MRI_BSIGHT-')], 
+        [sg.Text('Bsight Elec file:'), 
+         sg.InputText('',key='-MRI_BSIGHT_ELEC-', enable_events=True), 
+         sg.FileBrowse(target='-MRI_BSIGHT_ELEC-')]
                         ]
-    coreg_afni_opts = [[sg.Text('Brik File:'), sg.InputText('', key='-BRIK_FILE-', enable_events=True), sg.FileBrowse()]] 
     
+    coreg_afni_opts = [
+        [sg.Text('Brik File:'), 
+         sg.InputText('', key='-MRI_BRIK-', enable_events=True), 
+         sg.FileBrowse(target='-MRI_BRIK-')]] 
+    
+    # Fold down menu for coregistration options
     coreg_opts = [
         [sg.Text('COREG:'), sg.Combo(['BrainSight', 'Afni', 'None'], enable_events=True, readonly=True, k='-COREG-', 
                   default_value='BrainSight')],
         collapse(coreg_bsight_opts, '-COREG_BSIGHT-', True), 
         collapse(coreg_afni_opts, '-COREG_AFNI-', False),
-        
         ]
          
-    # coreg_afni_opts = [
-    #     [sg.Text('Brik File', key='brik_file')]
-    #     ]
-
-    # coreg_bsight_opts = [
-    #     [sg.Text('Nifti MRI', key='brik_file')]
-    #     ]
+    # -- Assemble Layout --
      
     layout = init_layout
     layout.append(l_button_opts)
@@ -105,7 +117,7 @@ def make_layout(options=None):
 global size_mult, font_size, x_size, y_size
 size_mult=2
 font_size=12
-x_size = 400*size_mult
+x_size = 500*size_mult
 y_size = 600*size_mult
 
 
@@ -116,12 +128,51 @@ def get_window(options=None):
     del layout
     return window
 
+single_flag_list = ['anonymize', 'autocrop_zeros', 'freesurfer', 'ignore_eroom',
+                    'ignore_mri_checks']
+def format_cmd(opts):
+    '''
+    Write out the commandline options from the opts object.  Special cases 
+    for the single flag vs flag w/option entry.
+
+    Parameters
+    ----------
+    opts : opt object
+        DESCRIPTION.
+
+    Returns
+    -------
+    cmd : str
+
+    '''
+    arglist = ['make_meg_bids.py']
+    for i in value_writedict.values():
+        flag_val =  getattr(opts, i)
+        if i in single_flag_list:
+            if flag_val == True:
+                arglist += [f'-{i}']
+            else:
+                continue
+        else:
+            if flag_val != None:
+                arglist += [f'-{i} {getattr(opts, i)}']
+    cmd = ' '.join(arglist)
+    return cmd 
+    
+## Setup and run gui
 opts = window_opts()
 window = get_window(opts)
 coreg_toggle = False
 
+# Conversion dictionary between GUI variables and cmdline vars
+_tmp = [i for i in dir(opts) if not i.startswith('_')]
+value_writedict = {f'-{i.upper()}-':i for i in _tmp}
+
 while True:
     event, values = window.read()
+    if event in value_writedict.keys():
+        setattr(opts, value_writedict[event], values[event])
+    
     if event == 'anonymize': 
         if opts.anonymize == False:
             window['anonymize'].update(button_color='green')
@@ -131,7 +182,8 @@ while True:
             window['anonymize'].update(button_color='red')
             window['anonymize'].update(text='Anonymize: N')
             opts.anonymize = not opts.anonymize
-            
+    
+    # Logic for displaying coreg options
     if event == '-COREG-':
         if values['-COREG-'] == 'BrainSight':
             window['-COREG_BSIGHT-'].update(visible=True)
@@ -143,22 +195,9 @@ while True:
             window['-COREG_BSIGHT-'].update(visible=False)
             window['-COREG_AFNI-'].update(visible=False)
             
-    if event == '-GET_AFNI_BRIK-':
-        opts.mri_brik = sg.popup_get_file('Afni BRIK file')
-        
     if event == '-PRINT_CMD-':
-        tmp = f'make_meg_bids.py -bids_root {opts.bids_root} -bsight_elec {opts.mri_bsight_elec}'
-        print(tmp)
-        
-    if event == '-BIDS_SESSION-':
-        opts.bids_session = values['-BIDS_SESSION-']
-    
-    if event == '-BIDS_ROOT-':
-        opts.bids_root = values['-BIDS_ROOT-']
-    
-    if event == '-BSIGHT_ELEC_FILE-':
-        opts.mri_bsight_elec = values['-BSIGHT_ELEC_FILE-']
-        print(f"Bsightfile: {values['-BSIGHT_ELEC_FILE-']}")
+        cmd = format_cmd(opts)
+        print(cmd)
         
     if event == 'set_coreg_afni':
         set_coreg_afni = True
@@ -168,11 +207,35 @@ while True:
         set_coreg_bsight = True        
     if event == sg.WIN_CLOSED or event == 'EXIT': # if user closes window or clicks cancel
         break
-    print('You entered ', values[0])
-    print(f'Anonymize is {opts.anonymize}')
-
-
+    
 window.close()
+
+#%%
+        self.anonymize = False
+        self.ignore_mri_checks = False
+
+        # Standard Entries
+        self.bids_dir = op.join(os.getcwd(), 'bids_dir')
+        self.meg_input_dir = None
+        self.bids_session = 1
+        self.subjid_input = None
+        self.bids_id = None
+        self.coreg = 'brainsight'
+
+        ## Afni Coreg:
+        self.mri_brik = None
+
+        ## Brainsight Coreg:
+        self.mri_bsight = None
+        self.mri_bsight_elec = None
+
+        ## Optional Overrides:
+        self.ignore_eroom = None
+        self.autocrop_zeros = None
+        self.freesurfer = None
+        self.eventID_csv = None
+        # Run standardize_eventID_list.py
+
 
 
 
