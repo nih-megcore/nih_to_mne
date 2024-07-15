@@ -8,13 +8,14 @@ Created on Fri Jul  5 10:50:57 2024
 import PySimpleGUI as sg
 import os,os.path as op
 import glob
+import subprocess
 
 font = ("Arial", 25)
 sg.set_options(font=font)
 
 global size_mult, font_size, x_size, y_size
 size_mult=2
-font_size=12
+font_size=12   ### NOT SURE I ACTUALLY USE THESE -- FUTURE IMPLEMENTATION
 x_size = 500*size_mult
 y_size = 600*size_mult
 
@@ -123,7 +124,7 @@ def make_layout(options=None):
     layout.append(standard_opts)
     # if options.ignore_mri_checks != True:
     layout.append(coreg_opts)
-    layout.append([sg.Button('Print CMD', key='-PRINT_CMD-'), sg.Button('RUN'), sg.Button('EXIT')])
+    layout.append([sg.Button('Print CMD', key='-PRINT_CMD-'), sg.Button('RUN', key='-RUN-'), sg.Button('EXIT')])
     return layout
         
 def subject_selector_POPUP(data):
@@ -174,7 +175,11 @@ def format_cmd(opts):
     arglist = ['make_meg_bids.py']
     for i in value_writedict.values():
         if i in drop_flag_list:
-            continue
+            if (i == 'coreg') and (opts.coreg == 'None'):
+                arglist.append('-ignore_mri_checks')
+                continue
+            else:
+                continue
         flag_val =  getattr(opts, i)
         if i in single_flag_list:
             if flag_val == True:
@@ -236,10 +241,17 @@ while True:
         if len(tmp) > 1:
             tmp = subject_selector_POPUP(tmp)
             window['-SUBJID_INPUT-'].update(tmp[0])
+            opts.subjid_input=tmp[0]
             
     if event == '-PRINT_CMD-':
         cmd = format_cmd(opts)
         print(cmd)
+    
+    if event == '-RUN-':
+        print(f'Running the command: {cmd}')
+        cmd = format_cmd(opts)
+        subprocess.run(cmd.split(), check=True, capture_output=True)
+        print('FINISHED')
         
     if event == 'set_coreg_afni':
         set_coreg_afni = True
