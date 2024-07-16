@@ -190,6 +190,7 @@ def make_layout(options=None):
     layout.append(additional_opts)
     layout.append([sg.Button('Print CMD', key='-PRINT_CMD-'), sg.Button('RUN', key='-RUN-'), 
                    sg.Button('Write Cfg', key='-WRITE_CFG-'), sg.Button('EXIT')])
+    layout.append([sg.Button('QA_coreg', key='-CHECK_TRIAX_COREG-', disabled=True)])
     return layout
         
 def subject_selector_POPUP(data):
@@ -237,7 +238,7 @@ def get_window(options=None):
 
 single_flag_list = ['anonymize', 'autocrop_zeros', 'freesurfer', 'ignore_eroom',
                     'ignore_mri_checks']
-drop_flag_list = ['coreg', 'read_from_config', 'config', 'update_opts']
+drop_flag_list = ['coreg', 'read_from_config', 'config', 'update_opts', 'error_log', 'full_log', 'fids_qa']
 def format_cmd(opts):
     '''
     Write out the commandline options from the opts object.  Special cases 
@@ -365,8 +366,15 @@ while True:
             if _start:
                 summary.append(i)
         sg.popup_get_text('\n'.join(summary), title='SUMMARY')
+        _tmp = op.dirname(opts.bids_dir)
+        setattr(opts, 'error_log',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_err_log.txt'))
+        setattr(opts, 'full_log',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_log.txt'))
+        setattr(opts, 'fids_qa',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_fids_qa.png'))  
+        window['-CHECK_TRIAX_COREG-'].update(disabled=False)
         print('FINISHED')
-             
+        
+    if event == '-CHECK_TRIAX_COREG-':
+        subprocess.run(f'xdg-open {opts.fids_qa}'.split())
     if event == sg.WIN_CLOSED or event == 'EXIT': # if user closes window or clicks cancel
         break
     
