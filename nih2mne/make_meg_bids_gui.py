@@ -5,13 +5,30 @@ Created on Fri Jul  5 10:50:57 2024
 
 @author: jstout
 
-TODO: config reader/writer
-    write out and test MRI coreg related items
+TODO: 
+    1)Functionalize the window loop operations, so they can be called outside 
+    of the while loop - basically this is preventing the read_cfg operation from
+    changing the layout.
+    2)Button to launch full logfile read
+    3) Button to view MRI coreg
+    4) Button to view 3D coreg in helmet (requires runtime to eval headsurf)
+
+Code layout:
+    1) Define call options (opts)
+        a) Override default opts with config file
+    2) Define layout based on options    
+    3) Read / Write Config options from opts object
+    4) RUN: Format opts object into commandline string and execute
+        After running - open Summary text
+    
+                       
 """
 import PySimpleGUI as sg
 import os,os.path as op
 import glob
 import subprocess
+
+CFG_VERSION = 1.0
 
 font = ("Arial", 25)
 sg.set_options(font=font)
@@ -45,7 +62,7 @@ class window_opts:
         self.bids_session = 1
         self.subjid_input = None
         self.bids_id = None
-        self.coreg = 'brainsight'
+        self.coreg = 'Brainsight'
 
         ## Afni Coreg:
         self.mri_brik = None
@@ -63,13 +80,31 @@ class window_opts:
         
         self.config = config
         if config != False:
-            self.read_from_config()
+            write_opts = read_cfg(config)
+            self.update_opts(opts=write_opts)
     
-    def read_from_config(self):
-        # Config file should have Key:Value  entries 
-        with open(self.config, 'r') as f:
-            lines = f.readlines()
-        ### NOT DONE -- KEEP writing here to read out the config file    
+    def update_opts(self, opts=None):
+        for key, val in opts.items():
+            if hasattr(self, key):
+                setattr(self, key, val)
+    
+
+def read_cfg(cfg_fname):
+    with open(cfg_fname, 'r') as f:
+        lines = f.readlines()
+    lines = [i.strip('\n') for i in lines]
+    write_opts={}
+    for i in lines:
+        _key, _val = i.split(':')
+        if _val == 'True':
+            _val=True
+        elif _val == 'None':
+            _val=None
+        elif _val == 'False':
+            _val=False
+        write_opts[_key]=_val
+    return write_opts
+    
         
 
 def make_layout(options=None):
@@ -80,11 +115,13 @@ def make_layout(options=None):
     
     if options.anonymize==True:
         l_button_opts = [
-            [sg.Button('Anonymize: Y', key='anonymize', button_color='green')], 
+            [sg.Button('Anonymize: Y', key='anonymize', button_color='green'), 
+            sg.Button('Read Cfg', key='-READ_CFG-', disabled=True)],
             ]
     else:
         l_button_opts = [
-            [sg.Button('Anonymize: N', key='anonymize', button_color='red')], 
+            [sg.Button('Anonymize: N', key='anonymize', button_color='red'), 
+            sg.Button('Read Cfg', key='-READ_CFG-', disabled=True)],
             ]
              
     standard_opts = [
@@ -100,7 +137,7 @@ def make_layout(options=None):
          sg.InputText(key='-BIDS_ID-', enable_events=True)
          ],
         [sg.Text('BIDS Output Directory'), 
-         sg.InputText(key='-BIDS_DIR-', enable_events=True), 
+         sg.InputText(key='-BIDS_DIR-', enable_events=True, default_text=opts.bids_dir), 
          sg.FolderBrowse(target='-BIDS_DIR-')],
         [sg.Text('BIDS Session'), 
          sg.InputText(default_text=opts.bids_session, enable_events=True, 
@@ -125,9 +162,9 @@ def make_layout(options=None):
     # Fold down menu for coregistration options
     coreg_opts = [
         [sg.Text('COREG:'), sg.Combo(['BrainSight', 'Afni', 'None'], enable_events=True, readonly=True, k='-COREG-', 
-                  default_value='BrainSight')],
-        collapse(coreg_bsight_opts, '-COREG_BSIGHT-', True), 
-        collapse(coreg_afni_opts, '-COREG_AFNI-', False),
+                  default_value=opts.coreg)],
+        collapse(coreg_bsight_opts, '-COREG_BSIGHT-', opts.coreg=='Brainsight'), 
+        collapse(coreg_afni_opts, '-COREG_AFNI-', opts.coreg=='Afni'),
         ]
     
     # Additional Options
@@ -151,10 +188,15 @@ def make_layout(options=None):
     # if options.ignore_mri_checks != True:
     layout.append(coreg_opts)
     layout.append(additional_opts)
-    layout.append([sg.Button('Print CMD', key='-PRINT_CMD-'), sg.Button('RUN', key='-RUN-'), sg.Button('EXIT')])
+    layout.append([sg.Button('Print CMD', key='-PRINT_CMD-'), sg.Button('RUN', key='-RUN-'), 
+                   sg.Button('Write Cfg', key='-WRITE_CFG-'), sg.Button('EXIT')])
     return layout
         
 def subject_selector_POPUP(data):
+    '''
+    If multiple datasets are found - create a popup selector to select the 
+    correct subject
+    '''
     layout = [
         [sg.Text('Select a subject')],
         [sg.Listbox(data, size=(20,5), key='SELECTED')],
@@ -172,7 +214,19 @@ def subject_selector_POPUP(data):
     window.close()
     if values and values['SELECTED']:
         return values['SELECTED']
-
+    
+def write_cfg(opts, fname=None):
+    '''
+    From a list of writeable options - save these in key:value pair format sep=:
+    '''
+    save_opt_list = ['anonymize', 'autocrop_zeros', 'freesurfer', 'ignore_eroom',
+                    'ignore_mri_checks', 'coreg', 'bids_dir', 'bids_session']
+    write_opts = []
+    for opt_tag in save_opt_list:
+        if hasattr(opts, opt_tag):
+            write_opts.append(f'{opt_tag}:{getattr(opts,opt_tag)}\n')
+    with open(fname, 'w') as f:
+        f.writelines(write_opts)
 
 def get_window(options=None):
     layout = make_layout(options=options)
@@ -183,7 +237,7 @@ def get_window(options=None):
 
 single_flag_list = ['anonymize', 'autocrop_zeros', 'freesurfer', 'ignore_eroom',
                     'ignore_mri_checks']
-drop_flag_list = ['coreg', 'read_from_config', 'config']
+drop_flag_list = ['coreg', 'read_from_config', 'config', 'update_opts']
 def format_cmd(opts):
     '''
     Write out the commandline options from the opts object.  Special cases 
@@ -218,9 +272,20 @@ def format_cmd(opts):
                 arglist += [f'-{i} {getattr(opts, i)}']
     cmd = ' '.join(arglist)
     return cmd 
+
+config_fname = False
+if __name__=='__main__':
+    ''' Get config file from the commandline - preset to False above'''
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-config', help='Config file: typically ending in cfg', 
+                        default=False)
+    args = parser.parse_args()
+    if hasattr(args, 'config'):
+        config_fname = args.config
     
 ## Setup and run gui
-opts = window_opts()
+opts = window_opts(config=config_fname) #This defaults to False if not set
 window = get_window(opts)
 coreg_toggle = False
 
@@ -230,6 +295,12 @@ value_writedict = {f'-{i.upper()}-':i for i in _tmp}
 
 while True:
     event, values = window.read()
+    
+    if event == '-READ_CFG-':
+        cfg_fname = sg.popup_get_file('ConfigFile ending in .cfg', 
+                                      default_extension='.cfg')
+        write_opts = read_cfg(cfg_fname)
+        opts.update_opts(write_opts)
     
     # Update object options if event triggered
     if event in value_writedict.keys():
@@ -276,6 +347,12 @@ while True:
         cmd = format_cmd(opts)
         print(cmd)
     
+    if event == '-WRITE_CFG-':
+        cfg_fname = sg.popup_get_file('ConfigFile ending in .cfg', default_path='nih_bids_gui.cfg', 
+                                      default_extension='.cfg')
+        write_cfg(opts, fname=cfg_fname)
+    
+    
     if event == '-RUN-':
         print(f'Running the command: {cmd}')
         cmd = format_cmd(opts)
@@ -289,13 +366,7 @@ while True:
                 summary.append(i)
         sg.popup_get_text('\n'.join(summary), title='SUMMARY')
         print('FINISHED')
-        
-    if event == 'set_coreg_afni':
-        set_coreg_afni = True
-        set_coreg_bsight = False
-    if event == 'set_coreg_bsight':
-        set_coreg_afni = False
-        set_coreg_bsight = True        
+             
     if event == sg.WIN_CLOSED or event == 'EXIT': # if user closes window or clicks cancel
         break
     
