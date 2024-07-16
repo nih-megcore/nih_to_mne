@@ -4,6 +4,9 @@
 Created on Fri Jul  5 10:50:57 2024
 
 @author: jstout
+
+TODO: config reader/writer
+    write out and test MRI coreg related items
 """
 import PySimpleGUI as sg
 import os,os.path as op
@@ -31,7 +34,7 @@ def collapse(layout, key, visible):
     return sg.pin(sg.Column(layout, key=key, visible=visible, pad=(0,0)))
 
 class window_opts:
-    def __init__(self):
+    def __init__(self, config=False):
         # Button Entries
         self.anonymize = False
         self.ignore_mri_checks = False
@@ -57,6 +60,16 @@ class window_opts:
         self.freesurfer = None
         self.eventID_csv = None
         # Run standardize_eventID_list.py
+        
+        self.config = config
+        if config != False:
+            self.read_from_config()
+    
+    def read_from_config(self):
+        # Config file should have Key:Value  entries 
+        with open(self.config, 'r') as f:
+            lines = f.readlines()
+        ### NOT DONE -- KEEP writing here to read out the config file    
         
 
 def make_layout(options=None):
@@ -123,7 +136,10 @@ def make_layout(options=None):
          sg.Checkbox('CropZeros', key='-AUTOCROP_ZEROS-', 
                      enable_events=True, default=opts.autocrop_zeros),
          sg.Checkbox('No_EmptyRoom', key='-IGNORE_EROOM-', 
-                     enable_events=True, default=opts.ignore_eroom)
+                     enable_events=True, default=opts.ignore_eroom), 
+         sg.Checkbox('Freesurfer', key='-FREESURFER-', 
+                     enable_events=True, default=opts.freesurfer, 
+                     disabled=True)
          ]
         ]
          
@@ -167,7 +183,7 @@ def get_window(options=None):
 
 single_flag_list = ['anonymize', 'autocrop_zeros', 'freesurfer', 'ignore_eroom',
                     'ignore_mri_checks']
-drop_flag_list = ['coreg']
+drop_flag_list = ['coreg', 'read_from_config', 'config']
 def format_cmd(opts):
     '''
     Write out the commandline options from the opts object.  Special cases 
@@ -214,7 +230,8 @@ value_writedict = {f'-{i.upper()}-':i for i in _tmp}
 
 while True:
     event, values = window.read()
-    print(event)
+    
+    # Update object options if event triggered
     if event in value_writedict.keys():
         setattr(opts, value_writedict[event], values[event])
     
@@ -262,7 +279,15 @@ while True:
     if event == '-RUN-':
         print(f'Running the command: {cmd}')
         cmd = format_cmd(opts)
-        subprocess.run(cmd.split(), check=True, capture_output=True)
+        out_txt = subprocess.run(cmd.split(), check=True, capture_output=True)
+        summary = []
+        _start = False
+        for i in str(out_txt.stdout).split('\\n'):
+            if '########### SUMMARY #################' in i:
+                _start = True
+            if _start:
+                summary.append(i)
+        sg.popup_get_text('\n'.join(summary), title='SUMMARY')
         print('FINISHED')
         
     if event == 'set_coreg_afni':
