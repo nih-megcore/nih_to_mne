@@ -117,7 +117,16 @@ def tags_from_bsight_targetfile(fname, tag_template=['NAS','LPA','RPA']):
     for tag in tag_template:
         tmp = dframe[dframe['Sample Name']==tag][['Loc. X','Loc. Y','Loc. Z']].values[0]
         tags[tag] = [float(i) for i in tmp]
-    return tags
+    final_tags = {}
+    for key in tags.keys():
+        if key[0].upper()=='L':
+            final_tags['Left Ear']=tags[key]
+        if key[0].upper()=='R':
+            final_tags['Right Ear']=tags[key]
+        if key[0].upper()=='N':
+            final_tags['Nasion'] = tags[key]
+    assert ['Left Ear','Right Ear','Nasion'] in list(final_tags.keys())
+    return final_tags
 
 
 def write_tagfile(tags, out_fname=None):

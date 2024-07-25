@@ -71,9 +71,9 @@ def test_tags_from_bsight_targetfile():
     fname = os.path.join(test_dir, 'bsight_target_file.txt')
     tmp = tags_from_bsight_targetfile(fname, tag_template=['NAS','LPA','RPA'])
     
-    testvals = {'NAS': [9.1961, 125.8807, 5.5038],
-                 'LPA': [-62.6752, 52.695, -39.5915],
-                 'RPA': [71.4232, 39.4116, -31.5812]}
+    testvals = {'Nasion': [9.1961, 125.8807, 5.5038],
+                 'Left Ear': [-62.6752, 52.695, -39.5915],
+                 'Right Ear': [71.4232, 39.4116, -31.5812]}
     assert tmp == testvals
         
     

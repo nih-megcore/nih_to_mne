@@ -15,7 +15,7 @@ from mne.transforms import read_trans, write_trans, Transform
 from mne.transforms import apply_trans, invert_transform
 from mne.io import read_raw_ctf
 
-from nih2mne.bstags import txt_to_tag, txt_to_tag_pd
+from nih2mne.bstags import txt_to_tag, txt_to_tag_pd, tags_from_bsight_targetfile
 
 
 # =============================================================================
