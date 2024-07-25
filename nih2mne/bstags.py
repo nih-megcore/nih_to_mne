@@ -125,7 +125,10 @@ def tags_from_bsight_targetfile(fname, tag_template=['NAS','LPA','RPA']):
             final_tags['Right Ear']=tags[key]
         if key[0].upper()=='N':
             final_tags['Nasion'] = tags[key]
-    assert ['Left Ear','Right Ear','Nasion'] in list(final_tags.keys())
+    test_tagnames = list(final_tags.keys())
+    assert 'Left Ear' in test_tagnames
+    assert 'Right Ear' in test_tagnames
+    assert 'Nasion' in test_tagnames
     return final_tags
 
 
