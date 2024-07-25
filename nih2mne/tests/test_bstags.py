@@ -6,10 +6,13 @@ Created on Tue Aug 31 17:08:48 2021
 @author: jstout
 """
 
-from ..bstags import txt_to_tag, txt_to_tag_pd
+from ..bstags import txt_to_tag, txt_to_tag_pd, tags_from_bsight_targetfile
 from ..bstags import write_tagfile
 import pytest 
 import os
+import logging
+# logger = logging.get_logger()
+# err_logger = logging.get_logger()
 # =============================================================================
 # Tests
 # =============================================================================
@@ -63,7 +66,15 @@ def test_alt_exported():
     assert tags['Nasion']=="'Nasion' -6.0344 -114.7126 -2.6041"
     assert tags['Right Ear']=="'Right Ear' -67.2147 -18.6125 -36.5009"
     assert tags['Left Ear']=="'Left Ear' 64.1748 -28.3103 -32.4693"
+
+def test_tags_from_bsight_targetfile():
+    fname = os.path.join(test_dir, 'bsight_target_file.txt')
+    tmp = tags_from_bsight_targetfile(fname, tag_template=['NAS','LPA','RPA'])
     
+    testvals = {'NAS': [9.1961, 125.8807, 5.5038],
+                 'LPA': [-62.6752, 52.695, -39.5915],
+                 'RPA': [71.4232, 39.4116, -31.5812]}
+    assert tmp == testvals
         
     
         

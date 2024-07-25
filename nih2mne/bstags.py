@@ -63,6 +63,63 @@ def txt_to_tag_pd(txtname):
     return tags
 
 
+def tags_from_bsight_targetfile(fname, tag_template=['NAS','LPA','RPA']):
+    '''
+    If brainsight files are exported from the target menu, the headers are 
+    inconsistent the electrodes.txt style export file.  This strips out the 
+    non-matching column widths.
+
+    Parameters
+    ----------
+    fname : TYPE
+        DESCRIPTION.
+    tag_template : TYPE, optional
+        DESCRIPTION. The default is ['NAS','LPA','RPA'].
+
+    Raises
+    ------
+    ValueError
+        If start or stopping conditions in the target file can not be found 
+        this will result in an error.
+
+    Returns
+    -------
+    tags : dict
+        {"NAS": float, "LPA": float, "RPA": float}
+
+    '''
+    import pandas as pd
+    with open(fname) as f:
+        tmp = f.readlines()
+    
+    #Identify start and end of target section
+    idx=0; start_idx=0; end_idx=0
+    for i in tmp:
+        if i[0:8]=='# Sample':
+            start_idx=idx
+        if i[0:9]=='# Planned':
+            end_idx=idx
+        idx+=1
+    
+    if (start_idx==0) or (end_idx==0):
+        raise ValueError('Cannot find the start and end of localizer section')
+    
+    #Format text and create list
+    tmp_ = tmp[start_idx:end_idx]        
+    output = []
+    for i in tmp_:
+        output.append(i.strip('\n').split('\t'))
+    output[0]=['Sample Name']+output[0][1:]
+    
+    #Create dataframe and extract tags
+    dframe = pd.DataFrame(output[1:], columns=output[0])
+    tags ={}
+    for tag in tag_template:
+        tmp = dframe[dframe['Sample Name']==tag][['Loc. X','Loc. Y','Loc. Z']].values[0]
+        tags[tag] = [float(i) for i in tmp]
+    return tags
+
+
 def write_tagfile(tags, out_fname=None):
     ''''''
     
