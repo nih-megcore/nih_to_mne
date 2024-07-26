@@ -179,7 +179,7 @@ def coords_from_oblique_afni(afni_fname):
 def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None, 
                         bsight_txt_fname=None, output_fid_path=None,
                         afni_fname=None, t1w_json_path=None, 
-                        searchpath=None):
+                        searchpath=None, bsight_target_fname=None):
     '''Pull the LPA,RPA,NAS indices from the T1w json file and correct for the
     freesurfer alignment.  The output is the fiducial file written in .fif format
     written to the (default) freesurfer/bem/"name"-fiducials.fif file
@@ -201,6 +201,8 @@ def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None,
         mri_coords_dict = coords_from_tagfile(tagfile)
     elif bsight_txt_fname!=None:
         mri_coords_dict = coords_from_bsight_txt(bsight_txt_fname)
+    elif bsight_target_fname != None:
+        mri_coords_dict = tags_from_bsight_targetfile(bsight_target_fname)
     elif afni_fname!=None:
         mri_coords_dict = coords_from_oblique_afni(afni_fname)
     elif t1w_json_path!=None:
@@ -279,19 +281,14 @@ def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None,
         name = output_fid_path
     
     if not op.exists(op.dirname(name)): os.mkdir(op.dirname(name))
-    try:
-        write_fiducials(name, pts, frame)
-        print()
-        print('Created {} fiducial file'.format(name))
-        #print()
-        #print('Run the pyctf/mne/mktrans.py file to create the trans file needed for MNE')
-        return name
-    
-    except:
-        print("Can't write output file:", name)
+
+    write_fiducials(name, pts, frame, overwrite=True)
+    print()
+    print('Created {} fiducial file'.format(name))
+    return name
         
 def write_mne_trans(mne_fids_path=None, dsname=None,
-                    output_name=None, subjects_dir=None):
+                    output_name=None, subject=None, subjects_dir=None):
     if output_name==None:
         if 'SUBJECTS_DIR' in os.environ:
             subjects_dir=os.environ['SUBJECTS_DIR']
@@ -321,7 +318,7 @@ def write_mne_trans(mne_fids_path=None, dsname=None,
     if output_name[-10:]!='-trans.fif':
         print('The suffix to the file must be -trans.fif')
         sys.exit(1)
-    write_trans(output_name, t)
+    write_trans(output_name, t, overwrite=True)
     return output_name
 
 def assess_available_localizers(pathvar):
@@ -462,8 +459,8 @@ def test_is_tagfile():
     
 
 
-def view_coreg(dsname=None, trans_file=None, subjects_dir=None):
-    raw = read_raw_ctf(dsname)
+def view_coreg(dsname=None, trans_file=None, subjects_dir=None, subject=None):
+    raw = read_raw_ctf(dsname, system_clock='ignore')
     trans = mne.read_trans(trans_file)
        
     mne.viz.plot_alignment(raw.info, trans=trans, subject=subject, src=None,
@@ -484,6 +481,9 @@ def main():
                         required=False, default=None)
     parser.add_argument('-elec_txt', help='''Electrode text file exported from
                         brainsight''', required=False, default=None)
+    parser.add_argument('-target_txt', help='''Non-default brainsight export!!  
+                        Target file export from brainsight.''', 
+                        required=False, default=None)
     parser.add_argument('-subject', help='''The freesurfer subject id.  
                         This folder is expected to be in the freesurfer 
                         SUBJECTS_DIR''', required=True)
@@ -507,23 +507,26 @@ def main():
     t1w_json_path = args.anat_json
     tagfile = args.tagfile
     elec_txt = args.elec_txt
+    target_txt = args.target_txt
     afni_fname = args.afni_mri
         
     #Write out the fiducials
     mne_fid_name = write_mne_fiducials(subject=subject, t1w_json_path=t1w_json_path, 
                                        subjects_dir=subjects_dir, tagfile=tagfile,
-                                       bsight_txt_fname=elec_txt, afni_fname=afni_fname)
+                                       bsight_txt_fname=elec_txt, afni_fname=afni_fname, 
+                                       bsight_target_fname=target_txt)
     
     if args.trans_output:
         output_path=args.trans_output
     else:
         output_path=None
     mne_trans_name = write_mne_trans(mne_fids_path=mne_fid_name, dsname=args.dsname,
-                    output_name=output_path, subjects_dir=subjects_dir)#,
+                    output_name=output_path, subject=subject, 
+                    subjects_dir=subjects_dir)#,
                     # tagfile=tagfile, bsight_txt_fname=elec_txt)
     
     if args.view_coreg:
-        view_coreg(args.dsname, mne_trans_name, subjects_dir)
+        view_coreg(args.dsname, mne_trans_name, subjects_dir, subject=subject)
         
 if __name__=='__main__':
     main()        
