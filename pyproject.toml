@@ -38,7 +38,7 @@ testing = ['datalad','pytest','pygit2']
 "megcore_prep_mri_bids.py"='nih2mne.megcore_prep_mri_bids:main'
 "qa_fids.py"='nih2mne.utilities.qa_fids:main'
 "standardize_eventID_list.py"='nih2mne.utilities.standardize_eventID_list:main_parser'
-"megcore_gui.py"='nih2mne/GUI/megcore_gui.py:meg_gui'
+"megcore_gui.py"='nih2mne.GUI.megcore_gui:meg_gui'
 #'nih2mne/eyetracking_preprocessing.py',
 #'cmdline/make_bids_fs_swarm.sh',
 
