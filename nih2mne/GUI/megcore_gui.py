@@ -26,31 +26,31 @@ y_size = 600*size_mult
 maj_font = ('Arial', 150)
 min_font = ('Arial', round(maj_font[1] / 2 ))
 
-layout = [
-    [sg.Text('Load Config:') ],
-    [sg.Button('Make BIDS', key='-MAKE_BIDS-', font=min_font)],
-    [sg.Button('QA BIDS', key='-QA_BIDS-', font=min_font)],
-    [sg.Button('-----', font=min_font),],
-    [sg.Button('Statistics', key='-Stats-', font=min_font) ],
-    [sg.Button('EXIT', button_color='red', font=min_font)]
-    ]
-
-window = sg.Window('MEG Functions', layout, resizable=True, auto_size_buttons=True, 
-               scaling=True, size=(x_size, y_size))
-
-
-while True:
-    event, values = window.read()
-    if event == sg.WIN_CLOSED or event == 'EXIT': # if user closes window or clicks cancel
-            break
-
-    if event == '-MAKE_BIDS-':
-        bids_gui()
-    if event == '-QA_BIDS-':
-        qa_gui()
-
+def meg_gui():
+    layout = [
+        [sg.Text('Load Config:') ],
+        [sg.Button('Make BIDS', key='-MAKE_BIDS-', font=min_font)],
+        [sg.Button('QA BIDS', key='-QA_BIDS-', font=min_font)],
+        [sg.Button('-----', font=min_font),],
+        [sg.Button('Statistics', key='-Stats-', font=min_font) ],
+        [sg.Button('EXIT', button_color='red', font=min_font)]
+        ]
     
-window.close()
+    window = sg.Window('MEG Functions', layout, resizable=True, auto_size_buttons=True, 
+                   scaling=True, size=(x_size, y_size))
+    
+    while True:
+        event, values = window.read()
+        if event == sg.WIN_CLOSED or event == 'EXIT': # if user closes window or clicks cancel
+                break
+    
+        if event == '-MAKE_BIDS-':
+            bids_gui()
+        if event == '-QA_BIDS-':
+            qa_gui()
+    
+        
+    window.close()
 
 
 
