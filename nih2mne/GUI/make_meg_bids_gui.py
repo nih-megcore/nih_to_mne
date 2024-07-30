@@ -107,13 +107,13 @@ def read_cfg(cfg_fname):
     
         
 
-def make_layout(options=None):
+def make_layout(opts=None):
     init_layout = [  
         [sg.Text('MEG Conversion to BIDS')],
         [sg.Text('Warning: currently works with {DATE/dsets} format from scanner')]
         ]
     
-    if options.anonymize==True:
+    if opts.anonymize==True:
         l_button_opts = [
             [sg.Button('Anonymize: Y', key='anonymize', button_color='green'), 
             sg.Button('Read Cfg', key='-READ_CFG-', disabled=True)],
@@ -230,7 +230,7 @@ def write_cfg(opts, fname=None):
         f.writelines(write_opts)
 
 def get_window(options=None):
-    layout = make_layout(options=options)
+    layout = make_layout(opts=options)
     window = sg.Window('MEG BIDS conversion', layout, resizable=True, auto_size_buttons=True, 
                    scaling=True, size=(x_size, y_size))
     del layout
@@ -284,101 +284,103 @@ if __name__=='__main__':
     args = parser.parse_args()
     if hasattr(args, 'config'):
         config_fname = args.config
-    
-## Setup and run gui
-opts = window_opts(config=config_fname) #This defaults to False if not set
-window = get_window(opts)
-coreg_toggle = False
 
-# Conversion dictionary between GUI variables and cmdline vars
-_tmp = [i for i in dir(opts) if not i.startswith('_')]
-value_writedict = {f'-{i.upper()}-':i for i in _tmp}
-
-while True:
-    event, values = window.read()
+def bids_gui(config_fname=False):    
+    ## Setup and run gui
+    opts = window_opts(config=config_fname) #This defaults to False if not set
+    window = get_window(opts)
+    coreg_toggle = False
     
-    if event == '-READ_CFG-':
-        cfg_fname = sg.popup_get_file('ConfigFile ending in .cfg', 
-                                      default_extension='.cfg')
-        write_opts = read_cfg(cfg_fname)
-        opts.update_opts(write_opts)
+    # Conversion dictionary between GUI variables and cmdline vars
+    _tmp = [i for i in dir(opts) if not i.startswith('_')]
+    global value_writedict
+    value_writedict = {f'-{i.upper()}-':i for i in _tmp}
     
-    # Update object options if event triggered
-    if event in value_writedict.keys():
-        setattr(opts, value_writedict[event], values[event])
-    
-    if event == 'anonymize': 
-        if opts.anonymize == False:
-            window['anonymize'].update(button_color='green')
-            window['anonymize'].update(text='Anonymize: Y')
-            opts.anonymize = not opts.anonymize
-        else:
-            window['anonymize'].update(button_color='red')
-            window['anonymize'].update(text='Anonymize: N')
-            opts.anonymize = not opts.anonymize
-    
-    # Logic for displaying coreg options
-    if event == '-COREG-':
-        if values['-COREG-'] == 'BrainSight':
-            window['-COREG_BSIGHT-'].update(visible=True)
-            window['-COREG_AFNI-'].update(visible=False)
-        elif values['-COREG-'] == 'Afni':
-            window['-COREG_AFNI-'].update(visible=True)
-            window['-COREG_BSIGHT-'].update(visible=False)
-        elif values['-COREG-'] == 'None':
-            window['-COREG_BSIGHT-'].update(visible=False)
-            window['-COREG_AFNI-'].update(visible=False)
-    
-    # If input directory is chosen - automatically select subject id and set
-    if event == '-MEG_INPUT_DIR-':
-        search_dir = values['-MEG_INPUT_DIR-']
-        tmp = glob.glob(op.join(search_dir, '*.ds'))
-        tmp = [op.basename(i) for i in tmp]
-        tmp = list(set([i.split('_')[0] for i in tmp]))
-        if len(tmp) == 1:
-            values['-SUBJID_INPUT-']=tmp[0]
-            opts.subjid_input =tmp[0]
-            window['-SUBJID_INPUT-'].update(tmp[0])
-        if len(tmp) > 1:
-            tmp = subject_selector_POPUP(tmp)
-            window['-SUBJID_INPUT-'].update(tmp[0])
-            opts.subjid_input=tmp[0]
-            
-    if event == '-PRINT_CMD-':
-        cmd = format_cmd(opts)
-        print(cmd)
-    
-    if event == '-WRITE_CFG-':
-        cfg_fname = sg.popup_get_file('ConfigFile ending in .cfg', default_path='nih_bids_gui.cfg', 
-                                      default_extension='.cfg')
-        write_cfg(opts, fname=cfg_fname)
-    
-    
-    if event == '-RUN-':
-        print(f'Running the command: {cmd}')
-        cmd = format_cmd(opts)
-        out_txt = subprocess.run(cmd.split(), check=True, capture_output=True)
-        summary = []
-        _start = False
-        for i in str(out_txt.stdout).split('\\n'):
-            if '########### SUMMARY #################' in i:
-                _start = True
-            if _start:
-                summary.append(i)
-        sg.popup_get_text('\n'.join(summary), title='SUMMARY')
-        _tmp = op.dirname(opts.bids_dir)
-        setattr(opts, 'error_log',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_err_log.txt'))
-        setattr(opts, 'full_log',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_log.txt'))
-        setattr(opts, 'fids_qa',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_fids_qa.png'))  
-        window['-CHECK_TRIAX_COREG-'].update(disabled=False)
-        print('FINISHED')
+    while True:
+        event, values = window.read()
         
-    if event == '-CHECK_TRIAX_COREG-':
-        subprocess.run(f'xdg-open {opts.fids_qa}'.split())
-    if event == sg.WIN_CLOSED or event == 'EXIT': # if user closes window or clicks cancel
-        break
-    
-window.close()
+        if event == '-READ_CFG-':
+            cfg_fname = sg.popup_get_file('ConfigFile ending in .cfg', 
+                                          default_extension='.cfg')
+            write_opts = read_cfg(cfg_fname)
+            opts.update_opts(write_opts)
+        
+        # Update object options if event triggered
+        if event in value_writedict.keys():
+            setattr(opts, value_writedict[event], values[event])
+        
+        if event == 'anonymize': 
+            if opts.anonymize == False:
+                window['anonymize'].update(button_color='green')
+                window['anonymize'].update(text='Anonymize: Y')
+                opts.anonymize = not opts.anonymize
+            else:
+                window['anonymize'].update(button_color='red')
+                window['anonymize'].update(text='Anonymize: N')
+                opts.anonymize = not opts.anonymize
+        
+        # Logic for displaying coreg options
+        if event == '-COREG-':
+            if values['-COREG-'] == 'BrainSight':
+                window['-COREG_BSIGHT-'].update(visible=True)
+                window['-COREG_AFNI-'].update(visible=False)
+            elif values['-COREG-'] == 'Afni':
+                window['-COREG_AFNI-'].update(visible=True)
+                window['-COREG_BSIGHT-'].update(visible=False)
+            elif values['-COREG-'] == 'None':
+                window['-COREG_BSIGHT-'].update(visible=False)
+                window['-COREG_AFNI-'].update(visible=False)
+        
+        # If input directory is chosen - automatically select subject id and set
+        if event == '-MEG_INPUT_DIR-':
+            search_dir = values['-MEG_INPUT_DIR-']
+            tmp = glob.glob(op.join(search_dir, '*.ds'))
+            tmp = [op.basename(i) for i in tmp]
+            tmp = list(set([i.split('_')[0] for i in tmp]))
+            if len(tmp) == 1:
+                values['-SUBJID_INPUT-']=tmp[0]
+                opts.subjid_input =tmp[0]
+                window['-SUBJID_INPUT-'].update(tmp[0])
+            if len(tmp) > 1:
+                tmp = subject_selector_POPUP(tmp)
+                window['-SUBJID_INPUT-'].update(tmp[0])
+                opts.subjid_input=tmp[0]
+                
+        if event == '-PRINT_CMD-':
+            cmd = format_cmd(opts)
+            print(cmd)
+        
+        if event == '-WRITE_CFG-':
+            cfg_fname = sg.popup_get_file('ConfigFile ending in .cfg', default_path='nih_bids_gui.cfg', 
+                                          default_extension='.cfg')
+            write_cfg(opts, fname=cfg_fname)
+        
+        
+        if event == '-RUN-':
+            print(f'Running the command: {cmd}')
+            cmd = format_cmd(opts)
+            out_txt = subprocess.run(cmd.split(), check=True, capture_output=True)
+            summary = []
+            _start = False
+            for i in str(out_txt.stdout).split('\\n'):
+                if '########### SUMMARY #################' in i:
+                    _start = True
+                if _start:
+                    summary.append(i)
+            sg.popup_get_text('\n'.join(summary), title='SUMMARY')
+            _tmp = op.dirname(opts.bids_dir)
+            setattr(opts, 'error_log',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_err_log.txt'))
+            setattr(opts, 'full_log',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_log.txt'))
+            setattr(opts, 'fids_qa',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_fids_qa.png'))  
+            window['-CHECK_TRIAX_COREG-'].update(disabled=False)
+            print('FINISHED')
+            
+        if event == '-CHECK_TRIAX_COREG-':
+            subprocess.run(f'xdg-open {opts.fids_qa}'.split())
+        if event == sg.WIN_CLOSED or event == 'EXIT': # if user closes window or clicks cancel
+            break
+        
+    window.close()
 
 
 
