@@ -11,6 +11,7 @@ import os,os.path as op
 import glob
 import subprocess
 from nih2mne.GUI.make_meg_bids_gui import bids_gui
+from nih2mne.GUI.qa_bids_gui import qa_gui
 
 CFG_VERSION = 1.0
 
@@ -22,10 +23,11 @@ y_size = 600*size_mult
 
 
 #%%
-maj_font = ('Ariel', 150)
-min_font = ('Ariel', round(maj_font[1] / 2 ))
+maj_font = ('Arial', 150)
+min_font = ('Arial', round(maj_font[1] / 2 ))
 
 layout = [
+    [sg.Text('Load Config:') ],
     [sg.Button('Make BIDS', key='-MAKE_BIDS-', font=min_font)],
     [sg.Button('QA BIDS', key='-QA_BIDS-', font=min_font)],
     [sg.Button('-----', font=min_font),],
@@ -45,7 +47,7 @@ while True:
     if event == '-MAKE_BIDS-':
         bids_gui()
     if event == '-QA_BIDS-':
-        pass
+        qa_gui()
 
     
 window.close()
