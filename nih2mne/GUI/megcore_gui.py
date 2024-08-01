@@ -52,7 +52,8 @@ def meg_gui():
         
     window.close()
 
-
+if __name__ == '__main__':
+    meg_gui()
 
 #%%%
         
