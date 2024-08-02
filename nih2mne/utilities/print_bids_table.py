@@ -4,11 +4,10 @@ import glob
 import os, os.path as op
 import mne_bids
 
-
 def get_sessions(subjid):
     return [i for i in os.listdir(subjid) if i[0:3]=='ses']
 
-def get_megs(subjid, ses='1', extension='.ds'):
+def get_megs(subjid, ses='1', extension='.ds', bids_dir=None):
     '''Return all MEG scans'''
     candidate_ses = glob.glob(f'{subjid}/ses-*')
     candidate_ses = [i.split('-')[-1] for i in candidate_ses]
@@ -32,7 +31,7 @@ def get_bids_table(bids_dir, ses='1'):
     subjids = glob.glob('sub-*')
     dsets=[]
     for sub in subjids:
-        dsets+=get_megs(sub, ses=ses)
+        dsets+=get_megs(sub, ses=ses, bids_dir=bids_dir)
     dframe=pd.DataFrame(dsets, columns=['fname'])
     dframe['task']=dframe.fname.apply(get_tag_output, tag='task')
     dframe['run']=dframe.fname.apply(get_tag_output, tag='run')
@@ -40,6 +39,14 @@ def get_bids_table(bids_dir, ses='1'):
     os.chdir(init_dir)
     return dframe
                                      
+def gui_interface(bids_dir=None, out_fname=None, session='1'):
+    if out_fname==None:
+        tmp_ = op.dirname(bids_dir)
+        out_fname = op.join(tmp_, 'bids_prep_logs', 'BIDS_table.csv')
+    dframe = get_bids_table(bids_dir, ses=session)
+    pivot = dframe.pivot_table(columns='task', index='subjid', aggfunc='count')
+    pivot.to_csv(out_fname)
+       
 
 def main():    
     import argparse

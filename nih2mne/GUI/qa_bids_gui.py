@@ -128,7 +128,7 @@ def make_layout(opts=None):
            
     project_opts = [
         [sg.Text(' -- PROJECT_QA -- ')],
-        [sg.Button('Project Totals')], 
+        [sg.Button('Compute Table'), sg.Button('View Table', disabled=True)], 
         [sg.Button('Missing Data', disabled=True)], 
         [sg.Button('Assess Noise Levels', disabled=True)]
         ]
@@ -277,16 +277,16 @@ def qa_gui(config_fname=False):
         # Update object options if event triggered
         if event in value_writedict.keys():
             setattr(opts, value_writedict[event], values[event])
+                
+        if event == 'Compute Table':
+            from nih2mne.utilities.print_bids_table import gui_interface as pbids_table
+            opts.bids_table_fname = op.join(op.dirname(opts.bids_dir), 'bids_prep_logs','BIDS_table.csv')
+            pbids_table(opts.bids_dir, out_fname =opts.bids_table_fname)
+            window['View Table'].update(disabled=False)
         
-        if event == 'anonymize': 
-            if opts.anonymize == False:
-                window['anonymize'].update(button_color='green')
-                window['anonymize'].update(text='Anonymize: Y')
-                opts.anonymize = not opts.anonymize
-            else:
-                window['anonymize'].update(button_color='red')
-                window['anonymize'].update(text='Anonymize: N')
-                opts.anonymize = not opts.anonymize
+        if event == 'View Table':
+            cmd = f'xdg-open {opts.bids_table_fname}'
+            subprocess.run(cmd.split())
         
         # Logic for displaying coreg options
         if event == '-COREG-':
