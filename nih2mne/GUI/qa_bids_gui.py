@@ -290,7 +290,7 @@ def qa_gui(config_fname=False):
         
         ## MRI Preprocess
         if (event == 'Run MR Prep') or (event == 'Run MR Prep (VOL)'):
-            subjects = glob.glob('sub-*', root_dir=opts.bids_dir)
+            subjects = sorted(glob.glob('sub-*', root_dir=opts.bids_dir))
             subject = selector_POPUP(subjects, text_item='Select a subject')[0]
             dsets = glob.glob(f'**/{subject}_*.ds', recursive=True, root_dir=op.join(opts.bids_dir, subject))
             dsets = ['ALL'] + dsets
