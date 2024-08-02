@@ -147,7 +147,7 @@ def make_layout(opts=None):
     
     subject_preproc_opts = [
         [sg.Text('  -- SUBJECT Preproc QA --')],
-        [sg.Button('Run MR Prep', disabled=True)]
+        [sg.Button('Run MR Prep', disabled=False), sg.Button('Run MR Prep (VOL)', disabled=False)]
         ]    
          
     # -- Assemble Layout --
@@ -163,13 +163,9 @@ def make_layout(opts=None):
                    sg.Button('Write Cfg', key='-WRITE_CFG-'), sg.Button('EXIT')])
     return layout
         
-def subject_selector_POPUP(data):
-    '''
-    If multiple datasets are found - create a popup selector to select the 
-    correct subject
-    '''
+def selector_POPUP(data, text_item='Select'):
     layout = [
-        [sg.Text('Select a subject')],
+        [sg.Text(text_item)],
         [sg.Listbox(data, size=(20,5), key='SELECTED')],
         [sg.Button('OK')],
     ]
@@ -277,7 +273,8 @@ def qa_gui(config_fname=False):
         # Update object options if event triggered
         if event in value_writedict.keys():
             setattr(opts, value_writedict[event], values[event])
-                
+        
+        ## BIDS PROJECT LEVEL
         if event == 'Compute Table':
             from nih2mne.utilities.print_bids_table import gui_interface as pbids_table
             opts.bids_table_fname = op.join(op.dirname(opts.bids_dir), 'bids_prep_logs','BIDS_table.csv')
@@ -287,6 +284,28 @@ def qa_gui(config_fname=False):
         if event == 'View Table':
             cmd = f'xdg-open {opts.bids_table_fname}'
             subprocess.run(cmd.split())
+            
+        ## BIDS SUBJECT LEVEL QA 
+        
+        
+        ## MRI Preprocess
+        if (event == 'Run MR Prep') or (event == 'Run MR Prep (VOL)'):
+            subjects = glob.glob('sub-*', root_dir=opts.bids_dir)
+            subject = selector_POPUP(subjects, text_item='Select a subject')[0]
+            dsets = glob.glob(f'**/{subject}_*.ds', recursive=True, root_dir=op.join(opts.bids_dir, subject))
+            dsets = ['ALL'] + dsets
+            dsets_sel = selector_POPUP(dsets, text_item = 'Select a dataset to run MR preprocessing')
+            if dsets_sel[0] == 'ALL':
+                dsets.remove('ALL')
+                dsets_sel = dsets
+            #Add full path for processing
+            dsets_sel = [op.join(opts.bids_dir, subject, i) for i in dsets_sel]
+            for dset in dsets_sel:
+                cmd = f'megcore_prep_mri_bids.py -bids_root {opts.bids_dir} -filename {dset}'
+                if event == 'Run MR Prep (VOL)':
+                    cmd+=' -volume'
+                subprocess.run(cmd.split())
+            
         
         # Logic for displaying coreg options
         if event == '-COREG-':
