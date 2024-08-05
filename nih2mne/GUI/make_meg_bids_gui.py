@@ -357,8 +357,8 @@ def bids_gui(config_fname=False):
         
         
         if event == '-RUN-':
-            print(f'Running the command: {cmd}')
             cmd = format_cmd(opts)
+            print(f'Running the command: {cmd}')
             out_txt = subprocess.run(cmd.split(), check=True, capture_output=True)
             summary = []
             _start = False
