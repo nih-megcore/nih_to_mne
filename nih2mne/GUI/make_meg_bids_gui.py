@@ -274,17 +274,6 @@ def format_cmd(opts):
     cmd = ' '.join(arglist)
     return cmd 
 
-config_fname = False
-if __name__=='__main__':
-    ''' Get config file from the commandline - preset to False above'''
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-config', help='Config file: typically ending in cfg', 
-                        default=False)
-    args = parser.parse_args()
-    if hasattr(args, 'config'):
-        config_fname = args.config
-
 def bids_gui(config_fname=False):    
     ## Setup and run gui
     opts = window_opts(config=config_fname) #This defaults to False if not set
@@ -381,6 +370,18 @@ def bids_gui(config_fname=False):
             break
         
     window.close()
+
+config_fname = False
+if __name__=='__main__':
+    ''' Get config file from the commandline - preset to False above'''
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-config', help='Config file: typically ending in cfg', 
+                        default=False)
+    args = parser.parse_args()
+    if hasattr(args, 'config'):
+        config_fname = args.config
+    bids_gui(config_fname)
 
 
 
