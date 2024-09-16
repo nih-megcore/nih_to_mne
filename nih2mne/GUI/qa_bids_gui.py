@@ -27,6 +27,7 @@ import PySimpleGUI as sg
 import os,os.path as op
 import glob
 import subprocess
+import mne
 
 CFG_VERSION = 1.0
 
@@ -374,25 +375,25 @@ def qa_gui(config_fname=False):
 # Main window
 # Check bids data
 
-bidsroot_template = 'bidsroot'
-projectroot_template = 'projectroot'
+# bidsroot_template = 'bidsroot'
+# projectroot_template = 'projectroot'
 
 
-# Data checks 
-data_checks = {
-    'MEGraw':{'key':
-              '*.ds'
-              },
-    'MRIraw':{'key':
-              ['*.nii.gz', '*.nii']
-              },
-    'MRIfree':{'key':
-                   ['surf/lh.pial', 'surf/rh.pial'],
-               'logkey':[]
-                   },
-    'Coreg':[   ], 
-    'MRIprep':[  ],
-    }
+# # Data checks 
+# data_checks = {
+#     'MEGraw':{'key':
+#               '*.ds'
+#               },
+#     'MRIraw':{'key':
+#               ['*.nii.gz', '*.nii']
+#               },
+#     'MRIfree':{'key':
+#                    ['surf/lh.pial', 'surf/rh.pial'],
+#                'logkey':[]
+#                    },
+#     'Coreg':[   ], 
+#     'MRIprep':[  ],
+#     }
     
 def check_fs_recon(subjid, subjects_dir):
     '''
@@ -473,8 +474,6 @@ class qa_megraw_object:
 
 class meglist_class:
     def __init__(self, subject=None, bids_root=None):
-        if subject[0:4]!='sub-':
-            subject='sub-'+subject
         dsets = glob.glob(f'{op.join(subject, "**", "*.ds")}',
                           root_dir=bids_root, recursive=True)
         tmp = [qa_megraw_object(i) for i in dsets]
@@ -486,39 +485,87 @@ class meglist_class:
     
 class qa_mri_class:    
     def __init__(self, subject=None, bids_root=None):
-        tmp = glob.glob(f'{op.join(subject,"**", "anat/*")}')
+        mr_list = glob.glob(f'{op.join(bids_root, subject,"**", "anat/*")}', recursive=True)
         all_mri_list = []
-        for i in tmp:
-            if (tmp[-4:]=='.nii') or (tmp[-6]=='.nii.gz'):
+        for i in mr_list:
+            if (i[-4:]=='.nii') or (i[-7:]=='.nii.gz'):
                 all_mri_list.append(i)
         self.all_mris = all_mri_list
+        if len(self.all_mris)==0:
+            self.mri = None
+        elif len(self.all_mris)==1:
+            self.mri = self.all_mris[0]
+            if self.mri.endswith('.nii'):
+                self.mri_json = self.mri.replace('.nii','.json')
+            else:
+                self.mri_json = self.mri.replace('.nii.gz','.json')
+        else:
+            self.mri = 'Multiple'
+        
+        if (self.mri != 'Multiple') and (self.mri != None):
+            self._valid_fids()
+            
         
     def _sort_T1(self):
+        pass
+    
+    def _valid_fids(self):
+        import json
+        with open(self.mri_json) as f:
+            json_data = json.load(f)
+        if 'AnatomicalLandmarkCoordinates' not in json_data.keys():
+            self.mri_json_qa = 'BAD'
+            return
+        fids = json_data['AnatomicalLandmarkCoordinates']
+        fids_keys = sorted(fids.keys())
+        if fids_keys == ['LPA', 'NAS', 'RPA']:
+            self.mri_json_qa = 'GOOD'
+        else:
+            self.mri_json_qa = 'BAD'
         
         
+       
     
 
 class subject_tile(qa_mri_class, meglist_class):
     def __init__(self, subject, bids_root=None, subjects_dir=None):
-        self.subject = subject
+        if subject[0:4]=='sub-':
+            self.subject = subject
+            self.bids_id = subject[4:]
+        else:
+            self.subject = 'sub-'+subject
+            self.bids_id = subject
         if bids_root==None:
             self.bids_root=os.getcwd()
         else:
             self.bids_root = bids_root
         
         if subjects_dir==None:
-            self.subjects_dir = op.join('derivatives','freesurfer','subjects')
+            self.subjects_dir = op.join(bids_root, 'derivatives','freesurfer','subjects')
         else:
             self.subjects_dir = subjects_dir
         
-        # MEG component
-        self.meg_list = meglist_class(subject, self.bids_root)
-        self.fs_recon = check_fs_recon(subject, self.subjects_dir)
+        # MEG Component
+        meglist_class.__init__(self, self.subject, self.bids_root)
+        
+        # MRI Component
+        qa_mri_class.__init__(self, subject=self.subject, bids_root=self.bids_root)
+        
+        # Freesurfer Component
+        self.fs_recon = check_fs_recon(self.subject, self.subjects_dir)
         
         
-        # # MRI component
-        # mri_stuff = mri_class(self, 
-        # self.mri = 
+    def __repr__(self):
+        tmp = f'Subject {self.subject}\n'
+        tmp += f'MEG Scans: {self.meg_count}\n'
+        tmp += f'MRI Used: {self.mri}\n'
+        tmp += f'MRI fiducials: {self.mri_json_qa}\n'
+        if self.fs_recon['fs_success']==True:
+            tmp += 'Freesurfer: Successful Recon'
+        else:
+            logfile = op.join(self.subjects_dir, self.subject, 'scripts', 'recon-all.log')
+            tmp += f'Freesurfer: ERROR : Check log {logfile}'
+        return tmp
         
         
         
@@ -526,14 +573,15 @@ class subject_tile(qa_mri_class, meglist_class):
         
 
 # Test Section
-topdir = '/fast2/BIDS'
-tmp = meglist_class(subject='ON08710')
-tmp.meg_list
-test= tmp.meg_list[0]
-test.load()
+# topdir = '/fast2/BIDS'
+# tmp = meglist_class(subject='ON08710')
+# tmp.meg_list
+# test= tmp.meg_list[0]
+# test.load()
 
+tmp2 = subject_tile(subject='ON08710', bids_root='/fast2/BIDS')
 
-
+# tmp = qa_mri_class(subject='sub-ON08710', bids_root='/fast2/BIDS') 
 
 
 
