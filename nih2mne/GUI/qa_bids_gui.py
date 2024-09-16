@@ -370,9 +370,167 @@ def qa_gui(config_fname=False):
         
     window.close()
 
+#%%
+# Main window
+# Check bids data
+
+bidsroot_template = 'bidsroot'
+projectroot_template = 'projectroot'
 
 
+# Data checks 
+data_checks = {
+    'MEGraw':{'key':
+              '*.ds'
+              },
+    'MRIraw':{'key':
+              ['*.nii.gz', '*.nii']
+              },
+    'MRIfree':{'key':
+                   ['surf/lh.pial', 'surf/rh.pial'],
+               'logkey':[]
+                   },
+    'Coreg':[   ], 
+    'MRIprep':[  ],
+    }
+    
+def check_fs_recon(subjid, subjects_dir):
+    '''
+    Returns status of freesurfer reconstruction
 
+    Parameters
+    ----------
+    subjid : str
+        Subject ID
+    subjects_dir : str
+        Freesurfer subjects dir
+
+    Returns
+    -------
+    out_dict: dict
+        
+
+    '''
+    logfile = op.join(subjects_dir, subjid, 'scripts', 'recon-all.log')
+    with open(logfile) as f:
+        fs_success_line = f.readlines()[-1]
+    if 'finished without error' in fs_success_line:
+        finished = True
+    else:
+        finished = False
+    has_lhpial = os.path.exists(op.join(subjects_dir, subjid, 'surf', 'lh.pial'))
+    has_rhpial = os.path.exists(op.join(subjects_dir, subjid, 'surf', 'rh.pial'))
+    out_dict = dict(fs_success = finished,
+                lhpial = has_lhpial, 
+                rhpial = has_rhpial)
+                
+    return out_dict
+
+
+class qa_megraw_object:
+    '''Current minimal template - add more later'''
+    def __init__(self, fname):
+        self.rel_path = fname
+        self.fname = op.basename(fname)
+        self._get_task()
+        self._is_emptyroom()
+    
+    def _get_task(self):
+        tmp = self.fname.split('_')
+        task_stub = [i for i in tmp if i[0:4]=='task'][0]
+        self.task = task_stub.split('-')[-1]
+        
+    def _is_emptyroom(self):
+        eroom_tags = ['empty', 'er','emptyroom', 'noise']
+        if self.task.lower() in eroom_tags:
+            self.is_emptyroom = True
+        else:
+            self.is_emptyroom = False
+    
+    def load(self, load_val=False):
+        self.raw = mne.io.read_raw_ctf(self.rel_path, 
+                                       preload=load_val,
+                                       system_clock='ignore',
+                                       clean_names=True)
+    def _calc_bad_segments(self):
+        'Template for calculation'
+    
+    def _calc_jumps(self):
+        'Template for calc'
+    
+    def _is_valid(self, set_value=None):
+        '''Fill in more of this -- maybe '''
+        if set_value != None:
+            self.is_valid = set_value
+        else:
+            self.is_valid = True
+        
+        
+
+    def __repr__(self):
+        return f'megraw: {self.task} : {self.fname}'
+            
+
+class meglist_class:
+    def __init__(self, subject=None, bids_root=None):
+        if subject[0:4]!='sub-':
+            subject='sub-'+subject
+        dsets = glob.glob(f'{op.join(subject, "**", "*.ds")}',
+                          root_dir=bids_root, recursive=True)
+        tmp = [qa_megraw_object(i) for i in dsets]
+        self.meg_list = tmp
+    
+    @property
+    def meg_count(self):
+        return len(self.meg_list)
+    
+class qa_mri_class:    
+    def __init__(self, subject=None, bids_root=None):
+        tmp = glob.glob(f'{op.join(subject,"**", "anat/*")}')
+        all_mri_list = []
+        for i in tmp:
+            if (tmp[-4:]=='.nii') or (tmp[-6]=='.nii.gz'):
+                all_mri_list.append(i)
+        self.all_mris = all_mri_list
+        
+    def _sort_T1(self):
+        
+        
+    
+
+class subject_tile(qa_mri_class, meglist_class):
+    def __init__(self, subject, bids_root=None, subjects_dir=None):
+        self.subject = subject
+        if bids_root==None:
+            self.bids_root=os.getcwd()
+        else:
+            self.bids_root = bids_root
+        
+        if subjects_dir==None:
+            self.subjects_dir = op.join('derivatives','freesurfer','subjects')
+        else:
+            self.subjects_dir = subjects_dir
+        
+        # MEG component
+        self.meg_list = meglist_class(subject, self.bids_root)
+        self.fs_recon = check_fs_recon(subject, self.subjects_dir)
+        
+        
+        # # MRI component
+        # mri_stuff = mri_class(self, 
+        # self.mri = 
+        
+        
+        
+        
+        
+
+# Test Section
+topdir = '/fast2/BIDS'
+tmp = meglist_class(subject='ON08710')
+tmp.meg_list
+test= tmp.meg_list[0]
+test.load()
 
 
 
