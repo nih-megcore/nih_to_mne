@@ -28,6 +28,7 @@ import os,os.path as op
 import glob
 import subprocess
 import mne
+import numpy as np
 
 CFG_VERSION = 1.0
 
@@ -39,6 +40,9 @@ size_mult=2
 font_size=12  
 x_size = 500*size_mult
 y_size = 600*size_mult
+
+jump_thresh = 5e-17 #Squared value thresh
+
 
 def collapse(layout, key, visible):
     """
@@ -374,6 +378,14 @@ def qa_gui(config_fname=False):
 #%%
 # Main window
 # Check bids data
+'''
+qa_mri_class - mri finder and json QA and freesurfer qa
+meg_class - minimal wrapper
+meg_list_class - List of meg_class
+subject_bids_info  - MIXIN
+subject_tile  
+
+'''
 
 # bidsroot_template = 'bidsroot'
 # projectroot_template = 'projectroot'
@@ -413,8 +425,14 @@ def check_fs_recon(subjid, subjects_dir):
 
     '''
     logfile = op.join(subjects_dir, subjid, 'scripts', 'recon-all.log')
-    with open(logfile) as f:
-        fs_success_line = f.readlines()[-1]
+    if not op.exists(logfile):
+        finished = False
+        started = False
+        fs_success_line=[]
+    else:
+        started = True
+        with open(logfile) as f:
+            fs_success_line = f.readlines()[-1]
     if 'finished without error' in fs_success_line:
         finished = True
     else:
@@ -422,12 +440,13 @@ def check_fs_recon(subjid, subjects_dir):
     has_lhpial = os.path.exists(op.join(subjects_dir, subjid, 'surf', 'lh.pial'))
     has_rhpial = os.path.exists(op.join(subjects_dir, subjid, 'surf', 'rh.pial'))
     out_dict = dict(fs_success = finished,
+                    fs_started = started,
                 lhpial = has_lhpial, 
                 rhpial = has_rhpial)
                 
     return out_dict
 
-
+#%%
 class qa_megraw_object:
     '''Current minimal template - add more later'''
     def __init__(self, fname):
@@ -435,6 +454,10 @@ class qa_megraw_object:
         self.fname = op.basename(fname)
         self._get_task()
         self._is_emptyroom()
+        
+        # Identify and drop channel jumps
+        self.BADS = {}
+        self.BADS['JUMPS'] = self._check_jumps()
     
     def _get_task(self):
         tmp = self.fname.split('_')
@@ -452,12 +475,54 @@ class qa_megraw_object:
         self.raw = mne.io.read_raw_ctf(self.rel_path, 
                                        preload=load_val,
                                        system_clock='ignore',
-                                       clean_names=True)
+                                       clean_names=True, 
+                                       verbose=False)
+        if self.raw.compensation_grade != 3:
+            self.raw.apply_gradient_compensation(3)
+    
+    def save(self, fname=None, overwrite=False):
+        import pickle
+        if fname == None:
+            raise ValueError('fname must be set during save')
+        
+        if hasattr(self, 'raw'):
+            del self.raw
+        
+        if op.exists(fname) and overwrite==False:
+            raise ValueError(f'The fname already exists: {fname}')
+        else:
+            with open(fname, 'wb') as f:
+                pickle.dump(self, f)
+        
+        
+            
     def _calc_bad_segments(self):
         'Template for calculation'
     
-    def _calc_jumps(self):
-        'Template for calc'
+    
+    def _check_jumps(self):
+        '''
+        Jump artifacts with np.diff
+        Returns dictionary with jumps segmented into refs and data chans
+        '''
+        if not hasattr(self, 'raw'):
+            self.load(load_val=True)
+
+        ref_picks = [i for i in self.raw.ch_names if i[0] in ['B', 'G', 'P','Q','R']]
+        chan_picks = [i for i in self.raw.ch_names if i[0]=='M']
+        chan_picks = [i for i in chan_picks if len(i)==5]  #Some datasets have extra odd chans
+        megall_picks = ref_picks+chan_picks
+
+        _tmp = self.raw.copy().pick(megall_picks)            
+        # _tmp = self.raw.copy().pick(ref_picks)
+        dif = mne.io.RawArray(np.diff(_tmp._data), info=_tmp.info)
+        
+        ch_idx, bad_samps = np.where(dif._data**2 > jump_thresh)
+        jump_chans = {dif.ch_names[i]:timeval for i,timeval in zip(set(ch_idx),bad_samps)}
+        jump_megs = [i for i in jump_chans if i in chan_picks]
+        jump_refs = [i for i in jump_chans if i in ref_picks]
+        print(f'Jumps found: {len(jump_chans)}: Refs: {len(jump_refs)}: Grads: {len(jump_megs)}') 
+        return {'CHANS': jump_chans, 'TSTEP': bad_samps}
     
     def _is_valid(self, set_value=None):
         '''Fill in more of this -- maybe '''
@@ -465,19 +530,34 @@ class qa_megraw_object:
             self.is_valid = set_value
         else:
             self.is_valid = True
-        
-        
+    
+    def button_set_status(self):
+        '''Set up toggle for Unchecked/GOOD/BAD'''
+        if self.status=='Unchecked':
+            self.status = 'GOOD'
+        elif self.status=='GOOD':
+            self.status = 'BAD'
+        elif self.status=='BAD':
+            self.status = 'Unchecked'
+    
+    def set_status(self, status):
+        self.status=status
 
     def __repr__(self):
-        return f'megraw: {self.task} : {self.fname}'
+        tmp_ = f'megraw: {self.task} : {self.fname}'
+        bads_len = self.BADS['JUMPS']['CHANS'].__len__()
+        if bads_len !=0:
+            tmp_ += f' :: JUMPS: {bads_len}'
+        return tmp_
             
-
+#%%
 class meglist_class:
     def __init__(self, subject=None, bids_root=None):
         dsets = glob.glob(f'{op.join(subject, "**", "*.ds")}',
                           root_dir=bids_root, recursive=True)
         tmp = [qa_megraw_object(i) for i in dsets]
         self.meg_list = tmp
+        self.meg_emptyroom = [i for i in self.meg_list if i.is_emptyroom]
     
     @property
     def meg_count(self):
@@ -523,11 +603,9 @@ class qa_mri_class:
         else:
             self.mri_json_qa = 'BAD'
         
-        
-       
-    
 
-class subject_tile(qa_mri_class, meglist_class):
+class subject_bids_info(qa_mri_class, meglist_class):
+    '''Subject Status Mixin of MRI and MEG classes'''
     def __init__(self, subject, bids_root=None, subjects_dir=None):
         if subject[0:4]=='sub-':
             self.subject = subject
@@ -554,22 +632,251 @@ class subject_tile(qa_mri_class, meglist_class):
         # Freesurfer Component
         self.fs_recon = check_fs_recon(self.subject, self.subjects_dir)
         
-        
-    def __repr__(self):
+    @property
+    def info(self):
         tmp = f'Subject {self.subject}\n'
         tmp += f'MEG Scans: {self.meg_count}\n'
+        if len(self.meg_emptyroom) == 0:
+            tmp += 'MEG Emptyroom: None\n'
+        else:
+            tmp += f'MEG Emptyroom: ({len(self.meg_emptyroom)})\n'
+            for i in self.meg_emptyroom:
+                tmp += f'   {i.fname}\n'
         tmp += f'MRI Used: {self.mri}\n'
         tmp += f'MRI fiducials: {self.mri_json_qa}\n'
         if self.fs_recon['fs_success']==True:
             tmp += 'Freesurfer: Successful Recon'
         else:
-            logfile = op.join(self.subjects_dir, self.subject, 'scripts', 'recon-all.log')
-            tmp += f'Freesurfer: ERROR : Check log {logfile}'
+            if self.fs_recon['fs_started']==False:
+                tmp += 'Freesurfer: Has not been performed'
+            else:
+                logfile = op.join(self.subjects_dir, self.subject, 'scripts', 'recon-all.log')
+                tmp += f'Freesurfer: ERROR : Check log {logfile}'
         return tmp
         
+    def __repr__(self):
+        return self.info
+
+class subject_tile(subject_bids_info):
+    '''Attach GUI tile properties to bids information'''
+    def __init__(self, subject=None, bids_root=None, subjects_dir=None):
+        subject_bids_info.__init__(self, subject=subject, bids_root=bids_root, 
+                                   subjects_dir=subjects_dir)
+    
+    def button_set_status(self):
+        '''Set up toggle for Unchecked/GOOD/BAD'''
+        if self.status=='Unchecked':
+            self.status = 'GOOD'
+        elif self.status=='GOOD':
+            self.status = 'BAD'
+        elif self.status=='BAD':
+            self.status = 'Unchecked'
+    
+    def set_status(self, status):
+        self.status=status
+        
+    # def set_type(self, qa_type):
+    #     self.qa_type = qa_type
+        
+    
+#%% 
+test =    subject_tile(subject='sub-ON11394', bids_root=os.getcwd())
+        
+test = subject_tile(subject='sub-ON08710', bids_root=os.getcwd())        
+subject_tile_list = [subject_tile(i, bids_root=bids_root) for i in glob.glob('sub-*')]
+
+def make_bids_subject_layout(row_num=6, col_num=4, subject_list=None, opts=None):
+    '''Generate a Grid of datasets'''  
+    idx = 0
+    layout = []
+    #Preallocate Layout --- !! WILL need to zero/Null pad the matrix
+    for row in range(row_num):
+        layout.append([None]*col_num)
+    
+    #Fill in the current grid with the appropriate subjects
+    tile_idxs = np.arange(row_num*col_num)
+    tile_idxs_grid = tile_idxs.reshape(row_num, col_num)
+    row_idxs, col_idxs = np.unravel_index(tile_idxs, [row_num, col_num])
+    for row_idx, col_idx in zip(row_idxs, col_idxs):
+        layout[row_idx][col_idx] = subject_list[tile_idxs_grid[row_idx, col_idx]]
+        
+    # for row in range(row_num):
+    #     for col in range(col_num):
+    #         if idx<len(subject_tile_list):
+    #             layout
+    #     layout[idx]
+    
+    
+    for row in range(row_num):
+        row_layout = []
+        for col in range(col_num):
+            subject_tile = subject_list[idx]
+            row_layout.append(subject_tile)
+            idx+=1
+    
+    
+    required_opts = [
+        [sg.Text('BIDS DIR:'), 
+         sg.InputText(key='-BIDS_DIR-', enable_events=True),
+         sg.FolderBrowse(target='-BIDS_DIR-')
+         ],
+        ]
+           
+    project_opts = [
+        [sg.Text(' -- PROJECT_QA -- ')],
+        [sg.Button('Compute Table'), sg.Button('View Table', disabled=True)], 
+        [sg.Button('Missing Data', disabled=True)], 
+        [sg.Button('Assess Noise Levels', disabled=True)]
+        ]
+    
+    subject_required_opts = [
+        [sg.Text(' -- Subject Section -- ')],
+        [sg.Button('Select Subject')]
+         ]
+    subject_raw_opts = [
+        [sg.Text(' -- SUBJECT INPUT QA -- ')],
+        [sg.Button('MRI ANON', disabled=True),
+         sg.Button('Fiducials', disabled=True)],
+        [sg.Button('3D Coreg', disabled=True),
+         sg.Button('Data QA', disabled=True)]
+        ]
+    
+    subject_preproc_opts = [
+        [sg.Text('  -- SUBJECT Preproc QA --')],
+        [sg.Button('Run MR Prep', disabled=False), sg.Button('Run MR Prep (VOL)', disabled=False)]
+        ]    
+         
+    # -- Assemble Layout --
+    layout = required_opts
+    layout.append([sg.Text(' ')])
+    layout.append(project_opts)
+    layout.append([sg.Text(' ')])
+    layout.append(subject_raw_opts)
+    layout.append([sg.Text(' ')])
+    layout.append(subject_preproc_opts)
+    layout.append([sg.Text(' ')])
+    layout.append([sg.Button('Print CMD', key='-PRINT_CMD-'), sg.Button('RUN', key='-RUN-'), 
+                   sg.Button('Write Cfg', key='-WRITE_CFG-'), sg.Button('EXIT')])
+    return layout        
+        
+def qa_subject_selector(config_fname=False):    
+    ## Setup and run gui
+    opts = window_opts(config=config_fname) #This defaults to False if not set
+    window = get_window(opts)
+    
+    # Conversion dictionary between GUI variables and cmdline vars
+    _tmp = [i for i in dir(opts) if not i.startswith('_')]
+    global value_writedict
+    value_writedict = {f'-{i.upper()}-':i for i in _tmp}
+    
+    while True:
+        event, values = window.read()
+        
+        if event == '-READ_CFG-':
+            cfg_fname = sg.popup_get_file('ConfigFile ending in .cfg', 
+                                          default_extension='.cfg')
+            write_opts = read_cfg(cfg_fname)
+            opts.update_opts(write_opts)
+        
+        # Update object options if event triggered
+        if event in value_writedict.keys():
+            setattr(opts, value_writedict[event], values[event])
+        
+        ## BIDS PROJECT LEVEL
+        if event == 'Compute Table':
+            from nih2mne.utilities.print_bids_table import gui_interface as pbids_table
+            opts.bids_table_fname = op.join(op.dirname(opts.bids_dir), 'bids_prep_logs','BIDS_table.csv')
+            pbids_table(opts.bids_dir, out_fname =opts.bids_table_fname)
+            window['View Table'].update(disabled=False)
+        
+        if event == 'View Table':
+            cmd = f'xdg-open {opts.bids_table_fname}'
+            subprocess.run(cmd.split())
+            
+        ## BIDS SUBJECT LEVEL QA 
         
         
+        ## MRI Preprocess
+        if (event == 'Run MR Prep') or (event == 'Run MR Prep (VOL)'):
+            subjects = sorted(glob.glob('sub-*', root_dir=opts.bids_dir))
+            subject = selector_POPUP(subjects, text_item='Select a subject')[0]
+            dsets = glob.glob(f'**/{subject}_*.ds', recursive=True, root_dir=op.join(opts.bids_dir, subject))
+            dsets = ['ALL'] + dsets
+            dsets_sel = selector_POPUP(dsets, text_item = 'Select a dataset to run MR preprocessing')
+            if dsets_sel[0] == 'ALL':
+                dsets.remove('ALL')
+                dsets_sel = dsets
+            #Add full path for processing
+            dsets_sel = [op.join(opts.bids_dir, subject, i) for i in dsets_sel]
+            for dset in dsets_sel:
+                cmd = f'megcore_prep_mri_bids.py -bids_root {opts.bids_dir} -filename {dset}'
+                if event == 'Run MR Prep (VOL)':
+                    cmd+=' -volume'
+                subprocess.run(cmd.split())
+            
         
+        # Logic for displaying coreg options
+        if event == '-COREG-':
+            if values['-COREG-'] == 'BrainSight':
+                window['-COREG_BSIGHT-'].update(visible=True)
+                window['-COREG_AFNI-'].update(visible=False)
+            elif values['-COREG-'] == 'Afni':
+                window['-COREG_AFNI-'].update(visible=True)
+                window['-COREG_BSIGHT-'].update(visible=False)
+            elif values['-COREG-'] == 'None':
+                window['-COREG_BSIGHT-'].update(visible=False)
+                window['-COREG_AFNI-'].update(visible=False)
+        
+        # If input directory is chosen - automatically select subject id and set
+        if event == '-MEG_INPUT_DIR-':
+            search_dir = values['-MEG_INPUT_DIR-']
+            tmp = glob.glob(op.join(search_dir, '*.ds'))
+            tmp = [op.basename(i) for i in tmp]
+            tmp = list(set([i.split('_')[0] for i in tmp]))
+            if len(tmp) == 1:
+                values['-SUBJID_INPUT-']=tmp[0]
+                opts.subjid_input =tmp[0]
+                window['-SUBJID_INPUT-'].update(tmp[0])
+            if len(tmp) > 1:
+                tmp = subject_selector_POPUP(tmp)
+                window['-SUBJID_INPUT-'].update(tmp[0])
+                opts.subjid_input=tmp[0]
+                
+        if event == '-PRINT_CMD-':
+            cmd = format_cmd(opts)
+            print(cmd)
+        
+        if event == '-WRITE_CFG-':
+            cfg_fname = sg.popup_get_file('ConfigFile ending in .cfg', default_path='nih_bids_gui.cfg', 
+                                          default_extension='.cfg')
+            write_cfg(opts, fname=cfg_fname)
+        
+        
+        if event == '-RUN-':
+            print(f'Running the command: {cmd}')
+            cmd = format_cmd(opts)
+            out_txt = subprocess.run(cmd.split(), check=True, capture_output=True)
+            summary = []
+            _start = False
+            for i in str(out_txt.stdout).split('\\n'):
+                if '########### SUMMARY #################' in i:
+                    _start = True
+                if _start:
+                    summary.append(i)
+            sg.popup_get_text('\n'.join(summary), title='SUMMARY')
+            _tmp = op.dirname(opts.bids_dir)
+            setattr(opts, 'error_log',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_err_log.txt'))
+            setattr(opts, 'full_log',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_log.txt'))
+            setattr(opts, 'fids_qa',  op.join(_tmp, 'bids_prep_logs' , opts.subjid_input + '_fids_qa.png'))  
+            window['-CHECK_TRIAX_COREG-'].update(disabled=False)
+            print('FINISHED')
+            
+        if event == '-CHECK_TRIAX_COREG-':
+            subprocess.run(f'xdg-open {opts.fids_qa}'.split())
+        if event == sg.WIN_CLOSED or event == 'EXIT': # if user closes window or clicks cancel
+            break
+        
+    window.close()
         
 
 # Test Section
@@ -580,7 +887,7 @@ class subject_tile(qa_mri_class, meglist_class):
 # test.load()
 
 tmp2 = subject_tile(subject='ON08710', bids_root='/fast2/BIDS')
-
+tmp2 = subject_bids_info(subject='ON08710', bids_root='/fast2/BIDS')
 # tmp = qa_mri_class(subject='sub-ON08710', bids_root='/fast2/BIDS') 
 
 
