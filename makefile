@@ -26,6 +26,9 @@ install_system_requirements:
 	dnf install Xvfb -y
 	dnf install git git-annex -y
 
+make_bids:
+	cd nih2mne/test_data ; make_meg_bids.py -bids_dir ./BIDS -subjid_input ABABABAB -meg_input_dir 20010101 -bids_id S01 -mri_bsight MRI/ABABABAB_refaced_T1w.nii.gz -mri_bsight MRI/ABABABAB_elec.txt
+
 test:
 	($(CONDA_ACTIVATE) enigma_meg_test ; cd enigma_MEG; pytest -vv --report-log=/tmp/enigma_MEG_test_logfile.txt )  
 
