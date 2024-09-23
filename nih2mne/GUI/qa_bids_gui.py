@@ -29,6 +29,7 @@ import glob
 import subprocess
 import mne
 import numpy as np
+from scipy.stats import zscore, trim_mean
 
 CFG_VERSION = 1.0
 
@@ -41,7 +42,7 @@ font_size=12
 x_size = 500*size_mult
 y_size = 600*size_mult
 
-jump_thresh = 5e-17 #Squared value thresh
+jump_thresh = 1.5e-07 #Abs value thresh
 
 
 def collapse(layout, key, visible):
@@ -458,6 +459,10 @@ class qa_megraw_object:
         # Identify and drop channel jumps
         self.BADS = {}
         self.BADS['JUMPS'] = self._check_jumps()
+        
+        # Calculate the 10s epoch trim mean (60% mid) average power
+        self._calc_chan_power()
+        
     
     def _get_task(self):
         tmp = self.fname.split('_')
@@ -479,6 +484,12 @@ class qa_megraw_object:
                                        verbose=False)
         if self.raw.compensation_grade != 3:
             self.raw.apply_gradient_compensation(3)
+        
+        # Define useable chans
+        self._ref_picks = [i for i in self.raw.ch_names if i[0] in ['B', 'G', 'P','Q','R']]
+        chan_picks = [i for i in self.raw.ch_names if i[0]=='M']
+        self._chan_picks = [i for i in chan_picks if len(i)==5]  #Some datasets have extra odd chans
+        self._megall_picks = self._ref_picks+self._chan_picks
     
     def save(self, fname=None, overwrite=False):
         import pickle
@@ -502,7 +513,7 @@ class qa_megraw_object:
     
     def _check_jumps(self):
         '''
-        Jump artifacts with np.diff
+        Jump artifacts with np.diff and abs
         Returns dictionary with jumps segmented into refs and data chans
         '''
         if not hasattr(self, 'raw'):
@@ -517,12 +528,22 @@ class qa_megraw_object:
         # _tmp = self.raw.copy().pick(ref_picks)
         dif = mne.io.RawArray(np.diff(_tmp._data), info=_tmp.info)
         
-        ch_idx, bad_samps = np.where(dif._data**2 > jump_thresh)
+        ch_idx, bad_samps = np.where(np.abs(dif._data) > jump_thresh)
         jump_chans = {dif.ch_names[i]:timeval for i,timeval in zip(set(ch_idx),bad_samps)}
         jump_megs = [i for i in jump_chans if i in chan_picks]
         jump_refs = [i for i in jump_chans if i in ref_picks]
         print(f'Jumps found: {len(jump_chans)}: Refs: {len(jump_refs)}: Grads: {len(jump_megs)}') 
         return {'CHANS': jump_chans, 'TSTEP': bad_samps}
+    
+    def _calc_chan_power(self):
+        if not hasattr(self, 'raw'):
+            self.load(load_val=True)
+        
+        epochs = mne.make_fixed_length_epochs(self.raw, duration=10.0, preload=True)
+        epo_pow = epochs._data**2
+        epo_pow_av = epo_pow.mean(axis=-1)  #average over time in block
+        epo_robust_av = trim_mean(epo_pow_av, proportiontocut=0.2, axis=0)
+        self.chan_power = epo_robust_av
     
     def _is_valid(self, set_value=None):
         '''Fill in more of this -- maybe '''
@@ -680,7 +701,7 @@ class subject_tile(subject_bids_info):
         
     
 #%% 
-test =    subject_tile(subject='sub-ON11394', bids_root=os.getcwd())
+test = subject_tile(subject='sub-ON11394', bids_root=os.getcwd())
         
 test = subject_tile(subject='sub-ON08710', bids_root=os.getcwd())        
 subject_tile_list = [subject_tile(i, bids_root=bids_root) for i in glob.glob('sub-*')]
