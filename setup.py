@@ -24,6 +24,7 @@ setuptools.setup(
         'nih2mne/bstags.py',
         'nih2mne/calc_mnetrans.py',
         'nih2mne/make_meg_bids.py',
+        'nih2mne/GUI/make_meg_bids_gui.py',
         'nih2mne/utilities/make_meg_bids_fromcsv.py',
         'nih2mne/utilities/print_bids_table.py',
         'nih2mne/utilities/fix_dsname.py',

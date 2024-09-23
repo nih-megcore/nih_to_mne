@@ -102,7 +102,7 @@ def check_mri(t1_bids_path):
     return t1_bids_path
 
 
-def _gen_expanded_src(subject, subjects_dir, dilation_iter=4):
+def _gen_expanded_src(subject, subjects_dir, dilation_iter=8):
     '''
     Expand the brainmask out to use as a source model.  This is used to 
     prevent voxel cropping on the edges of the brain.
