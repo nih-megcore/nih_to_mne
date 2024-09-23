@@ -89,7 +89,7 @@ def make_swarm(bids_root=None, src_type='surf', project=None,
     
     
 def check_mri(t1_bids_path):
-    for acq in ['MPRAGE', 'FSPGR', None]:
+    for acq in ['MPRAGE', 'FSPGR', 'mprage', 'fspgr', None]:
         t1_bids_path.update(acquisition=acq, extension='.nii')
         if op.exists(t1_bids_path.fpath):
             break
