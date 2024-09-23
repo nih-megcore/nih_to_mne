@@ -872,8 +872,11 @@ def main():
         # Proc Brainsight Data
         #
         if args.mri_bsight:
-            assert op.splitext(args.mri_bsight)[-1] in ['.nii','.nii.gz']
-            nii_mri = args.mri_bsight
+            if (args.mri_bsight.endswith('.nii')) or (args.mri_bsight.endswith('.nii.gz')):
+                nii_mri = args.mri_bsight
+            else:
+                raise ValueError(f'mri_bsight entry does not end with (nii or nii.gz): {args.mri_bsight}')
+        
         
         #
         #   Anonymize/Deface MRI if set
