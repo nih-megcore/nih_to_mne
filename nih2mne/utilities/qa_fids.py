@@ -12,7 +12,7 @@ import glob
 import json
 import nibabel as nib
 
-def plot_fids_qa(subjid=None, bids_root=None, outfile=None):
+def plot_fids_qa(subjid=None, bids_root=None, outfile=None, block=False):
     '''
     Plot triaxial images of the fiducial locations and save out image
 
@@ -60,17 +60,29 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None):
     mri_pos = {'LPA':lpa, 'NAS': nas , 'RPA': rpa}
     
     # Plot it
-    fig, axs = plt.subplots(3, 1, figsize=(7, 7), facecolor="k")
-    for point_idx, label in enumerate(("LPA", "NAS", "RPA")):
-        plot_anat(
-            str(t1w_bids_path),
-            axes=axs[point_idx],
-            cut_coords=mri_pos[label],#, :],
-            title=label,
-            vmax=160,
-            output_file = outfile
-        )
-    plt.show()
+    if block==False:
+        fig, axs = plt.subplots(3, 1, figsize=(7, 7), facecolor="k")
+        for point_idx, label in enumerate(("LPA", "NAS", "RPA")):
+            plot_anat(
+                str(t1w_bids_path),
+                axes=axs[point_idx],
+                cut_coords=mri_pos[label],#, :],
+                title=label,
+                vmax=160,
+                output_file = outfile
+            )
+        plt.show()
+    else:
+        fig, axs = plt.subplots(3, 1, figsize=(7, 7), facecolor="k")
+        for point_idx, label in enumerate(("LPA", "NAS", "RPA")):
+            plot_anat(
+                str(t1w_bids_path),
+                axes=axs[point_idx],
+                cut_coords=mri_pos[label],#, :],
+                title=label,
+                vmax=160,
+            )
+        plt.show(block=True)
 
 def main():
     import argparse
