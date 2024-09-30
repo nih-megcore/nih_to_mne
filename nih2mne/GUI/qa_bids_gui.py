@@ -33,6 +33,7 @@ from scipy.stats import zscore, trim_mean
 import pandas as pd
 import pyctf
 import mne_bids
+from nih2mne.megcore_prep_mri_bids import mripreproc
 
 CFG_VERSION = 1.0
 
@@ -495,9 +496,7 @@ class qa_megraw_object:
         chan_picks = [i for i in self.raw.ch_names if i[0]=='M']
         self._chan_picks = [i for i in chan_picks if len(i)==5]  #Some datasets have extra odd chans
         self._megall_picks = self._ref_picks+self._chan_picks
-    
         
-            
     def _calc_bad_segments(self):
         'Template for calculation'
     
@@ -588,15 +587,22 @@ class meglist_class:
         self.meg_list = tmp
         self.meg_emptyroom = [i for i in self.meg_list if i.is_emptyroom]
     
-    def _print_meg_list_idxs(self):
+    def _pick_meg_from_list(self, choice_quote='Choice:\n', add_allchoice=False):
         for idx, dset in enumerate(self.meg_list):
             print(f'{idx}: {dset.fname}')
+        if add_allchoice==True:
+            print(f'{idx+1}: Choose all datasets')
+        if choice_quote.replace(' ','').endswith('\n'):
+            choice_quote+='\n'
+        dset_idx = int(input(choice_quote))
+        if str(dset_idx) == str(idx+1):
+            return 'all'
+        else:
+            return self.meg_list[dset_idx]
     
     def plot_meg(self):
-        self._print_meg_list_idxs()
-        dset_idx = input('Enter the number associated with the MEG dataset to plot: \n')
-        dset_idx = int(dset_idx)
-        self.meg_list[dset_idx].raw.plot()    
+        dset = self._pick_meg_from_list('Enter the number associated with the MEG dataset to plot: ')
+        dset.raw.plot()    
     
     @property
     def meg_count(self):
@@ -650,7 +656,8 @@ class qa_mri_class:
 
 class subject_bids_info(qa_mri_class, meglist_class):
     '''Subject Status Mixin of MRI and MEG classes'''
-    def __init__(self, subject, bids_root=None, subjects_dir=None):
+    def __init__(self, subject, bids_root=None, subjects_dir=None, 
+                 deriv_project=None):
         if subject[0:4]=='sub-':
             self.subject = subject
             self.bids_id = subject[4:]
@@ -661,6 +668,11 @@ class subject_bids_info(qa_mri_class, meglist_class):
             self.bids_root=os.getcwd()
         else:
             self.bids_root = bids_root
+        if deriv_project == None:
+            self.deriv_project = 'nihmeg'
+        else:
+            self.deriv_project = deriv_project
+        self.deriv_root = op.join(self.bids_root, 'derivatives', self.deriv_project)
         
         if not op.exists(op.join(bids_root, self.subject)):
             raise ValueError(f'Subject {self.subject} does not exist in {bids_root}')
@@ -678,6 +690,7 @@ class subject_bids_info(qa_mri_class, meglist_class):
         
         # Freesurfer Component
         self.fs_recon = check_fs_recon(self.subject, self.subjects_dir)
+        
     
     def plot_mri_fids(self):
         ''' Open a triaxial image of the fiducial locations'''
@@ -688,17 +701,15 @@ class subject_bids_info(qa_mri_class, meglist_class):
         # tmp_ = input('Hit any button to close')
     
     def plot_3D_coreg(self):
-        self._print_meg_list_idxs()
-        dset_idx = input('Enter the number associated with the MEG dataset to plot coreg: \n')
-        dset_idx = int(dset_idx)
-        bids_path = mne_bids.get_bids_path_from_fname(self.meg_list[dset_idx].fname)
+        dset = self._pick_meg_from_list(choice_quote='Enter the number associated with the MEG dataset to plot coreg: \n')
+        bids_path = mne_bids.get_bids_path_from_fname(dset.fname)
         t1_bids_path = mne_bids.get_bids_path_from_fname(self.mri)
         trans = mne_bids.get_head_mri_trans(bids_path, t1_bids_path=t1_bids_path, 
                                             extra_params=dict(system_clock='ignore'),
                                             fs_subject=self.subject, fs_subjects_dir=self.subjects_dir)
-        mne.viz.plot_alignment(self.meg_list[dset_idx].raw.info, 
+        mne.viz.plot_alignment(dset.raw.info, 
                                trans=trans,subject=self.subject, 
-                               subjects_dir = self.subjects_dir)
+                               subjects_dir = self.subjects_dir, dig=True)
         
     @property
     def info(self):
@@ -721,7 +732,60 @@ class subject_bids_info(qa_mri_class, meglist_class):
                 logfile = op.join(self.subjects_dir, self.subject, 'scripts', 'recon-all.log')
                 tmp += f'Freesurfer: ERROR : Check log {logfile}'
         return tmp
+    
+    def mri_preproc(self, surf=True, fname=None):
+        '''
+        Perform mri preprocessing  (bem / src / trans / fwd models)
+        If an fname is provided, this dataset will be run, otherwise a menu
+        with the different runs will be provided to choose.
         
+        fname can be "all" to loop over all meg datasets, ignoring emptyroom
+
+        Parameters
+        ----------
+        surf : BOOL, optional
+            Surface (True) or Volumetric (False). The default is True.
+        fname : str, optional
+            Path to meg dataset. The default is None.
+
+        Raises
+        ------
+        ValueError
+            If no freesurfer, this will raise an error.
+
+        Returns
+        -------
+        qa_megraw_object or "all"
+
+        '''
+        
+        if self.fs_recon['fs_started'] != True:
+            raise ValueError('Freesurfer processing of the data has not been performed')
+        if (self.fs_recon['fs_success'] != True) and (surf==True):
+            raise ValueError('Freesurfer did not complete successfully')
+        if fname == None:
+            dset = self._pick_meg_from_list(choice_quote='Pick an index to process the MEG src/fwd/trans/bem: \n',
+                                            add_allchoice=True)
+        else:
+            dset = fname
+
+        if dset == 'all':
+            dsets = self.meg_list
+        else:
+            dsets = [dset]
+        del dset
+        
+        for dset in dsets:
+            if dset.is_emptyroom:
+                continue
+            bids_path_meg = mne_bids.get_bids_path_from_fname(dset.fname)
+            deriv_path =  bids_path_meg.copy().update(root=self.deriv_root, check=False)
+            deriv_path.directory.mkdir(parents=True, exist_ok=True)
+            mripreproc(bids_path=bids_path_meg,
+                       t1_bids_path= mne_bids.get_bids_path_from_fname(self.mri),
+                       deriv_path = deriv_path, 
+                       surf=surf, subjects_dir=self.subjects_dir)
+                   
     def __repr__(self):
         return self.info
     
@@ -778,6 +842,13 @@ def test_subject_bids_info():
     val_counts = airpuff.event_counts
     assert val_counts['stim']==103
     assert val_counts['missingstim']==17
+    
+def test_jumps():
+    tmp = np.zeros([2, 1000])
+    tmp[1,500:]=1.2* jump_thresh**0.5
+    info = mne.create_info(['M1','M2'], 1000, ch_types='grad')
+    raw_test = mne.io.RawArray(tmp, info)
+    assert meg
         
     
 test = subject_bids_info('sub-ON02811', bids_root=os.getcwd())
@@ -799,8 +870,7 @@ for i in glob.glob('sub-*'):
     except:
         fail.append(i)
 
-# power_stack = {}
-# psd_stack = {}
+######  Assess Power Spectral Density and BroadBand Power   #######
 psd_dframe_list = []
 pow_dframe_list = []
 fail = []
@@ -831,6 +901,21 @@ for i in glob.glob('QA_objs/*bidsqa.pkl'):
 psd_dframe = pd.concat                
 power_dframe = pd.concat(pow_dframe_list)
 power_dframe.to_csv('/home/jstout/src/nih_to_mne/nih2mne/dataQA/power_hv_092424.csv', index=False)
+
+#
+power_dframe_fname = op.join(nih2mne.__path__[0], 'dataQA', 'power_hv_092424.csv')
+power_dframe = pd.read_csv(power_dframe_fname)
+keep_cols = [i for i in power_dframe.columns if (i[0]=='M') and (len(i)==5)]
+keep_cols.extend(['subject']) #,'task'])
+
+power_dframe = power_dframe[keep_cols]
+subj_vals = np.nanmedian(power_dframe.groupby('subject').mean().values, axis=-1)  #.mean(axis=-1)
+subj_vals_z = zscore(subj_vals)
+
+
+subj_vals_z[subj_vals_z > 2]
+
+
 
 def make_bids_subject_layout(row_num=6, col_num=4, subject_list=None, opts=None):
     '''Generate a Grid of datasets'''  
