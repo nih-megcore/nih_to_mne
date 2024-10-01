@@ -721,7 +721,7 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         from nih2mne.utilities.qa_fids import plot_fids_qa
         plot_fids_qa(subjid=self.subject,
                      bids_root=self.bids_root, 
-                     outfile=None, block=True)
+                     outfile=None, block=True, mri_override=[self.mri])
         # tmp_ = input('Hit any button to close')
     
     def plot_3D_coreg(self):

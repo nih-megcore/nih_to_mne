@@ -12,7 +12,8 @@ import glob
 import json
 import nibabel as nib
 
-def plot_fids_qa(subjid=None, bids_root=None, outfile=None, block=False):
+def plot_fids_qa(subjid=None, bids_root=None, outfile=None, block=False, 
+                 mri_override=None):
     '''
     Plot triaxial images of the fiducial locations and save out image
 
@@ -34,7 +35,10 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None, block=False):
         subjid='sub-'+subjid
     if outfile == None:
         outfile = op.join(os.getcwd(), f'{subjid}_fids_qa.png')
-    tmp = glob.glob(op.join(bids_root, subjid, '**/*T1w.nii.gz'), recursive=True)
+    if mri_override != None:
+        tmp = mri_override
+    else:
+        tmp = glob.glob(op.join(bids_root, subjid, '**/*T1w.nii.gz'), recursive=True)
     if len(tmp) == 0:
         tmp = glob.glob(op.join(bids_root, subjid, '**/*T1w.nii'), recursive=True)
         if len(tmp) == 0:
