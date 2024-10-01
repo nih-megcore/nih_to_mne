@@ -29,6 +29,8 @@ import glob
 import subprocess
 import mne
 import numpy as np
+import pickle
+import dill
 from scipy.stats import zscore, trim_mean
 import pandas as pd
 import pyctf
@@ -569,6 +571,8 @@ class qa_megraw_object:
 
     @property    
     def event_counts(self):
+        if not hasattr(self, 'raw'):
+            self.load()
         return pd.DataFrame(self.raw.annotations).description.value_counts()
 
     def __repr__(self):
@@ -602,6 +606,7 @@ class meglist_class:
     
     def plot_meg(self):
         dset = self._pick_meg_from_list('Enter the number associated with the MEG dataset to plot: ')
+        dset.load()
         dset.raw.plot()    
     
     @property
@@ -621,10 +626,7 @@ class qa_mri_class:
             self.mri_json_qa = 'No MRIs'
         elif len(self.all_mris)==1:
             self.mri = self.all_mris[0]
-            if self.mri.endswith('.nii'):
-                self.mri_json = self.mri.replace('.nii','.json')
-            else:
-                self.mri_json = self.mri.replace('.nii.gz','.json')
+            self.mri_json = self._get_matching_mr_json()
         else:
             self.mri = 'Multiple'
             self.mri_json_qa = 'Undetermined - Multiple MRIs'
@@ -632,6 +634,23 @@ class qa_mri_class:
         if (self.mri != 'Multiple') and (self.mri != None):
             self._valid_fids()
             
+    def mri_selection_override(self):
+        for idx, fname in enumerate(self.all_mris):
+            print(f'{idx}: {fname}')
+        fname_idx = int(input('Choose an MRI to use in processing:\n'))
+        self.mri = self.all_mris[fname_idx]
+        self.mri_json = self._get_matching_mr_json()
+        assert len(self.mri_json)>3
+        self._valid_fids()
+        print('Updated MRI')
+    
+    def _get_matching_mr_json(self):
+        if self.mri.endswith('.nii'):
+            self.mri_json = self.mri.replace('.nii','.json')
+        else:
+            self.mri_json = self.mri.replace('.nii.gz','.json')
+        return self.mri_json
+        
         
     def _sort_T1(self):
         pass
@@ -654,7 +673,7 @@ class qa_mri_class:
             self.mri_json_qa = 'BAD'
         
 
-class subject_bids_info(qa_mri_class, meglist_class):
+class _subject_bids_info(qa_mri_class, meglist_class):
     '''Subject Status Mixin of MRI and MEG classes'''
     def __init__(self, subject, bids_root=None, subjects_dir=None, 
                  deriv_project=None):
@@ -674,6 +693,10 @@ class subject_bids_info(qa_mri_class, meglist_class):
             self.deriv_project = deriv_project
         self.deriv_root = op.join(self.bids_root, 'derivatives', self.deriv_project)
         
+        # Save variables
+        self.qa_output_dir = op.join(self.bids_root, 'derivatives', 'megQA')
+        self.qa_default_fname = op.join(self.qa_output_dir, self.subject + '.pkl')
+        
         if not op.exists(op.join(bids_root, self.subject)):
             raise ValueError(f'Subject {self.subject} does not exist in {bids_root}')
         
@@ -690,6 +713,7 @@ class subject_bids_info(qa_mri_class, meglist_class):
         
         # Freesurfer Component
         self.fs_recon = check_fs_recon(self.subject, self.subjects_dir)
+        
         
     
     def plot_mri_fids(self):
@@ -790,22 +814,31 @@ class subject_bids_info(qa_mri_class, meglist_class):
         return self.info
     
     def save(self, fname=None, overwrite=False):
-        import pickle
+        if not op.exists(self.qa_output_dir): os.makedirs(self.qa_output_dir)
         if fname == None:
-            raise ValueError('fname must be set during save')
+            fname = self.qa_default_fname
         
         #Remove fully loaded meg before saving
         for meg_dset in self.meg_list:
             if hasattr(meg_dset, 'raw'):
                 del meg_dset.raw
         
-        if op.exists(fname) and overwrite==False:
-            raise ValueError(f'The fname already exists: {fname}')
-        else:
+        fname_exists = op.exists(fname)
+        if fname_exists and overwrite==False:
+            overwrite = input(f'{fname} exists. \n Do you want to write over (y/n): \n')
+            if overwrite[0].lower()=='y':
+                overwrite==True
+            else:
+                return
+            
+        if (fname_exists==False) or (overwrite==True):
             with open(fname, 'wb') as f:
-                pickle.dump(self, f)
+                dill.dump(self, f)
+    
+        
+        
 
-class subject_tile(subject_bids_info):
+class subject_tile(_subject_bids_info):
     '''Attach GUI tile properties to bids information'''
     def __init__(self, subject=None, bids_root=None, subjects_dir=None):
         subject_bids_info.__init__(self, subject=subject, bids_root=bids_root, 
@@ -825,7 +858,54 @@ class subject_tile(subject_bids_info):
         
     # def set_type(self, qa_type):
     #     self.qa_type = qa_type
+
+
+def subject_bids_info( subject=None, bids_root=None, subjects_dir=None, 
+                              deriv_project=None, force_update=False):
+    '''
+    Main entrypoint for subject bids infor (Factory method) to initialize 
+    subject_bids_info class. This is necessary to be able to preload 
+    saved projects
+
+    Parameters
+    ----------
+    subject : str, required
+        Subject ID. The default is None.
+    bids_root : str, optional
+        Path. The default is None.
+    subjects_dir : str, optional
+        Override Freesurfer subjects dir. The default is None.
+    deriv_project : str, optional
+        Project output in derivatives folder. The default is None.
+    force_update : TYPE, optional
+        DESCRIPTION. The default is False.
+
+    Returns
+    -------
+    QA object
+        QA object for BIDS.
+
+    '''
+    if subject[0:4]=='sub-':
+        subject = subject
+        bids_id = subject[4:]
+    else:
+        subject = 'sub-'+subject
+        bids_id = subject
+    qa_default_fname = op.join(bids_root, 'derivatives', 'megQA', subject+'.pkl')
+    if op.exists(qa_default_fname) and (force_update==False):
+        with open(qa_default_fname, 'rb') as f:
+            bids_info = dill.load(f)
+        return bids_info
+    else:
+        return _subject_bids_info(subject=subject, bids_root=bids_root, 
+                          subjects_dir=subjects_dir,
+                          deriv_project=deriv_project)
         
+
+        
+
+
     
 #%% 
 
@@ -834,14 +914,26 @@ def test_subject_bids_info():
     bids_root = op.join(nih2mne.__path__[0], 'test_data','BIDS_test')
     test = subject_bids_info('sub-S01', bids_root=bids_root)
     assert test.meg_count == 2
+    
+    #MRI component
     tmp_ = test.mri
     tmp_ = tmp_.split('test_data')[-1]
+    #Relative path testing 
     assert tmp_ == '/BIDS_test/sub-S01/ses-1/anat/sub-S01_ses-1_T1w.nii.gz'
+    assert test.mri_json_qa == 'GOOD'
     
     airpuff = test.meg_list[0]
     val_counts = airpuff.event_counts
     assert val_counts['stim']==103
     assert val_counts['missingstim']==17
+    
+    if op.exists(test.qa_default_fname):
+        os.remove(test.qa_default_fname)
+    
+    test.save()
+    assert op.exists(test.qa_default_fname)
+        
+    
     
 def test_jumps():
     tmp = np.zeros([2, 1000])
@@ -849,11 +941,17 @@ def test_jumps():
     info = mne.create_info(['M1','M2'], 1000, ch_types='grad')
     raw_test = mne.io.RawArray(tmp, info)
     assert meg
+
+def test_file_save_load():
+    if op.exists(
         
     
 test = subject_bids_info('sub-ON02811', bids_root=os.getcwd())
-test = subject_bids_info('sub-ON69163', bids_root=os.getcwd())
+test = subject_bids_info('sub-ON69163', bids_root=os.getcwd(), force_update=True)
 test.save(op.join('QA_objs', 'sub-ON69163.pkl'), overwrite=True)
+
+test2 = subject_bids_info('sub-ON69163', bids_root=os.getcwd())
+
 
 test = subject_tile(subject='sub-ON11394', bids_root=os.getcwd())
         
