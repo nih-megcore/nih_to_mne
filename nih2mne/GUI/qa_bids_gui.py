@@ -393,26 +393,6 @@ subject_bids_info  - MIXIN
 subject_tile  
 
 '''
-
-# bidsroot_template = 'bidsroot'
-# projectroot_template = 'projectroot'
-
-
-# # Data checks 
-# data_checks = {
-#     'MEGraw':{'key':
-#               '*.ds'
-#               },
-#     'MRIraw':{'key':
-#               ['*.nii.gz', '*.nii']
-#               },
-#     'MRIfree':{'key':
-#                    ['surf/lh.pial', 'surf/rh.pial'],
-#                'logkey':[]
-#                    },
-#     'Coreg':[   ], 
-#     'MRIprep':[  ],
-#     }
     
 def check_fs_recon(subjid, subjects_dir):
     '''
@@ -827,13 +807,14 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         if fname_exists and overwrite==False:
             overwrite = input(f'{fname} exists. \n Do you want to write over (y/n): \n')
             if overwrite[0].lower()=='y':
-                overwrite==True
+                overwrite=True
             else:
                 return
             
         if (fname_exists==False) or (overwrite==True):
             with open(fname, 'wb') as f:
                 dill.dump(self, f)
+            print(f'Overwrote: {fname}')
     
         
         
