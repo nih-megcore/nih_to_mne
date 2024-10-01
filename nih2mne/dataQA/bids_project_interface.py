@@ -114,7 +114,7 @@ def run_sbatch(cmd=None, mem=None, threads=None, time="02:00:00", sbatch_dep=Non
 
     '''
     script = f'#! /bin/bash\n {cmd}\n'
-    submission = subprocess.run(["sbatch", "--mem={mem}g", f"--time={time}", f"--cpus-per-task={threads}"],
+    submission = subprocess.run(["sbatch", f"--mem={mem}g", f"--time={time}", f"--cpus-per-task={threads}"],
                                 input=script,
                                 capture_output=True,
                                 text=True,
