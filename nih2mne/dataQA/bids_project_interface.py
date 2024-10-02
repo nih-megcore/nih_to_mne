@@ -388,6 +388,9 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         # Freesurfer Component
         self.fs_recon = check_fs_recon(self.subject, self.subjects_dir)
         
+    def _reload_info(self):
+        self.fs_recon = check_fs_recon(self.subject, self.subjects_dir)
+        
     def proc_freesurfer(self): 
         cmd = f"export SUBJECTS_DIR={self.subjects_dir}; recon-all -all -i {self.mri} -s {self.subject}" 
         os.makedirs(self.subjects_dir, exist_ok=True)
@@ -573,6 +576,8 @@ def subject_bids_info( subject=None, bids_root=None, subjects_dir=None,
     if op.exists(qa_default_fname) and (force_update==False):
         with open(qa_default_fname, 'rb') as f:
             bids_info = dill.load(f)
+            
+        bids_info._reload_info()
         return bids_info
     else:
         return _subject_bids_info(subject=subject, bids_root=bids_root, 
