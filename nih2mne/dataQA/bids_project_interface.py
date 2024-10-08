@@ -32,6 +32,7 @@ import pandas as pd
 import pyctf
 import mne_bids
 from nih2mne.megcore_prep_mri_bids import mripreproc
+import munch
 
 CFG_VERSION = 1.0
 
@@ -583,5 +584,24 @@ def subject_bids_info( subject=None, bids_root=None, subjects_dir=None,
         return _subject_bids_info(subject=subject, bids_root=bids_root, 
                           subjects_dir=subjects_dir,
                           deriv_project=deriv_project)
+
+    
+
+class bids_project():
+    def __init__(self, bids_root=None):
+        _subjects = glob.glob('sub-*', root_dir=bids_root)
+        self.subjects = munch.Munch()
+        self.error_subjects= []
+        for subject in _subjects:
+            try:
+                self.subjects[subject.replace('sub-','')] = subject_bids_info( subject=subject, bids_root=bids_root)
+            except:
+                self.error_subjects.append(subject)
+                
+                
+#bids_pro = bids_project(bids_root = '/fast2/BIDS')            
+        
+        
+        
         
 
