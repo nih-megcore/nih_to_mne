@@ -48,45 +48,6 @@ subject_bids_info  - Factory method to load saved or generate from new
 subject_tile  
 '''
     
-def check_fs_recon(subjid, subjects_dir):
-    '''
-    Returns status of freesurfer reconstruction
-
-    Parameters
-    ----------
-    subjid : str
-        Subject ID
-    subjects_dir : str
-        Freesurfer subjects dir
-
-    Returns
-    -------
-    out_dict: dict
-        
-
-    '''
-    logfile = op.join(subjects_dir, subjid, 'scripts', 'recon-all.log')
-    if not op.exists(logfile):
-        finished = False
-        started = False
-        fs_success_line=[]
-    else:
-        started = True
-        with open(logfile) as f:
-            fs_success_line = f.readlines()[-1]
-    if 'finished without error' in fs_success_line:
-        finished = True
-    else:
-        finished = False
-    has_lhpial = os.path.exists(op.join(subjects_dir, subjid, 'surf', 'lh.pial'))
-    has_rhpial = os.path.exists(op.join(subjects_dir, subjid, 'surf', 'rh.pial'))
-    out_dict = dict(fs_success = finished,
-                    fs_started = started,
-                lhpial = has_lhpial, 
-                rhpial = has_rhpial)
-                
-    return out_dict
-
 
 
 
@@ -346,6 +307,44 @@ class qa_mri_class:
             self.mri_json_qa = 'GOOD'
         else:
             self.mri_json_qa = 'BAD'
+
+    def check_fs_recon(self):
+        '''
+        Returns status of freesurfer reconstruction
+    
+        Parameters
+        ----------
+        subjid : str
+            Subject ID
+        subjects_dir : str
+            Freesurfer subjects dir
+    
+        Returns
+        -------
+        out_dict: dict
+            
+    
+        '''
+        logfile = op.join(self.subjects_dir, self.subject, 'scripts', 'recon-all.log')
+        if not op.exists(logfile):
+            finished = False
+            started = False
+            fs_success_line=[]
+        else:
+            started = True
+            with open(logfile) as f:
+                fs_success_line = f.readlines()[-1]
+        if 'finished without error' in fs_success_line:
+            finished = True
+        else:
+            finished = False
+        has_lhpial = os.path.exists(op.join(self.subjects_dir, self.subject, 'surf', 'lh.pial'))
+        has_rhpial = os.path.exists(op.join(self.subjects_dir, self.subject, 'surf', 'rh.pial'))
+        out_dict = dict(fs_success = finished,
+                        fs_started = started,
+                    lhpial = has_lhpial, 
+                    rhpial = has_rhpial)
+        return out_dict
         
 
 class _subject_bids_info(qa_mri_class, meglist_class):
@@ -387,10 +386,10 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         qa_mri_class.__init__(self, subject=self.subject, bids_root=self.bids_root)
         
         # Freesurfer Component
-        self.fs_recon = check_fs_recon(self.subject, self.subjects_dir)
+        self.fs_recon = self.check_fs_recon()
         
     def _reload_info(self):
-        self.fs_recon = check_fs_recon(self.subject, self.subjects_dir)
+        self.fs_recon = self.check_fs_recon()
         
     def proc_freesurfer(self): 
         cmd = f"export SUBJECTS_DIR={self.subjects_dir}; recon-all -all -i {self.mri} -s {self.subject}" 
@@ -523,27 +522,6 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         
         
 
-class subject_tile(_subject_bids_info):
-    '''Attach GUI tile properties to bids information'''
-    def __init__(self, subject=None, bids_root=None, subjects_dir=None):
-        subject_bids_info.__init__(self, subject=subject, bids_root=bids_root, 
-                                   subjects_dir=subjects_dir)
-    
-    def button_set_status(self):
-        '''Set up toggle for Unchecked/GOOD/BAD'''
-        if self.status=='Unchecked':
-            self.status = 'GOOD'
-        elif self.status=='GOOD':
-            self.status = 'BAD'
-        elif self.status=='BAD':
-            self.status = 'Unchecked'
-    
-    def set_status(self, status):
-        self.status=status
-        
-    # def set_type(self, qa_type):
-    #     self.qa_type = qa_type
-
 
 def subject_bids_info( subject=None, bids_root=None, subjects_dir=None, 
                               deriv_project=None, force_update=False):
@@ -581,25 +559,123 @@ def subject_bids_info( subject=None, bids_root=None, subjects_dir=None,
         bids_info._reload_info()
         return bids_info
     else:
-        return _subject_bids_info(subject=subject, bids_root=bids_root, 
+        tmp_ = _subject_bids_info(subject=subject, bids_root=bids_root, 
                           subjects_dir=subjects_dir,
                           deriv_project=deriv_project)
+        tmp_.save(overwrite=True)
+        return tmp_
 
+class _bids_subject_list():
+    def __init__(self, subject_list, bids_root):
+        for subject in subject_list:
+            self.subjects={}
+            self.subjects[subject]= subject_bids_info( subject=subject, bids_root=bids_root)
     
-
+    def __repr__(self):
+        return [i.subject for i in self.subjects]
+            
+class dotdict(dict):
+    """dot.notation access to dictionary attributes"""
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+        
+from collections import OrderedDict
+#%%    
+#For initializing and maintaining a larger project
+# This will loop over all subjects and save out the pkl file.
+# TODO: 
+    # Make dot accessible subject with object attributes - Munch does not allow that
 class bids_project():
-    def __init__(self, bids_root=None):
+    def __init__(self, bids_root=None, project_root=None, force_update=False):
         _subjects = glob.glob('sub-*', root_dir=bids_root)
-        self.subjects = munch.Munch()
+        self.subjects = OrderedDict()  
         self.error_subjects= []
+        self.bids_root = bids_root
+        if project_root == None:
+            self.project_root = op.join(self.bids_root, 'derivatives', 'nihmeg')
         for subject in _subjects:
             try:
-                self.subjects[subject.replace('sub-','')] = subject_bids_info( subject=subject, bids_root=bids_root)
+                tmp_ = subject_bids_info( subject=subject, bids_root=bids_root, 
+                                         force_update=force_update)
+                self.subjects[subject] = tmp_
+                if not op.exists(tmp_.qa_default_fname): tmp_.save()
             except:
                 self.error_subjects.append(subject)
+        
+        self._fs_status()
+        self.compile_issues()
+    
+    def __repr__(self):
+        txt = f'BIDS root: {self.bids_root}\n'
+        txt += f'Project root: {self.project_root}\n'
+        txt += f'There are {len(self.subjects)} subjects in BIDS folder {op.basename(self.bids_root)}\n'
+        if len(self.error_subjects) > 0:
+            txt += f'!! There were {len(self.error_subjects)} subject errors during reading !!\n'
+        #Freesurfer
+        s_1, f_1, ns_1 = len(self.fs_recon['success']), len(self.fs_recon['failed']), len(self.fs_recon['notStarted'])
+        txt += f'Freesurfer:: (Success {s_1}) / (Failed {f_1}) / (NotStarted {ns_1})\n' 
+        
+        # MRIs
+        txt += '\n########## ISSUES ##########\n'
+        txt += f'MRI: {len(self.issues["MRI"])} \n'
+        txt += f'MRI FIDS: {len(self.issues["MRI_FIDS"])} \n'
+        txt += f'Freesurfer: {f_1+ns_1}'
+
+        return txt
+    
+    def compile_issues(self):
+        self.issues = OrderedDict()
+        self.issues['MRI'] = [i.subject for i in self.subjects.values() if i.mri in ['Multiple',None]]
+        self.issues['MRI_FIDS'] = [i.subject for i in self.subjects.values() if i.mri_json_qa == 'GOOD']
+        
+        self.issues['Freesurfer_failed'] = self.fs_recon['failed']
+        self.issues['Freesurfer_notStarted'] = self.fs_recon['notStarted']
+        # self.issues['Bad_Subjects'] = 
+        
+    def run_anat_pipeline(self):
+        return None
+        
+    
+    
+    def _fs_status(self):
+        self.fs_recon = {}
+        self.fs_recon['success'] = []
+        self.fs_recon['failed'] = []
+        self.fs_recon['notStarted'] = []
+        for subj_id in self.subjects.keys():
+            bidsi = self.subjects[subj_id]
+            if bidsi.fs_recon['fs_started']==False:
+                self.fs_recon['notStarted'].append(bidsi.subject)
+                continue
+            if bidsi.fs_recon['fs_success']==True:
+                self.fs_recon['success'].append(bidsi.subject)
+            else:
+                self.fs_recon['failed'].append(bidsi.subject)
+    
+    # def prep_freesurfer(self):
+    #     for i in self.subjects:
+            
+            
+        
+            
+    
+    # # def _get_missing(self):
+    # #     dframe_missing = 
+        
+    
+    # def _check(self):
+    #     return None
+    
+    # def _return_issue(self):
+    #     return None
+        
+    
                 
                 
-#bids_pro = bids_project(bids_root = '/fast2/BIDS')            
+# bids_pro = bids_project(bids_root = '/fast2/BIDS')     
+# bids_pro.compile_issues()  
+# bids_pro.issues     
         
         
         
