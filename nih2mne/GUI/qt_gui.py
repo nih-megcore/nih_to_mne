@@ -97,9 +97,27 @@ class Subject_GUI(QWidget):
         self.bids_info = bids_info
         
         main_layout = QVBoxLayout()
-        main_layout.addWidget(QPushButton('Test'))
+        main_layout.addWidget(QPushButton('Save'))
         main_layout.addWidget(QLabel(bids_info.__repr__()))
+        
+        self.b_plot_fids = QPushButton('Plot FIDS')
+        self.b_plot_fids.clicked.connect(self.plot_fids)
+        main_layout.addWidget(self.b_plot_fids)
+        
+        self.b_plot_3Dcoreg = QPushButton('Plot 3D Coreg')
+        self.b_plot_3Dcoreg.clicked.connect(self.plot_3d_coreg)
+        main_layout.addWidget(self.b_plot_3Dcoreg)
         self.setLayout(main_layout)
+        
+    def plot_fids(self):
+        self.bids_info.plot_mri_fids()
+    
+    def plot_3d_coreg(self):
+        self.bids_info.plot_3D_coreg()
+        
+    def save(self):
+        self.bids_info.save(overwrite=True)
+        
         
                               
         
