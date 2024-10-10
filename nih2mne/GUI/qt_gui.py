@@ -59,9 +59,9 @@ class Subject_Tile(QWidget):
     
     def clicked(self):
         '''This will eventually open the subject QA'''
-        self.subj_button.setText('you pressed the button')
+        self.subj_button.setText('X_'+self.bids_info.subject+'_X')
         self.subj_button.adjustSize()
-        self.w = Subject_GUI()
+        self.w = Subject_GUI(bids_info = self.bids_info)
         self.w.show()
                 
         
@@ -92,10 +92,13 @@ class Subject_Tile(QWidget):
         
 class Subject_GUI(QWidget):        
     '''All the subject level QA at a finer detail'''
-    def __init__(self):
+    def __init__(self, bids_info):
         super(Subject_GUI, self).__init__()
+        self.bids_info = bids_info
+        
         main_layout = QVBoxLayout()
         main_layout.addWidget(QPushButton('Test'))
+        main_layout.addWidget(QLabel(bids_info.__repr__()))
         self.setLayout(main_layout)
         
                               
