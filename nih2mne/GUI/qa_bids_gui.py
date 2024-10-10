@@ -36,6 +36,7 @@ import pandas as pd
 import pyctf
 import mne_bids
 from nih2mne.megcore_prep_mri_bids import mripreproc
+from nih2mne.dataQA.bids_project_interface import bids_project, subject_bids_info
 
 CFG_VERSION = 1.0
 
@@ -585,16 +586,139 @@ def qa_subject_selector(config_fname=False):
 # test= tmp.meg_list[0]
 # test.load()
 
-tmp2 = subject_tile(subject='ON08710', bids_root='/fast2/BIDS')
-tmp2 = subject_bids_info(subject='ON08710', bids_root='/fast2/BIDS')
+# tmp2 = subject_tile(subject='ON08710', bids_root='/fast2/BIDS')
+# tmp2 = subject_bids_info(subject='ON08710', bids_root='/fast2/BIDS')
 # tmp = qa_mri_class(subject='sub-ON08710', bids_root='/fast2/BIDS') 
 
 
 
+#%%
+class subject_tile():
+    '''Attach GUI tile properties to bids information'''
+    def __init__(self, bids_info=None):
+        self.bids_info = bids_info
+        
+        self.meg_count = self.bids_info.meg_count
+        self.meg_color = self.get_meg_color()
+        self.mri_color = self.get_mri_color()
+        self.fs_color = self.get_fs_color()
+        # self.evts_color = get_fs_color()
+        
+        self.layout = [
+            [sg.Button(self.bids_info.subject)],
+            [sg.Text(f'Meg {self.meg_count}', background_color=self.get_meg_color()),
+                 # sg.Text('EV', background_color = self.get_evts_color()),
+                 sg.Text('MR', background_color = self.get_mri_color()),
+                 sg.Text('FS', background_color=self.get_fs_color()), 
+             ]
+            ]
+        
+    def get_fs_color(self):
+        if self.bids_info.fs_recon['fs_success']:
+            return 'green'
+        else:
+            return 'red'
+    
+    def get_mri_color(self):
+        if self.bids_info.mri=='Multiple':
+            return 'red'
+        elif self.bids_info.mri==None:
+            return 'red'
+        
+        if self.bids_info.mri_json_qa == 'GOOD':
+            return 'green'
+        else:
+            return 'red'
+    
+    def get_meg_color(self):
+        '-- current template -- use jumps / bad channels to assess'
+        'self.bids_info.meg.....'
+        return 'green'
+        
+
+num_row = 4
+num_col = 5
+entry_num = num_row*num_col
+layout =  [[None]*num_col for i in range(num_row)] #np.array([[None]*4]*4) #np.array([num_row, num_col])
+idx_mat = np.arange(entry_num).reshape(num_row,num_col)
+# for i in range(num_row):
+#     layout[i]=[None]*num_col
+
+bids_pro = bids_project(bids_root='/fast2/BIDS')
+subject_keys = sorted(list(bids_pro.subjects.keys()))
+
+for i in np.arange(entry_num):
+    subject_key = subject_keys[i]
+    z_0, z_1 = np.where(idx_mat==i)
+    idx_row, idx_col = z_0[0], z_1[0] #get rid of sub-indexing for row/col
+    layout[idx_row][idx_col] = subject_tile(bids_pro.subjects[subject_key]).layout
+   
+#%%
+    
+# Make subject popup    
+        
 
 
 
 
+def make_subject_tile(bidsi):
+    layout = [
+        [sg.Button(bidsi.subject)],
+        [sg.Text('FS', background_color='red'), sg.Text('Meg'),sg.Text('MR'),sg.Text('EV')]
+                    ]
+    return sg.Window('POPUP', layout).Finalize()
+
+# window = make_subject_tile(subj)
+
+def subject_qa_POPUP(bids_info, text_item='Select'):
+    
+    layout = [
+        [sg.Text(bids_info.subject)],
+        [sg.Text(f'MEG Scans: {bids_info.meg_count}')],
+        [sg.Text(f'{bids_info}')],                 
+        # [sg.Listbox(data, size=(20,5), key='SELECTED')],
+        [sg.Button('Plot MEG',key='-PLOT_MEG-'), sg.Combo(bids_info.meg_list, key='-MEG_SELECTION-')],
+    ]
+    window = sg.Window('POPUP', layout).Finalize()
+    meg_selection = None
+    while True:
+        event, values = window.read()
+        print(f'Event {event}, values {values}')
+        if event == sg.WINDOW_CLOSED:
+            break
+        elif event == 'OK':
+            break
+        elif event == '-PLOT_MEG-':
+            if values['-MEG_SELECTION-'] == '':
+                pass
+            else:
+                tmp = values['-MEG_SELECTION-']
+                tmp.load()
+                tmp.raw.plot()
+        else:
+            print('OVER')
+    window.close()
+    if values and values['SELECTED']:
+        return values['SELECTED']
+
+bids_info = bids_pro.subjects['sub-ON02747']
+subject_qa_POPUP(bids_info)
+#%%
+
+window = sg.Window('POPUP', layout) #.Finalize()
+# window = sg.Window('test', layout[0])
+
+
+while True:
+    event, values = window.read()
+    if event == sg.WINDOW_CLOSED:
+        break
+    elif event == 'OK':
+        break
+    else:
+        subject_qa_POPUP(bids_pro.subjects[event])
+        print(f'event {event}, value {values} ')
+window.close()
 
 
 
