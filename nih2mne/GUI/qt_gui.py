@@ -13,7 +13,7 @@ launch single subject check from push button
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
-    QHBoxLayout, QPushButton, QLabel
+    QHBoxLayout, QVBoxLayout, QPushButton, QLabel
 
 import sys
 from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project
@@ -47,7 +47,11 @@ class Subject_Tile(QWidget):
                 tag+=f' {self.meg_count}'
             tmp = QLabel(tag)
             layout.addWidget(tmp)
-            tmp = QLabel('    ')
+            if color == 'red':
+                status_txt = '  /  '
+            else:
+                status_txt = '     '
+            tmp = QLabel(status_txt)
             tmp.setAutoFillBackground(True)
             tmp.setStyleSheet(f"background-color: {color}")
             layout.addWidget(tmp)
@@ -57,6 +61,10 @@ class Subject_Tile(QWidget):
         '''This will eventually open the subject QA'''
         self.subj_button.setText('you pressed the button')
         self.subj_button.adjustSize()
+        self.w = Subject_GUI()
+        self.w.show()
+                
+        
     
     def get_fs_status(self):
         if self.bids_info.fs_recon['fs_success']:
@@ -82,8 +90,16 @@ class Subject_Tile(QWidget):
             return 'red'
         
         
-class Subject_GUI():        
+class Subject_GUI(QWidget):        
     '''All the subject level QA at a finer detail'''
+    def __init__(self):
+        super(Subject_GUI, self).__init__()
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(QPushButton('Test'))
+        self.setLayout(main_layout)
+        
+                              
+        
 
 
 
@@ -91,10 +107,10 @@ class Subject_GUI():
 ## create the window 
 
 class BIDS_Project_Window(QMainWindow):
-    def __init__(self, bids_root=os.getcwd(), gridsize_row=4, gridsize_col=6, 
+    def __init__(self, bids_root=os.getcwd(), gridsize_row=10, gridsize_col=6, 
                  bids_project=None):
         super(BIDS_Project_Window, self).__init__()
-        self.setGeometry(100,100, 1080, 800)
+        self.setGeometry(100,100, 250*gridsize_col, 100*gridsize_row)
         self.setWindowTitle(f'BIDS Folder: {bids_root}')
         self.gridsize_row = gridsize_row
         self.gridsize_col = gridsize_col
@@ -110,6 +126,8 @@ class BIDS_Project_Window(QMainWindow):
         row_idxs, col_idxs = np.unravel_index(tile_idxs, [self.gridsize_row, self.gridsize_col])
         i=0
         for row_idx, col_idx in zip(row_idxs, col_idxs):
+            if i+1 > len(self.bids_project.subjects):
+                break
             bids_info = self.bids_project.subjects[subject_keys[i]]
             layout.addWidget(Subject_Tile(bids_info), row_idx, col_idx)
             i+=1
