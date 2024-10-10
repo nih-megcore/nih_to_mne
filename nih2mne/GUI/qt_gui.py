@@ -97,7 +97,9 @@ class Subject_GUI(QWidget):
         self.bids_info = bids_info
         
         main_layout = QVBoxLayout()
-        main_layout.addWidget(QPushButton('Save'))
+        self.b_save = QPushButton('Save')
+        self.b_save.clicked.connect(self.save)
+        main_layout.addWidget(self.b_save)
         main_layout.addWidget(QLabel(bids_info.__repr__()))
         
         self.b_plot_fids = QPushButton('Plot FIDS')
