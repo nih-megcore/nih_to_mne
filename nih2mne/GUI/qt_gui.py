@@ -13,7 +13,7 @@ launch single subject check from push button
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
-    QHBoxLayout, QVBoxLayout, QPushButton, QLabel
+    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox
 
 import sys
 from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project
@@ -89,36 +89,62 @@ class Subject_Tile(QWidget):
         else:
             return 'red'
         
-        
+       
 class Subject_GUI(QWidget):        
     '''All the subject level QA at a finer detail'''
     def __init__(self, bids_info):
         super(Subject_GUI, self).__init__()
         self.bids_info = bids_info
         
+        ## Save button
         main_layout = QVBoxLayout()
         self.b_save = QPushButton('Save')
         self.b_save.clicked.connect(self.save)
         main_layout.addWidget(self.b_save)
         main_layout.addWidget(QLabel(bids_info.__repr__()))
         
+        ## Plotting
+        plot_widget_layout = QHBoxLayout()
         self.b_plot_fids = QPushButton('Plot FIDS')
         self.b_plot_fids.clicked.connect(self.plot_fids)
-        main_layout.addWidget(self.b_plot_fids)
-        
+        plot_widget_layout.addWidget(self.b_plot_fids)
+                
         self.b_plot_3Dcoreg = QPushButton('Plot 3D Coreg')
         self.b_plot_3Dcoreg.clicked.connect(self.plot_3d_coreg)
-        main_layout.addWidget(self.b_plot_3Dcoreg)
+        plot_widget_layout.addWidget(self.b_plot_3Dcoreg)
+                
+        self.b_plot_meg = QPushButton('Plot MEG Data')
+        self.b_plot_meg.clicked.connect(self.plot_meg)
+        plot_widget_layout.addWidget(self.b_plot_meg)
+        main_layout.addLayout(plot_widget_layout)
+        
+        self.b_chooser_meg = QComboBox()
+        self.b_chooser_meg.addItems(self.get_meg_choices())
+        # plot_meg_widget_layout.addWidget(self.b_chooser_meg)        
+        main_layout.addWidget(self.b_chooser_meg)
+        
+        
         self.setLayout(main_layout)
+        
+    def get_meg_choices(self):
+        return [f'{i}: {j.fname}' for i,j in enumerate(self.bids_info.meg_list)]
+        
+    def plot_meg(self):
+        idx = self.b_chooser_meg.currentIndex()
+        self.bids_info.plot_meg(idx=idx)
         
     def plot_fids(self):
         self.bids_info.plot_mri_fids()
     
     def plot_3d_coreg(self):
-        self.bids_info.plot_3D_coreg()
+        idx = self.b_chooser_meg.currentIndex()
+        self.bids_info.plot_3D_coreg(idx=idx)
         
     def save(self):
         self.bids_info.save(overwrite=True)
+    
+    def override_mri(self):
+        pass
         
         
                               
