@@ -15,7 +15,7 @@ import nibabel as nib
 import subprocess
 # from nih2mne import get_njobs
 
-n_jobs=4 
+n_jobs=-1 
 
 desc = '''Preprocess all MRI related processing.  To generate a swarmfile, 
 use the swarmfile specific options (without setting filename).
@@ -148,7 +148,8 @@ def _gen_expanded_src(subject, subjects_dir, dilation_iter=8):
 def mripreproc(bids_path=None,
                t1_bids_path=None, 
                deriv_path=None, 
-               surf=True):
+               surf=True, 
+               subjects_dir=None):
     '''
     Generate the typical MRI inputs for processing MEG and saved to the 
     derivatives folder:
@@ -186,7 +187,8 @@ def mripreproc(bids_path=None,
     
     raw_fname = bids_path.copy().update(suffix='meg')
     raw = mne.io.read_raw_ctf(raw_fname, system_clock='ignore', clean_names=True)
-    subjects_dir = mne_bids.read.get_subjects_dir()
+    if subjects_dir == None:
+        subjects_dir = mne_bids.read.get_subjects_dir()
     fs_subject = 'sub-'+bids_path.subject
     
     if not op.exists(op.join(subjects_dir, 'sub-'+bids_path.subject, 'bem','watershed')):
