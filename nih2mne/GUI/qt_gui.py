@@ -13,11 +13,11 @@ launch single subject check from push button
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
-    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox
+    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit
 
 import sys
 from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project
-import os
+import os, os.path as op
 import numpy as np
 
 
@@ -118,20 +118,41 @@ class Subject_GUI(QWidget):
         plot_widget_layout.addWidget(self.b_plot_meg)
         main_layout.addLayout(plot_widget_layout)
         
+        # MEG chooser and filter parameters
+        meg_display_layout = QHBoxLayout()
         self.b_chooser_meg = QComboBox()
         self.b_chooser_meg.addItems(self.get_meg_choices())
-        # plot_meg_widget_layout.addWidget(self.b_chooser_meg)        
-        main_layout.addWidget(self.b_chooser_meg)
+        meg_display_layout.addWidget(self.b_chooser_meg)
+        meg_display_layout.addWidget(QLabel('fmin'))
+        self.b_fmin = QLineEdit()
+        meg_display_layout.addWidget(self.b_fmin)
+        meg_display_layout.addWidget(QLabel('fmax'))
+        self.b_fmax = QLineEdit()
+        meg_display_layout.addWidget(self.b_fmax)
+        main_layout.addLayout(meg_display_layout)
         
         
         self.setLayout(main_layout)
         
     def get_meg_choices(self):
         return [f'{i}: {j.fname}' for i,j in enumerate(self.bids_info.meg_list)]
+    
+    def get_mri_choices(self):
+        return [f'{i}: {op.basename(j)}' for i,j in enumerate(self.bids_info.all_mris)]
         
     def plot_meg(self):
         idx = self.b_chooser_meg.currentIndex()
-        self.bids_info.plot_meg(idx=idx)
+        fmin = self.b_fmin.text().strip()
+        fmax = self.b_fmax.text().strip()
+        if (fmin == '') or (fmin.lower() == 'none'):
+            fmin = None
+        else:
+            fmin = float(fmin)
+        if (fmax == '') or (fmax.lower() == 'none'):
+            fmax = None
+        else:
+            fmax = float(fmax)
+        self.bids_info.plot_meg(idx=idx, hp=fmin, lp=fmax)
         
     def plot_fids(self):
         self.bids_info.plot_mri_fids()

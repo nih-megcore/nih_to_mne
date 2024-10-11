@@ -227,7 +227,11 @@ class meglist_class:
         self.meg_list = tmp
         self.meg_emptyroom = [i for i in self.meg_list if i.is_emptyroom]
     
-    def _pick_meg_from_list(self, choice_quote='Choice:\n', add_allchoice=False):
+    def _pick_meg_from_list(self, choice_quote='Choice:\n', add_allchoice=False, 
+                            idx=None):
+        if idx != None:
+            # Don't show the prompt - this is useful for GUI
+            return self.meg_list[idx]
         for idx, dset in enumerate(self.meg_list):
             print(f'{idx}: {dset.fname}')
         if add_allchoice==True:
@@ -240,10 +244,13 @@ class meglist_class:
         else:
             return self.meg_list[dset_idx]
     
-    def plot_meg(self):
-        dset = self._pick_meg_from_list('Enter the number associated with the MEG dataset to plot: ')
+    def plot_meg(self, idx=None, hp=None, lp=None):
+        if idx == None:
+            dset = self._pick_meg_from_list('Enter the number associated with the MEG dataset to plot: ')
+        else:
+            dset = self.meg_list[idx]
         dset.load()
-        dset.raw.plot()    
+        dset.raw.plot(highpass=hp, lowpass=lp)    
     
     @property
     def meg_count(self):
@@ -405,8 +412,9 @@ class _subject_bids_info(qa_mri_class, meglist_class):
                      outfile=None, block=True, mri_override=[self.mri])
         # tmp_ = input('Hit any button to close')
     
-    def plot_3D_coreg(self):
-        dset = self._pick_meg_from_list(choice_quote='Enter the number associated with the MEG dataset to plot coreg: \n')
+    def plot_3D_coreg(self, idx=None):
+        dset = self._pick_meg_from_list(choice_quote='Enter the number associated with the MEG dataset to plot coreg: \n',
+                                        idx=idx)
         dset.load()
         bids_path = mne_bids.get_bids_path_from_fname(dset.fname)
         t1_bids_path = mne_bids.get_bids_path_from_fname(self.mri)
