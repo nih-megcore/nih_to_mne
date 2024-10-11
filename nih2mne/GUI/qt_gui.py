@@ -131,8 +131,23 @@ class Subject_GUI(QWidget):
         meg_display_layout.addWidget(self.b_fmax)
         main_layout.addLayout(meg_display_layout)
         
+        # Add an events display -- SEt this to update after selection
+        self.b_meg_events = QLabel(self.get_meg_events())
+        self.b_chooser_meg.currentIndexChanged.connect(self.update_chooser_meg_idx)
+        main_layout.addWidget(self.b_meg_events)
         
         self.setLayout(main_layout)
+        
+    def update_chooser_meg_idx(self):
+        self.b_meg_events.setText(self.get_meg_events())
+        
+    def get_meg_events(self):
+        megidx_ = self.b_chooser_meg.currentIndex()
+        megtmp_ = self.bids_info.meg_list[megidx_]
+        try:
+            return megtmp_.event_counts.__repr__().replace('description\n','').replace('Name: count, dtype: int64','')
+        except:
+            return 'No Events to list'
         
     def get_meg_choices(self):
         return [f'{i}: {j.fname}' for i,j in enumerate(self.bids_info.meg_list)]
@@ -188,7 +203,7 @@ class BIDS_Project_Window(QMainWindow):
         self.initUI()
         
     def initUI(self):
-        layout = QGridLayout()
+        subjs_layout = QGridLayout()
         subject_keys = sorted(list(self.bids_project.subjects.keys()))
         
         tile_idxs = np.arange(self.gridsize_row * self.gridsize_col)
@@ -199,11 +214,11 @@ class BIDS_Project_Window(QMainWindow):
             if i+1 > len(self.bids_project.subjects):
                 break
             bids_info = self.bids_project.subjects[subject_keys[i]]
-            layout.addWidget(Subject_Tile(bids_info), row_idx, col_idx)
+            subjs_layout.addWidget(Subject_Tile(bids_info), row_idx, col_idx)
             i+=1
             
         widget = QWidget()
-        widget.setLayout(layout)
+        widget.setLayout(subjs_layout)
         self.setCentralWidget(widget)
 
     def clicked(self):
@@ -212,6 +227,7 @@ class BIDS_Project_Window(QMainWindow):
 
 
 def window():
+    os.chdir(bids_pro.bids_root)
     app = QApplication(sys.argv)
     win = BIDS_Project_Window(bids_project = bids_pro)
     win.show()
