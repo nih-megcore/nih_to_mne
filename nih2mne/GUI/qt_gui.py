@@ -192,7 +192,7 @@ class Subject_GUI(QWidget):
 ## create the window 
 
 class BIDS_Project_Window(QMainWindow):
-    def __init__(self, bids_root=os.getcwd(), gridsize_row=10, gridsize_col=6, 
+    def __init__(self, bids_root=os.getcwd(), gridsize_row=8, gridsize_col=5, 
                  bids_project=None):
         super(BIDS_Project_Window, self).__init__()
         self.setGeometry(100,100, 250*gridsize_col, 100*gridsize_row)
@@ -200,9 +200,42 @@ class BIDS_Project_Window(QMainWindow):
         self.gridsize_row = gridsize_row
         self.gridsize_col = gridsize_col
         self.bids_project = bids_project
-        self.initUI()
+        main_layout = QVBoxLayout()
         
-    def initUI(self):
+        # Setup up Top Button Row
+        top_buttons_layout = QHBoxLayout()
+        self.b_choose_bids_root = QPushButton('BIDS Directory')
+        self.b_choose_bids_root.clicked.connect(self.select_bids_root)
+        top_buttons_layout.addWidget(self.b_choose_bids_root)
+        main_layout.addLayout(top_buttons_layout)
+        
+        # Add Subject Chooser Layer
+        subjs_layout = self.init_subjects_layout()
+        main_layout.addLayout(subjs_layout)
+        
+        # Add Bottom Row Buttons
+        bottom_buttons_layout = QHBoxLayout()
+        self.b_run_freesurfer = QPushButton('Run Freesurfer')
+        self.b_run_freesurfer.clicked.connect(self.proc_freesurfer)
+        bottom_buttons_layout.addWidget(self.b_run_freesurfer)
+        main_layout.addLayout(top_buttons_layout)
+        
+        # Finalize Widget and dispaly
+        widget = QWidget()
+        widget.setLayout(main_layout)
+        self.setCentralWidget(widget)
+    
+    # def setup_full_layout(self):
+    
+    def proc_freesurfer(self):
+        self.bids_project.run_anat_pipeline()      
+        
+        
+    def select_bids_root(self):
+        self.bids_root = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder')
+        
+        
+    def init_subjects_layout(self):
         subjs_layout = QGridLayout()
         subject_keys = sorted(list(self.bids_project.subjects.keys()))
         
@@ -216,11 +249,8 @@ class BIDS_Project_Window(QMainWindow):
             bids_info = self.bids_project.subjects[subject_keys[i]]
             subjs_layout.addWidget(Subject_Tile(bids_info), row_idx, col_idx)
             i+=1
+        return subjs_layout
             
-        widget = QWidget()
-        widget.setLayout(subjs_layout)
-        self.setCentralWidget(widget)
-
     def clicked(self):
         self.label.setText('you pressed the button')
         self.label.adjustSize()
