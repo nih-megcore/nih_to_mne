@@ -268,13 +268,17 @@ class BIDS_Project_Window(QMainWindow):
         return main_layout
     
     def make_task_set(self):
-        self.task_set = []
+        self.task_set = {'ALL':''}
         for bids_key in self.bids_project.subjects.keys():
             bids_info = self.bids_project.subjects[bids_key]
             for dset in bids_info.meg_list:
-                if dset.task not in self.task_set:
-                    self.task_set.append(dset.task)
-        self.task_set = sorted(self.task_set)
+                if dset.task not in self.task_set.keys():
+                    self.task_set[dset.task] = 1
+                else:
+                    self.task_set[dset.task] += 1
+        _keysort = sorted(list(self.task_set.keys()))
+        _tmp = [f'{i} : {self.task_set[i]}' for i in _keysort]
+        self.task_set = _tmp
             
     
     def update_page_idx_display(self):
