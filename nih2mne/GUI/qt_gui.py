@@ -200,13 +200,32 @@ class BIDS_Project_Window(QMainWindow):
         self.gridsize_row = gridsize_row
         self.gridsize_col = gridsize_col
         self.bids_project = bids_project
-        main_layout = QVBoxLayout()
+        self.page_idx = 0
+        self.subject_start_idx = 0
+        self.last_page_idx = len(bids_project.subjects)//(gridsize_col * gridsize_row)
+        _tmp = len(bids_project.subjects)/(gridsize_col * gridsize_row)
+        if _tmp != 0:
+            self.last_page_idx += 1
         
+        # Finalize Widget and dispaly
+        # main_layout = self.setup_full_layout()
+        widget = QWidget()
+        widget.setLayout(self.setup_full_layout())
+        self.setCentralWidget(widget)
+    
+    def setup_full_layout(self):
+        main_layout = QVBoxLayout()
+        # main_layout.addLayout(self.setup_full_layout)
         # Setup up Top Button Row
         top_buttons_layout = QHBoxLayout()
         self.b_choose_bids_root = QPushButton('BIDS Directory')
         self.b_choose_bids_root.clicked.connect(self.select_bids_root)
+        self.b_choose_qa_file = QPushButton('QA file')
+        self.b_choose_qa_file.clicked.connect(self.select_qa_file)
+        self.b_subject_number = QLabel(f'Subject Totals: #{len(self.bids_project.subjects)}')
         top_buttons_layout.addWidget(self.b_choose_bids_root)
+        top_buttons_layout.addWidget(self.b_choose_qa_file)
+        top_buttons_layout.addWidget(self.b_subject_number)
         main_layout.addLayout(top_buttons_layout)
         
         # Add Subject Chooser Layer
@@ -214,26 +233,77 @@ class BIDS_Project_Window(QMainWindow):
         main_layout.addLayout(subjs_layout)
         
         # Add Bottom Row Buttons
+        #-Freesurfer-
         bottom_buttons_layout = QHBoxLayout()
         self.b_run_freesurfer = QPushButton('Run Freesurfer')
         self.b_run_freesurfer.clicked.connect(self.proc_freesurfer)
         bottom_buttons_layout.addWidget(self.b_run_freesurfer)
-        main_layout.addLayout(top_buttons_layout)
+        #-MRI Prep-
+        self.b_run_mriprep = QPushButton('Run MRIPrep')
+        self.b_run_mriprep.clicked.connect(self.proc_mriprep)
+        bottom_buttons_layout.addWidget(self.b_run_mriprep)
+        #-MEGNet Cleaning-
+        self.b_run_megnet = QPushButton('Run MEGnet')
+        self.b_run_megnet.clicked.connect(self.proc_megnet)
+        bottom_buttons_layout.addWidget(self.b_run_megnet)
+        #-Next / Prev Page buttons
+        self.b_next_page = QPushButton('Next')
+        self.b_next_page.clicked.connect(self.increment_page_idx)
+        self.b_prev_page = QPushButton('Prev')
+        self.b_prev_page.clicked.connect(self.decrement_page_idx)
+        bottom_buttons_layout.addWidget(self.b_prev_page)
+        bottom_buttons_layout.addWidget(self.b_next_page)
+        #-Page Counter-
+        self.b_current_page_idx = QLabel(f'Page: {self.page_idx} / {self.last_page_idx}')
+        bottom_buttons_layout.addWidget(self.b_current_page_idx)
         
-        # Finalize Widget and dispaly
-        widget = QWidget()
-        widget.setLayout(main_layout)
-        self.setCentralWidget(widget)
+        #Finalize
+        main_layout.addLayout(bottom_buttons_layout)
+        return main_layout
     
-    # def setup_full_layout(self):
+    def update_page_idx_display(self):
+        self.b_current_page_idx.setText(f'Page: {self.page_idx} / {self.last_page_idx}')
+    
+    def increment_page_idx(self):
+        if self.page_idx<self.last_page_idx:
+            self.page_idx+=1
+            self.update_page_idx_display()
+        else:
+            pass
+    
+    def decrement_page_idx(self):
+        if self.page_idx==0:
+            pass
+        else:
+            self.page_idx-=1
+            self.update_page_idx_display()
+        
+    
+    def select_qa_file(self):
+        self.qa_file, filter = QtWidgets.QFileDialog.getOpenFileName(self, 'Select QA file',
+                                                             filter='*.yml')
+        
+        
     
     def proc_freesurfer(self):
-        self.bids_project.run_anat_pipeline()      
+        self.bids_project.run_anat_pipeline()   
+    
+    def proc_mriprep(self, volume=False):
+        'Run bem/src/fwd/trans for the datasets'
+        'Pre-req checks - Freesurfer and fids'
+        pass
+    
+    def proc_megnet(self):
+        pass
         
         
     def select_bids_root(self):
         self.bids_root = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder')
-        
+        os.chdir(self.bids_root)
+        # self.bids_project = bids_project(bids_root=self.bids_root)
+        # widget = QWidget()
+        # widget.setLayout(self.setup_full_layout())
+        # self.setCentralWidget(widget)
         
     def init_subjects_layout(self):
         subjs_layout = QGridLayout()
