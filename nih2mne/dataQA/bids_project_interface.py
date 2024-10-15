@@ -32,7 +32,6 @@ import pandas as pd
 import pyctf
 import mne_bids
 from nih2mne.megcore_prep_mri_bids import mripreproc
-import munch
 
 CFG_VERSION = 1.0
 
@@ -244,13 +243,20 @@ class meglist_class:
         else:
             return self.meg_list[dset_idx]
     
-    def plot_meg(self, idx=None, hp=None, lp=None):
+    def plot_meg(self, idx=None, hp=None, lp=None, montage=None):
         if idx == None:
             dset = self._pick_meg_from_list('Enter the number associated with the MEG dataset to plot: ')
         else:
             dset = self.meg_list[idx]
         dset.load()
-        dset.raw.plot(highpass=hp, lowpass=lp)    
+        if montage != None:
+            if type(montage) != list:
+                _tmp = montage(dset.raw)  #Call the function to eval montage
+                montage = _tmp
+            tmp = dset.raw.copy().pick_channels(montage, ordered=True)
+            tmp.plot(highpass=hp, lowpass=lp, n_channels=len(montage))
+        else:
+            dset.raw.plot(highpass=hp, lowpass=lp)    
     
     @property
     def meg_count(self):
