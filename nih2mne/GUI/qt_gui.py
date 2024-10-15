@@ -19,6 +19,8 @@ import sys
 from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project
 import os, os.path as op
 import numpy as np
+from nih2mne.utilities.montages import montages
+
 
 
 ## Create subject tile
@@ -202,7 +204,7 @@ class BIDS_Project_Window(QMainWindow):
         self.bids_project = bids_project
         self.page_idx = 0
         self.subject_start_idx = 0
-        self.last_page_idx = len(bids_project.subjects)//(gridsize_col * gridsize_row)
+        self.last_page_idx = len(bids_project.subjects)//(gridsize_col * gridsize_row) -1
         _tmp = len(bids_project.subjects)/(gridsize_col * gridsize_row)
         if _tmp != 0:
             self.last_page_idx += 1
@@ -268,6 +270,8 @@ class BIDS_Project_Window(QMainWindow):
         if self.page_idx<self.last_page_idx:
             self.page_idx+=1
             self.update_page_idx_display()
+            self.subject_start_idx += (self.gridsize_col * self.gridsize_row)
+            self.update_subjects_layout()
         else:
             pass
     
@@ -277,6 +281,9 @@ class BIDS_Project_Window(QMainWindow):
         else:
             self.page_idx-=1
             self.update_page_idx_display()
+            self.subject_start_idx -= (self.gridsize_col * self.gridsize_row)
+            self.update_subjects_layout()
+            
         
     
     def select_qa_file(self):
@@ -300,14 +307,31 @@ class BIDS_Project_Window(QMainWindow):
     def select_bids_root(self):
         self.bids_root = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder')
         os.chdir(self.bids_root)
-        # self.bids_project = bids_project(bids_root=self.bids_root)
-        # widget = QWidget()
-        # widget.setLayout(self.setup_full_layout())
-        # self.setCentralWidget(widget)
+        self.bids_project = bids_project(bids_root=self.bids_root)
+        self.page_idx = 0
+        self.subject_start_idx = 0
+        self.update_subjects_layout()
+        
+    def update_subjects_layout(self):
+        tile_idxs = np.arange(self.gridsize_row * self.gridsize_col)
+        tile_idxs_grid = tile_idxs.reshape(self.gridsize_row, self.gridsize_col)
+        row_idxs, col_idxs = np.unravel_index(tile_idxs, [self.gridsize_row, self.gridsize_col])
+        i=self.subject_start_idx
+        for row_idx, col_idx in zip(row_idxs, col_idxs):
+            _for_replace = self.subjs_layout.itemAtPosition(row_idx, col_idx)
+            widget = _for_replace.widget()
+            widget.deleteLater()
+            if i+1 > len(self.bids_project.subjects):
+                self.subjs_layout.addWidget(QLabel(''), row_idx, col_idx)
+            else:
+                bids_info = self.bids_project.subjects[self.subject_keys[i]]
+                self.subjs_layout.addWidget(Subject_Tile(bids_info), row_idx, col_idx)
+            i+=1
+        
         
     def init_subjects_layout(self):
-        subjs_layout = QGridLayout()
-        subject_keys = sorted(list(self.bids_project.subjects.keys()))
+        self.subjs_layout = QGridLayout()
+        self.subject_keys = sorted(list(self.bids_project.subjects.keys()))
         
         tile_idxs = np.arange(self.gridsize_row * self.gridsize_col)
         tile_idxs_grid = tile_idxs.reshape(self.gridsize_row, self.gridsize_col)
@@ -315,11 +339,11 @@ class BIDS_Project_Window(QMainWindow):
         i=0
         for row_idx, col_idx in zip(row_idxs, col_idxs):
             if i+1 > len(self.bids_project.subjects):
-                break
-            bids_info = self.bids_project.subjects[subject_keys[i]]
-            subjs_layout.addWidget(Subject_Tile(bids_info), row_idx, col_idx)
+                self.subjs_layout.addWidget(QLabel(''), row_idx, col_idx)
+            bids_info = self.bids_project.subjects[self.subject_keys[i]]
+            self.subjs_layout.addWidget(Subject_Tile(bids_info), row_idx, col_idx)
             i+=1
-        return subjs_layout
+        return self.subjs_layout
             
     def clicked(self):
         self.label.setText('you pressed the button')
