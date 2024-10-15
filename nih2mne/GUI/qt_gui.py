@@ -208,6 +208,7 @@ class BIDS_Project_Window(QMainWindow):
         _tmp = len(bids_project.subjects)/(gridsize_col * gridsize_row)
         if _tmp != 0:
             self.last_page_idx += 1
+        self.make_task_set()
         
         # Finalize Widget and dispaly
         # main_layout = self.setup_full_layout()
@@ -228,6 +229,9 @@ class BIDS_Project_Window(QMainWindow):
         top_buttons_layout.addWidget(self.b_choose_bids_root)
         top_buttons_layout.addWidget(self.b_choose_qa_file)
         top_buttons_layout.addWidget(self.b_subject_number)
+        self.b_task_chooser = QComboBox()
+        self.b_task_chooser.addItems(self.task_set)
+        top_buttons_layout.addWidget(self.b_task_chooser)
         main_layout.addLayout(top_buttons_layout)
         
         # Add Subject Chooser Layer
@@ -262,6 +266,16 @@ class BIDS_Project_Window(QMainWindow):
         #Finalize
         main_layout.addLayout(bottom_buttons_layout)
         return main_layout
+    
+    def make_task_set(self):
+        self.task_set = []
+        for bids_key in self.bids_project.subjects.keys():
+            bids_info = self.bids_project.subjects[bids_key]
+            for dset in bids_info.meg_list:
+                if dset.task not in self.task_set:
+                    self.task_set.append(dset.task)
+        self.task_set = sorted(self.task_set)
+            
     
     def update_page_idx_display(self):
         self.b_current_page_idx.setText(f'Page: {self.page_idx} / {self.last_page_idx}')
@@ -345,9 +359,7 @@ class BIDS_Project_Window(QMainWindow):
             i+=1
         return self.subjs_layout
             
-    def clicked(self):
-        self.label.setText('you pressed the button')
-        self.label.adjustSize()
+
 
 
 def window():
