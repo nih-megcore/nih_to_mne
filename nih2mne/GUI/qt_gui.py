@@ -31,7 +31,7 @@ class Subject_Tile(QWidget):
         
         self.bids_info = bids_info
         self.meg_count = self.bids_info.meg_count
-        self.meg_status = 'GOOD'
+        # self.meg_status = 'GOOD'
         self.mri_status = self.get_mri_status()
         self.fs_status = self.get_fs_status()
         self.evt_status = 'GOOD'
@@ -43,14 +43,18 @@ class Subject_Tile(QWidget):
         layout = QHBoxLayout()
         layout.addWidget(self.subj_button)
         
+        if task_filter != 'All':
+            self.filtered_tasklist = [i for i in self.bids_info.meg_list if i.task==task_filter]
+            self.meg_status = self.get_meg_status()
+        else:
+            self.filtered_tasklist = self.bids_info.meg_list
+            self.meg_status = self.get_meg_status()
+            
+        
         for tag in ['Meg', 'Mri','FS','EVT']:
             color = self.color(tag)
             if tag=='Meg':
-                if task_filter=='All':
-                    tag+=f' {self.meg_count}'
-                else:
-                    filt_tasklist = [i for i in self.bids_info.meg_list if i.task==task_filter]
-                    tag += f' {str(len(filt_tasklist))}'
+                tag+= f' {str(len(self.filtered_tasklist))}'
                     
             tmp = QLabel(tag)
             layout.addWidget(tmp)
@@ -70,8 +74,12 @@ class Subject_Tile(QWidget):
         self.subj_button.adjustSize()
         self.w = Subject_GUI(bids_info = self.bids_info)
         self.w.show()
-                
-        
+    
+    def get_meg_status(self):
+        if len(self.filtered_tasklist) == 0:
+            return 'BAD'
+        else:
+            return 'GOOD'
     
     def get_fs_status(self):
         if self.bids_info.fs_recon['fs_success']:
