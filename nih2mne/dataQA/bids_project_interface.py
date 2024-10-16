@@ -254,7 +254,11 @@ class meglist_class:
                 _tmp = montage(dset.raw)  #Call the function to eval montage
                 montage = _tmp
             tmp = dset.raw.copy().pick_channels(montage, ordered=True)
-            tmp.plot(highpass=hp, lowpass=lp, n_channels=len(montage))
+            if len(montage) < 80:
+                num_chans = len(montage)
+            else:
+                num_chans = 20 
+            tmp.plot(highpass=hp, lowpass=lp, n_channels=num_chans)
         else:
             dset.raw.plot(highpass=hp, lowpass=lp)    
     

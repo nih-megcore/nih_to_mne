@@ -11,7 +11,7 @@ Montages can either be a list or a function
 
 montages = {}
 
-montages['montage_56'] = ['MLC21', 'MLC23','MLC25','MLC53', 'MLC55',
+m56_list = ['MLC21', 'MLC23','MLC25','MLC53', 'MLC55',
  'MLF12','MLF14','MLF42','MLF44','MLF62','MLF64','MLF66',
  'MLO11','MLO32','MLO53','MLP23','MLP41','MLP54',
  'MLT11','MLT16','MLT23','MLT25','MLT51','MLT53','MLT55','MLT57',
@@ -22,6 +22,10 @@ montages['montage_56'] = ['MLC21', 'MLC23','MLC25','MLC53', 'MLC55',
  'MRT11','MRT16','MRT23','MRT25','MRT51','MRT53','MRT55','MRT57',
 'MZC03','MZF01','MZF03','MZO02','MZP01']
 
+def montage_56(raw):
+    montage = [i for i in raw.ch_names if i in m56_list]
+    return montage
+
 def montage_ALL(raw):
     return raw.ch_names
 
@@ -31,4 +35,5 @@ def montage_TRIG(raw):
 
 montages['montage_ALL'] = montage_ALL
 montages['montage_TRIG'] = montage_TRIG
+montages['montage_56'] = montage_56
                

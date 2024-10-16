@@ -36,7 +36,7 @@ class Subject_Tile(QWidget):
         self.fs_status = self.get_fs_status()
         self.evt_status = 'GOOD'
         
-        self.subj_button = QPushButton(self) #bids_info.subject)
+        self.subj_button = QPushButton(self) 
         self.subj_button.setText(bids_info.subject) 
         self.subj_button.clicked.connect(self.clicked)
         
@@ -144,6 +144,9 @@ class Subject_GUI(QWidget):
         meg_display_layout.addWidget(QLabel('fmax'))
         self.b_fmax = QLineEdit()
         meg_display_layout.addWidget(self.b_fmax)
+        self.b_plot_montage = QComboBox()
+        self.b_plot_montage.addItems(montages.keys())
+        meg_display_layout.addWidget(self.b_plot_montage)
         main_layout.addLayout(meg_display_layout)
         
         # Add an events display -- SEt this to update after selection
@@ -174,6 +177,10 @@ class Subject_GUI(QWidget):
         idx = self.b_chooser_meg.currentIndex()
         fmin = self.b_fmin.text().strip()
         fmax = self.b_fmax.text().strip()
+        tmp_idx = self.b_plot_montage.currentIndex()
+        tmp_choice = list(montages.keys())[tmp_idx]
+        montage_choice = montages[tmp_choice]
+        print(montage_choice)
         if (fmin == '') or (fmin.lower() == 'none'):
             fmin = None
         else:
@@ -182,7 +189,7 @@ class Subject_GUI(QWidget):
             fmax = None
         else:
             fmax = float(fmax)
-        self.bids_info.plot_meg(idx=idx, hp=fmin, lp=fmax)
+        self.bids_info.plot_meg(idx=idx, hp=fmin, lp=fmax, montage=montage_choice)
         
     def plot_fids(self):
         self.bids_info.plot_mri_fids()
@@ -222,6 +229,7 @@ class BIDS_Project_Window(QMainWindow):
         if _tmp != 0:
             self.last_page_idx += 1  #Add a page for the remaining subjs
         self.make_task_set()
+        self.selected_task = 'All'
         
         # Finalize Widget and dispaly
         # main_layout = self.setup_full_layout()
@@ -283,7 +291,7 @@ class BIDS_Project_Window(QMainWindow):
         return main_layout
     
     def make_task_set(self):
-        self.task_set = {'ALL':''}
+        self.task_set = {'All':''}
         for bids_key in self.bids_project.subjects.keys():
             bids_info = self.bids_project.subjects[bids_key]
             for dset in bids_info.meg_list:
