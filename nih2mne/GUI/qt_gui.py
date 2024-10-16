@@ -421,21 +421,30 @@ class BIDS_Project_Window(QMainWindow):
 
 
 
-def window():
-    os.chdir(bids_pro.bids_root)
+def window(bids_project=None):
+    os.chdir(bids_project.bids_root)
     app = QApplication(sys.argv)
-    win = BIDS_Project_Window(bids_project = bids_pro)
+    win = BIDS_Project_Window(bids_project = bids_project)
     win.show()
     sys.exit(app.exec_())
+    
+def cmdline_main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-bids_root', help='Path to your BIDS folder', 
+                        required=True)
+    args = parser.parse_args()
+    bids_root = args.bids_root
+    
+    bids_pro = bids_project(bids_root=bids_root)
+    window(bids_project=bids_pro)
+
+if __name__ == '__main__':
+    cmdline_main()
+
 
 # bids_pro = bids_project(bids_root='/fast2/BIDS')
 
     
-window()
-
-
-# bids_info = bids_pro.subjects['sub-ON95742']
-# window = Subject_Tile(bids_info)
-# window.show()
 
 
