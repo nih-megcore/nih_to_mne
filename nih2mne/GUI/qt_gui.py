@@ -346,7 +346,13 @@ class BIDS_Project_Window(QMainWindow):
         
     
     def proc_freesurfer(self):
-        self.bids_project.run_anat_pipeline()   
+        'Loop over subjects that do not have a fs dir and run fs'
+        issues = self.bids_project.issues
+        freesurfer_proclist=[] 
+        for subject, bids_info in self.bids_project.subjects.items():
+            if subject in issues['Freesurfer_notStarted']:
+                print(f'Submitting sbatch job for {subject}')
+                bids_info.proc_freesurfer()
     
     
     def proc_mriprep(self):
