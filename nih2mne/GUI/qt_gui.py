@@ -271,6 +271,10 @@ class BIDS_Project_Window(QMainWindow):
         self.b_run_mriprep = QPushButton('Run MRIPrep')
         self.b_run_mriprep.clicked.connect(self.proc_mriprep)
         bottom_buttons_layout.addWidget(self.b_run_mriprep)
+        #-MRI Prep Vol/Surf selection
+        self.b_mri_volSurf_selection = QComboBox()
+        self.b_mri_volSurf_selection.addItems(['Surf','Vol'])
+        bottom_buttons_layout.addWidget(self.b_mri_volSurf_selection)
         #-MEGNet Cleaning-
         self.b_run_megnet = QPushButton('Run MEGnet')
         self.b_run_megnet.clicked.connect(self.proc_megnet)
@@ -344,10 +348,24 @@ class BIDS_Project_Window(QMainWindow):
     def proc_freesurfer(self):
         self.bids_project.run_anat_pipeline()   
     
-    def proc_mriprep(self, volume=False):
+    
+    def proc_mriprep(self):
         'Run bem/src/fwd/trans for the datasets'
         'Pre-req checks - Freesurfer and fids'
-        pass
+        issues = self.bids_project.issues
+        mriprep_proclist=[]
+        if self.b_mri_volSurf_selection.currentText().lower() == 'surf':
+            surf = True
+        elif self.b_mri_volSurf_selection.currentText().lower() == 'vol':
+            surf = False
+        for subject, bids_info in self.bids_project.subjects.items():
+            if (subject in issues['Freesurfer_failed']) or (subject in issues['Freesurfer_notStarted']):
+                continue
+            else:
+                mriprep_proclist.append(subject)
+        task = self.selected_task.split(':')[0].strip()
+        for subject in mriprep_proclist:
+            self.bids_project.subjects[subject].mri_preproc(surf=surf, fname='all')
     
     def proc_megnet(self):
         pass

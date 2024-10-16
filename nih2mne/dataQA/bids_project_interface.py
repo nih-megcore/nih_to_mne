@@ -32,6 +32,7 @@ import pandas as pd
 import pyctf
 import mne_bids
 from nih2mne.megcore_prep_mri_bids import mripreproc
+from collections import OrderedDict
 
 CFG_VERSION = 1.0
 
@@ -592,13 +593,13 @@ class _bids_subject_list():
     def __repr__(self):
         return [i.subject for i in self.subjects]
             
-class dotdict(dict):
-    """dot.notation access to dictionary attributes"""
-    __getattr__ = dict.get
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
+# class dotdict(dict):
+#     """dot.notation access to dictionary attributes"""
+#     __getattr__ = dict.get
+#     __setattr__ = dict.__setitem__
+#     __delattr__ = dict.__delitem__
         
-from collections import OrderedDict
+
 #%%    
 #For initializing and maintaining a larger project
 # This will loop over all subjects and save out the pkl file.
