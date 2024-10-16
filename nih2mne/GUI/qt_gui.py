@@ -26,7 +26,7 @@ from nih2mne.utilities.montages import montages
 ## Create subject tile
 class Subject_Tile(QWidget):
     # SubjidButton -- MEG () MRI () FS ()
-    def __init__(self,bids_info):
+    def __init__(self,bids_info, task_filter='All'):
         super(Subject_Tile, self).__init__()
         
         self.bids_info = bids_info
@@ -46,7 +46,12 @@ class Subject_Tile(QWidget):
         for tag in ['Meg', 'Mri','FS','EVT']:
             color = self.color(tag)
             if tag=='Meg':
-                tag+=f' {self.meg_count}'
+                if task_filter=='All':
+                    tag+=f' {self.meg_count}'
+                else:
+                    filt_tasklist = [i for i in self.bids_info.meg_list if i.task==task_filter]
+                    tag += f' {str(len(filt_tasklist))}'
+                    
             tmp = QLabel(tag)
             layout.addWidget(tmp)
             if color == 'red':
@@ -207,7 +212,7 @@ class BIDS_Project_Window(QMainWindow):
         self.last_page_idx = len(bids_project.subjects)//(gridsize_col * gridsize_row) -1
         _tmp = len(bids_project.subjects)/(gridsize_col * gridsize_row)
         if _tmp != 0:
-            self.last_page_idx += 1
+            self.last_page_idx += 1  #Add a page for the remaining subjs
         self.make_task_set()
         
         # Finalize Widget and dispaly
@@ -218,7 +223,7 @@ class BIDS_Project_Window(QMainWindow):
     
     def setup_full_layout(self):
         main_layout = QVBoxLayout()
-        # main_layout.addLayout(self.setup_full_layout)
+
         # Setup up Top Button Row
         top_buttons_layout = QHBoxLayout()
         self.b_choose_bids_root = QPushButton('BIDS Directory')
@@ -231,17 +236,19 @@ class BIDS_Project_Window(QMainWindow):
         top_buttons_layout.addWidget(self.b_subject_number)
         self.b_task_chooser = QComboBox()
         self.b_task_chooser.addItems(self.task_set)
+        self.b_task_chooser.currentIndexChanged.connect(self.filter_task_qa_vis)
         top_buttons_layout.addWidget(self.b_task_chooser)
         main_layout.addLayout(top_buttons_layout)
         
-        # Add Subject Chooser Layer
+        # Add Subject Chooser Grid Layer
         subjs_layout = self.init_subjects_layout()
         main_layout.addLayout(subjs_layout)
         
         # Add Bottom Row Buttons
         #-Freesurfer-
         bottom_buttons_layout = QHBoxLayout()
-        self.b_run_freesurfer = QPushButton('Run Freesurfer')
+        _needs_fs = len(self.bids_project.issues['Freesurfer_notStarted'])
+        self.b_run_freesurfer = QPushButton(f'Run Freesurfer (N={_needs_fs})')
         self.b_run_freesurfer.clicked.connect(self.proc_freesurfer)
         bottom_buttons_layout.addWidget(self.b_run_freesurfer)
         #-MRI Prep-
@@ -279,6 +286,14 @@ class BIDS_Project_Window(QMainWindow):
         _keysort = sorted(list(self.task_set.keys()))
         _tmp = [f'{i} : {self.task_set[i]}' for i in _keysort]
         self.task_set = _tmp
+        
+    def filter_task_qa_vis(self):
+        'Get the task from the chosen task set'
+        idx = self.b_task_chooser.currentIndex()
+        self.selected_task = self.task_set[idx].split(':')[0].strip()
+        self.update_subjects_layout()
+        
+    
             
     
     def update_page_idx_display(self):
@@ -343,7 +358,7 @@ class BIDS_Project_Window(QMainWindow):
                 self.subjs_layout.addWidget(QLabel(''), row_idx, col_idx)
             else:
                 bids_info = self.bids_project.subjects[self.subject_keys[i]]
-                self.subjs_layout.addWidget(Subject_Tile(bids_info), row_idx, col_idx)
+                self.subjs_layout.addWidget(Subject_Tile(bids_info, task_filter=self.selected_task), row_idx, col_idx)
             i+=1
         
         
