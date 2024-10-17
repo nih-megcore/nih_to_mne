@@ -113,9 +113,13 @@ class Subject_GUI(QWidget):
         
         ## Save button
         main_layout = QVBoxLayout()
+        top_button_layout = QHBoxLayout()
         self.b_save = QPushButton('Save')
         self.b_save.clicked.connect(self.save)
-        main_layout.addWidget(self.b_save)
+        top_button_layout.addWidget(self.b_save)
+        
+        main_layout.addLayout(top_button_layout)
+        # main_layout.addWidget(self.b_save)
         main_layout.addWidget(QLabel(bids_info.__repr__()))
         
         ## Plotting
@@ -342,7 +346,7 @@ class BIDS_Project_Window(QMainWindow):
     def select_qa_file(self):
         self.qa_file, filter = QtWidgets.QFileDialog.getOpenFileName(self, 'Select QA file',
                                                              filter='*.yml')
-        
+        self.run_evts_count_qa()
         
     
     def proc_freesurfer(self):
@@ -413,18 +417,20 @@ class BIDS_Project_Window(QMainWindow):
         for row_idx, col_idx in zip(row_idxs, col_idxs):
             if i+1 > len(self.bids_project.subjects):
                 self.subjs_layout.addWidget(QLabel(''), row_idx, col_idx)
-            bids_info = self.bids_project.subjects[self.subject_keys[i]]
-            self.subjs_layout.addWidget(Subject_Tile(bids_info), row_idx, col_idx)
+            else:
+                bids_info = self.bids_project.subjects[self.subject_keys[i]]
+                self.subjs_layout.addWidget(Subject_Tile(bids_info), row_idx, col_idx)
             i+=1
         return self.subjs_layout
             
 
 
 
-def window(bids_project=None):
+def window(bids_project=None, num_rows=6, num_cols=4):
     os.chdir(bids_project.bids_root)
     app = QApplication(sys.argv)
-    win = BIDS_Project_Window(bids_project = bids_project)
+    win = BIDS_Project_Window(bids_project = bids_project, 
+                              gridsize_row=num_rows, gridsize_col=num_cols)
     win.show()
     sys.exit(app.exec_())
     
@@ -433,11 +439,15 @@ def cmdline_main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-bids_root', help='Path to your BIDS folder', 
                         required=True)
+    parser.add_argument('-num_rows', help='Number of subject rows',
+                        default=6, type=int)
+    parser.add_argument('-num_cols', help='Number of subject columns',
+                        default=4, type=int)
     args = parser.parse_args()
     bids_root = args.bids_root
     
     bids_pro = bids_project(bids_root=bids_root)
-    window(bids_project=bids_pro)
+    window(bids_project=bids_pro, num_rows=args.num_rows, num_cols=args.num_cols)
 
 if __name__ == '__main__':
     cmdline_main()
