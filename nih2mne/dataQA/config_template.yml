@@ -1,0 +1,14 @@
+---
+
+airpuff:
+    stim: 425
+    missingstim: 75
+    
+haririhammer:
+    probe_face: 90
+    encode_face: 90
+    probe_shape: 60
+    encode_shape: 60
+    encode_happy: 60
+
+
