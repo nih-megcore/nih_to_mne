@@ -20,21 +20,25 @@ from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_projec
 import os, os.path as op
 import numpy as np
 from nih2mne.utilities.montages import montages
+from nih2mne.dataQA.qa_config_reader import qa_dataset, read_yml
 
 
 
 ## Create subject tile
 class Subject_Tile(QWidget):
     # SubjidButton -- MEG () MRI () FS ()
-    def __init__(self,bids_info, task_filter='All'):
+    def __init__(self,bids_info, task_filter='All', qa_file=None):
         super(Subject_Tile, self).__init__()
         
         self.bids_info = bids_info
+        if qa_file != None:
+            self.bids_info.qa_file = qa_file
         self.meg_count = self.bids_info.meg_count
         # self.meg_status = 'GOOD'
         self.mri_status = self.get_mri_status()
         self.fs_status = self.get_fs_status()
         self.evt_status = 'GOOD'
+        self.qa_file = qa_file
         
         self.subj_button = QPushButton(self) 
         self.subj_button.setText(bids_info.subject) 
@@ -72,7 +76,7 @@ class Subject_Tile(QWidget):
         '''This will eventually open the subject QA'''
         self.subj_button.setText('X_'+self.bids_info.subject+'_X')
         self.subj_button.adjustSize()
-        self.w = Subject_GUI(bids_info = self.bids_info)
+        self.w = Subject_GUI(bids_info = self.bids_info, qa_file=self.qa_file)
         self.w.show()
     
     def get_meg_status(self):
@@ -107,9 +111,11 @@ class Subject_Tile(QWidget):
        
 class Subject_GUI(QWidget):        
     '''All the subject level QA at a finer detail'''
-    def __init__(self, bids_info):
+    def __init__(self, bids_info, qa_file=None):
         super(Subject_GUI, self).__init__()
         self.bids_info = bids_info
+        if qa_file !=None:
+            self.qa_file=qa_file
         
         ## Save button
         main_layout = QVBoxLayout()
@@ -166,10 +172,16 @@ class Subject_GUI(QWidget):
     def get_meg_events(self):
         megidx_ = self.b_chooser_meg.currentIndex()
         megtmp_ = self.bids_info.meg_list[megidx_]
-        try:
-            return megtmp_.event_counts.__repr__().replace('description\n','').replace('Name: count, dtype: int64','')
-        except:
-            return 'No Events to list'
+        if hasattr(self, 'qa_file'):
+            megtmp_.load()
+            qa_dict = read_yml(self.qa_file)
+            qa_dframe = qa_dataset(megtmp_.raw, task_type=megtmp_.task, qa_dict=qa_dict)
+            return qa_dframe
+        else:
+            try:
+                return megtmp_.event_counts.__repr__().replace('description\n','').replace('Name: count, dtype: int64','')
+            except:
+                return 'No Events to list'
         
     def get_meg_choices(self):
         return [f'{i}: {j.fname}' for i,j in enumerate(self.bids_info.meg_list)]
@@ -234,6 +246,7 @@ class BIDS_Project_Window(QMainWindow):
             self.last_page_idx += 1  #Add a page for the remaining subjs
         self.make_task_set()
         self.selected_task = 'All'
+        self.qa_file=None
         
         # Finalize Widget and dispaly
         # main_layout = self.setup_full_layout()
@@ -344,9 +357,15 @@ class BIDS_Project_Window(QMainWindow):
         
     
     def select_qa_file(self):
-        self.qa_file, filter = QtWidgets.QFileDialog.getOpenFileName(self, 'Select QA file',
+        qa_file, filter = QtWidgets.QFileDialog.getOpenFileName(self, 'Select QA file',
                                                              filter='*.yml')
-        self.run_evts_count_qa()
+        self.qa_file = qa_file
+        # print(self.qa_file)
+        for subject in self.bids_project.subjects.keys():
+            bids_info = self.bids_project.subjects[subject]
+            # print(subject)
+            setattr(bids_info, 'qa_file', qa_file)
+            # print(bids_info.qa_file)
         
     
     def proc_freesurfer(self):
@@ -402,7 +421,7 @@ class BIDS_Project_Window(QMainWindow):
                 self.subjs_layout.addWidget(QLabel(''), row_idx, col_idx)
             else:
                 bids_info = self.bids_project.subjects[self.subject_keys[i]]
-                self.subjs_layout.addWidget(Subject_Tile(bids_info, task_filter=self.selected_task), row_idx, col_idx)
+                self.subjs_layout.addWidget(Subject_Tile(bids_info, task_filter=self.selected_task, qa_file=self.qa_file), row_idx, col_idx)
             i+=1
         
         

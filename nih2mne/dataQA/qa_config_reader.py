@@ -18,12 +18,15 @@ def read_yml(fname):
 
 def qa_dataset(raw, task_type=None, qa_dict=None):
     dframe = pd.DataFrame(raw.annotations)
-    raw_evts_counts = pd.DataFrame(dframe.description.value_counts().items(), columns=['Condition', 'Raw'])
+    try:
+        raw_evts_counts = pd.DataFrame(dframe.description.value_counts().items(), columns=['Condition', 'Raw'])
+    except:
+        return None
     
     # raw_conditions = list(raw_evts_counts.keys()) #list(dframe.description.unique())
     
     if task_type not in qa_dict.keys():
-        task_qa_dict = {}
+        task_qa_dict = {'':None}
     else:
         task_qa_dict = qa_dict[task_type]
         
@@ -44,7 +47,7 @@ def qa_dataset(raw, task_type=None, qa_dict=None):
             out_dframe.loc[idx, 'Status'] = 'Fail'
             
     out_dframe.set_index('Condition',drop=True, inplace=True)
-    return out_dframe
+    return out_dframe.__repr__()
             
             
             
