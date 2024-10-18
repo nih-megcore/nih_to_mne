@@ -360,12 +360,7 @@ class BIDS_Project_Window(QMainWindow):
         qa_file, filter = QtWidgets.QFileDialog.getOpenFileName(self, 'Select QA file',
                                                              filter='*.yml')
         self.qa_file = qa_file
-        # print(self.qa_file)
-        for subject in self.bids_project.subjects.keys():
-            bids_info = self.bids_project.subjects[subject]
-            # print(subject)
-            setattr(bids_info, 'qa_file', qa_file)
-            # print(bids_info.qa_file)
+        self.update_subjects_layout()
         
     
     def proc_freesurfer(self):
