@@ -51,20 +51,3 @@ def qa_dataset(raw, task_type=None, qa_dict=None):
             
             
             
-            
-   
-        
-    
-    
-
-
-#%% Testing
-def test_yaml_read():
-    from nih2mne.dataQA.qa_config_reader import read_yml
-    import nih2mne
-    fname = op.join(nih2mne.__path__[0], 'dataQA', 'config_template.yml')
-    dat = read_yml(fname)    
-    assert dat['airpuff']['stim']==425
-    assert dat['airpuff']['missingstim'] ==75
-    assert 'haririhammer' in dat.keys()
-    

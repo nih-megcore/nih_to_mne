@@ -678,6 +678,8 @@ def subject_qa_POPUP(bids_info, text_item='Select'):
         [sg.Text(f'{bids_info}')],                 
         # [sg.Listbox(data, size=(20,5), key='SELECTED')],
         [sg.Button('Plot MEG',key='-PLOT_MEG-'), sg.Combo(bids_info.meg_list, key='-MEG_SELECTION-')],
+        
+        [sg.Button('Process Freesurfer', key='-PROC_FS-')]
     ]
     window = sg.Window('POPUP', layout).Finalize()
     meg_selection = None

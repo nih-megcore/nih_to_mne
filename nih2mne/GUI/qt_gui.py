@@ -7,7 +7,18 @@ Created on Thu Oct 10 13:45:31 2024
 
 TODO -- 
 check the MEG datasets and assess bad subjs data (bad chans etc)
-launch single subject check from push button 
+
+Layout:
+    BIDS_project_window: 
+        Freesurfer - Run all outstanding freesurfer processing
+        MRIprep - Run all mri preprocessing on outstanding subjects
+        MEGNET - not implemented currently
+        Next/Prev - Page Numbers
+    Subject_Tile: 
+        BIDS_root lookup
+        QA file - QA-s the MEG tasks per subject
+    Subject_GUI: 
+        Subject specific parameters.  Summary+Triax+3Dcoreg+MEG plotting
 
 """
 
@@ -21,6 +32,7 @@ import os, os.path as op
 import numpy as np
 from nih2mne.utilities.montages import montages
 from nih2mne.dataQA.qa_config_reader import qa_dataset, read_yml
+import glob
 
 
 
@@ -271,6 +283,17 @@ class BIDS_Project_Window(QMainWindow):
         self.b_task_chooser.addItems(self.task_set)
         self.b_task_chooser.currentIndexChanged.connect(self.filter_task_qa_vis)
         top_buttons_layout.addWidget(self.b_task_chooser)
+        self.b_out_project_chooser = QComboBox()
+        #Add Project output directory
+        # tmp_ = glob.glob('*', root_dir=op.join(self.bids_project.bids_root, 'derivatives'))
+        # derivatives_dirs = [i for i in tmp_ if op.isdir(op.join(self.bids_project.bids_root, 'derivatives', i))]
+        # for i in ['freesurfer', 'megQA']: 
+        #     if i in derivatives_dirs: derivatives_dirs.remove(i)
+        # self.b_out_project_chooser.addItems(derivatives_dirs)
+        # top_buttons_layout.addWidget(self.b_out_project_chooser)
+        
+        
+        
         main_layout.addLayout(top_buttons_layout)
         
         # Add Subject Chooser Grid Layer
