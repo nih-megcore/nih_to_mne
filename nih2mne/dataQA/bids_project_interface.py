@@ -288,11 +288,14 @@ class qa_mri_class:
         if (self.mri != 'Multiple') and (self.mri != None):
             self._valid_fids()
             
-    def mri_selection_override(self):
-        for idx, fname in enumerate(self.all_mris):
-            print(f'{idx}: {fname}')
-        fname_idx = int(input('Choose an MRI to use in processing:\n'))
-        self.mri = self.all_mris[fname_idx]
+    def mri_selection_override(self, override_mri=None):
+        if override_mri == None:
+            for idx, fname in enumerate(self.all_mris):
+                print(f'{idx}: {fname}')
+            fname_idx = int(input('Choose an MRI to use in processing:\n'))
+            self.mri = self.all_mris[fname_idx]
+        else:
+            self.mri = override_mri
         self.mri_json = self._get_matching_mr_json()
         assert len(self.mri_json)>3
         self._valid_fids()

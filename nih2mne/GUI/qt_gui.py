@@ -136,6 +136,17 @@ class Subject_GUI(QWidget):
         self.b_save.clicked.connect(self.save)
         top_button_layout.addWidget(self.b_save)
         
+        if self.bids_info.mri == 'Multiple':
+            mri_picker_layout = QHBoxLayout()
+            self.b_mri_override_selection = QComboBox()
+            self.b_mri_override_selection.addItems(self.get_mri_choices())
+            mri_picker_layout.addWidget(self.b_mri_override_selection)
+            self.b_mri_override_activate = QPushButton('Set MRI')
+            self.b_mri_override_activate.clicked.connect(self.override_mri)
+            mri_picker_layout.addWidget(self.b_mri_override_activate)
+            top_button_layout.addLayout(mri_picker_layout)
+        #Set an else statement to force an override
+        
         main_layout.addLayout(top_button_layout)
         # main_layout.addWidget(self.b_save)
         main_layout.addWidget(QLabel(bids_info.__repr__()))
@@ -230,7 +241,9 @@ class Subject_GUI(QWidget):
         self.bids_info.save(overwrite=True)
     
     def override_mri(self):
-        pass
+        idx = self.b_mri_override_selection.currentIndex()
+        mri_to_set = self.bids_info.all_mris[idx]
+        self.bids_info.mri_selection_override(override_mri=mri_to_set)
         
         
                               
