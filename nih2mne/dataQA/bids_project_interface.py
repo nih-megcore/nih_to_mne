@@ -10,14 +10,6 @@ TODO:
     changing the layout.
     2)Button to launch full logfile read
 
-Code layout:
-    1) Define call options (opts)
-        a) Override default opts with config file
-    2) Define layout based on options    
-    3) Read / Write Config options from opts object
-    4) RUN: Format opts object into commandline string and execute
-        After running - open Summary text
-    
                        
 """
 import os,os.path as op

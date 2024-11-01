@@ -8,6 +8,7 @@ Created on Sun Oct 27 11:51:20 2024
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.animation import FuncAnimation
 
 import os, os.path as op
 import nibabel as nib
@@ -24,7 +25,7 @@ project = 'nihmeg_nai'
 project_root = op.join(bids_root, 'derivatives',project)
 
 nii_files = glob.glob(op.join(project_root, '**','*Enc6o4RatioFS15t35_meg.nii'), recursive=True)
-
+nii_files=nii_files[0:20]
 
 subjs=[]
 imgs2=[]
@@ -51,7 +52,7 @@ for img in imgs2:
 
 imgs.keys()
 
-
+#FIX !!!!!!  Set panel title -- will not update on second panel
 
 class IndexTracker(object):
     def __init__(self, axes, data_dict):
@@ -74,10 +75,12 @@ class IndexTracker(object):
             self.im.append(self.axes[row_idx, col_idx].imshow(self.data_array[i][:,:,self.ind]))
             self.im[i].axes.xaxis.set_ticks([])
             self.im[i].axes.yaxis.set_ticks([])
-            self.im[i].axes.set_title(self.key_list[i])
+            self.im[i].axes.set_title(self.key_list[i])  #FIX !!!!!!  -- will not update on second panel
             plt.tight_layout()
             i+=1
-        self.update()
+        # self.update()
+        self.ani = FuncAnimation(plt.gcf(), self.update, frames=10, interval=None)
+        
 
     def onscroll(self, event):
         print("%s %s" % (event.button, event.step))
@@ -92,9 +95,8 @@ class IndexTracker(object):
         # i=0
         for i in range(self.axes.shape[0]*self.axes.shape[1]): #row_idx, col_idx, in zip (row_idxs, col_idxs):
             self.im[i].set_data(self.data_array[i][:, :, self.ind])
-            # self.axes[row_idx, col_idx].set_ylabel('slice %s' % self.ind)
             self.im[i].axes.figure.canvas.draw()
-            # i+=1
+        # return self.im
 
 
 def plot3d(image):
@@ -103,17 +105,28 @@ def plot3d(image):
     plt.tick_params(left = False, right = False , labelleft = False , 
                 labelbottom = False, bottom = False) 
     tracker = IndexTracker(axes, image)
+    
     fig.canvas.mpl_connect('scroll_event', tracker.onscroll)
+     #, interval=10, blit=True)
     plt.show()
 
 
 if __name__ == "__main__":
-    # tmp = [imgs[key] for key in ['sub-ON80038','sub-ON52662', 'sub-NJELTYFW']]
     img = imgs
-    # img = np.array([[[0, 0, 0], [0, 1, 0], [0, 0, 0]],
-    #                  [[0, 0, 0], [1, 1, 1], [0, 0, 0]],
-    #                  [[0, 0, 0], [1, 1, 1], [0, 0, 0]],
-    #                  [[0, 0, 0], [1, 1, 0], [0, 0, 0]],
-    #                  [[0, 0, 0], [0, 1, 0], [0, 0, 0]]])
-
     plot3d(img)
+    
+    
+    
+#%%
+# from matplotlib.animation import FuncAnimation
+
+# im = plt.imshow(np.random.randn(10,10))
+
+# def update(i):
+#     A = np.random.randn(10,10)
+#     im.set_array(A)
+#     return im, text
+
+# ani = FuncAnimation(plt.gcf(), update, frames=range(100), interval=50, blit=False)
+
+# plt.show()
