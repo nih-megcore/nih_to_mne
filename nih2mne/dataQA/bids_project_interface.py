@@ -84,14 +84,19 @@ def run_sbatch(cmd=None, mem=None, threads=None, time="02:00:00", sbatch_dep=Non
 #%%
 class qa_megraw_object:
     '''Current minimal template - add more later'''
-    def __init__(self, fname):
+    def __init__(self, fname, run_qa=False):
         self.rel_path = fname
         self.fname = op.basename(fname)
         self._get_task()
         self._is_emptyroom()
-        
-        # Identify and drop channel jumps
         self.BADS = {}
+        if run_qa==True:
+            self.qa_dset()
+        
+        
+    def qa_dset(self):
+        'Run the quality assurance on the dataset'
+        # Identify and drop channel jumps
         self.BADS['JUMPS'] = self._check_jumps()
         
         # Calculate the 10s epoch trim mean (60% mid) average power
