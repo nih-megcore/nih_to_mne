@@ -17,6 +17,8 @@ Set up MNE environment (conda can be substituted for mamba below if it doesn't w
 Install nih_to_mne<br>
 ```pip install git+https://github.com/nih-megcore/nih_to_mne```
 
+## GUI Components For Creating and QA-ing BIDS data
+Overview Here: https://megcore.nih.gov/index.php/BIDS_GUIs
 
 ## Adds calc_mnetrans.py, bstags.py, and make_meg_bids.py to the commandline
 
