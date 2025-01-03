@@ -121,12 +121,13 @@ class parsemarks_tile(QHBoxLayout):
     | EventsList | MarkOn | EventsList | MarkOn | Time1 | Time2 | Count | Name |
     | ComboBox   | CheckB | ComboBox   | CheckB  | LineE | LineE | QLabel | LineE | 
     
+    SET/DEL options will be handled by the main window
+    
     '''
     def __init__(self, event_namelist=None):
         super(parsemarks_tile, self).__init__()
         
         #Assemble Tile
-        # self.layout = QHBoxLayout()
         self.evt_namelist = event_namelist
         
         self.b_evt1_name = QComboBox()
@@ -145,8 +146,21 @@ class parsemarks_tile(QHBoxLayout):
         # self.b_mark_on_lag.clicked.connect(....)
         self.addWidget(self.b_mark_on_lag)
         
-        # self.b_window_t1 = QLineEdit(0)
-        # self.b_window_t2 = QLineEdit(0.5)
+        self.b_window_t1 = QLineEdit('0')
+        self.addWidget(self.b_window_t1)
+        self.b_window_t2 = QLineEdit('0.5')
+        self.addWidget(self.b_window_t2)
+        
+        self.event_count = QLabel('N=')  #Still need to compute event count and enter
+        self.addWidget(self.event_count)
+        
+        self.static_name_label = QLabel('Name:')
+        self.addWidget(self.static_name_label)
+        
+        self.event_name = QLineEdit()
+        self.addWidget(self.event_name)
+        
+        
         
         
         
@@ -196,6 +210,10 @@ class event_coding_Window(QMainWindow):
         return main_layout
     
     def fill_trig_chan_layout(self):
+        '''
+        Iterates over analog channels and PPT conditions to fill panel
+        | Trig Name | b_UpTrig | b_DownTrig | Count=  | OutName: | 
+        '''
         # Setup panel headers
         self.ana_trigger_layout.addWidget(QLabel('Analogue Channels'))
         self.dig_trigger_layout.addWidget(QLabel('Digital Channel Trigger Values'))
