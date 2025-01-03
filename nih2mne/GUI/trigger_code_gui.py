@@ -39,7 +39,9 @@ Layout:
         Create a trigger processing script
 
 
-TODO: Temporal coding on PPT -- a 1 followed by a 5 is a Y event        
+TODO: Temporal coding on PPT -- a 1 followed by a 5 is a Y event 
+Set action to invert trigger for counts    
+Set all dig trigs to invert together   
 
 """
 
@@ -48,23 +50,29 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QCheckBox
 
 import sys
-from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project
+# from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project
 import os, os.path as op
 import numpy as np
-from nih2mne.utilities.montages import montages
-from nih2mne.dataQA.qa_config_reader import qa_dataset, read_yml
+# from nih2mne.utilities.montages import montages
+# from nih2mne.dataQA.qa_config_reader import qa_dataset, read_yml
+from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital, 
+                                                 check_analog_inverted, threshold_detect)
+
 import glob
 import mne
 
 
 class trig_tile(QHBoxLayout):
-    def __init__(self, chan_name=None, include_polarity=True):
+    '''Analogue trigger tile for the analogue panel'''
+    def __init__(self, chan_name=None, include_polarity=True, 
+                 event_count=None, meg_fname=None):
         super(trig_tile, self).__init__()
         
+        self.meg_fname = meg_fname
         self.trig_type = chan_name[1:4]
         self.ch_name = chan_name
 
-        self.addWidget(QLabel(f'{chan_name} :'))
+        self.addWidget(QLabel(f'{chan_name} :'))  
         
         # Add Checkboxes for upgoing/Downgoing trigger polarity 
         self.b_upgoing_trigger = QCheckBox()
@@ -79,10 +87,21 @@ class trig_tile(QHBoxLayout):
         self.addWidget(self.b_downgoing_trigger)
         self.addWidget(QLabel('Down'))
         
-        # 
+        # Name the event, so that it can be referenced later
         self.addWidget(QLabel('   Event Name:'))
         self.event_name = QLineEdit()
         self.addWidget(self.event_name)
+        
+        # Event counter display
+        if self.trig_type == 'ADC':
+            self.event_dframe = threshold_detect(self.meg_fname,  channel=self.ch_name)
+            self.event_count = len(self.event_dframe)
+        elif self.trig_type == 'PPT':
+            self.event_count = event_count
+        else:
+            self.event_count = 'ERR'
+        self.event_count_label = QLabel(f'N={self.event_count}')
+        self.addWidget(self.event_count_label)
 
     def set_up_trigger_polarity(self):
         self.trigger_polarity = 'up'
@@ -92,8 +111,9 @@ class trig_tile(QHBoxLayout):
     def set_down_trigger_polarity(self):
         self.trigger_polarity = 'down'
         self.b_upgoing_trigger.setCheckState(0)
-        
-        
+    
+    def compute_value_count(self):
+        pass
         
         
         
@@ -131,21 +151,76 @@ class event_coding_Window(QMainWindow):
         return main_layout
     
     def fill_trig_chan_layout(self):
-        # Display the trig chans
+        # Setup panel headers
         self.ana_trigger_layout.addWidget(QLabel('Analogue Channels'))
-        self.dig_trigger_layout.addWidget(QLabel('Digital Channels'))
+        self.dig_trigger_layout.addWidget(QLabel('Digital Channel Trigger Values'))
         for i in self.trig_ch_names:
+            ### Analogue Channels ###
             if i.startswith('UADC'):
-                self.tile_dict[i]=trig_tile(chan_name=i,include_polarity=True)
+                self.tile_dict[i]=trig_tile(chan_name=i,include_polarity=True,
+                                            meg_fname=self.meg_fname)
                 self.ana_trigger_layout.addLayout(self.tile_dict[i])
+            ### Digital Channels - Breakout the Codes ###
             elif i.startswith('UPPT'):
-                pass
-                # self.tile_dict[i]= ;lkj;lkj ;lj ;l ##########<<<<<<<<<<
-                # self.dig_trigger_layout.addLayout(self.    lkjlkj lj )
+                dig_dframe = detect_digital(self.meg_fname, channel=i)
+                event_vals = list(dig_dframe.condition.unique())
+                event_vals = sorted(event_vals)
+                dig_event_counts = dig_dframe.condition.value_counts()
+                for evt_name in event_vals:
+                    self.tile_dict[i]= trig_tile(chan_name=f'{i} [{evt_name}]', 
+                                                 include_polarity=True,
+                                                 event_count=dig_event_counts[evt_name], 
+                                                 meg_fname = self.meg_fname)
+                    self.dig_trigger_layout.addLayout(self.tile_dict[i])
+            else:
+                print(f'Not processing channel {i}')
+                
+    
+    
+                    
+                    
+                    
+                
+                
+                
+
     
     
                                             
         
+
+
+
+    def select_meg_dset(self):
+        meg_fname = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select a MEG folder (.ds)')
+        self.meg_fname = meg_fname
+        meg_display_name = meg_fname.split('/')[-1]
+        self.meg_display_name.setText(meg_display_name)
+        print(meg_fname)
+        if meg_fname != None:
+            self.meg_raw = mne.io.read_raw_ctf(meg_fname, clean_names=True, 
+                                               system_clock='ignore', preload=False)
+        self.trig_ch_names = [i for i in self.meg_raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
+        self.fill_trig_chan_layout()
+        # self.update_subjects_layout()
+
+
+def window():
+    app = QApplication(sys.argv)
+    win = event_coding_Window() 
+    win.show()
+    sys.exit(app.exec_())
+    
+window()
+
+
+#%% Testing
+meg_fname = '/fast2/BIDS/sub-ON02747/ses-01/meg/sub-ON02747_ses-01_task-airpuff_run-01_meg.ds/'
+raw = mne.io.read_raw_ctf(meg_fname, clean_names=True, system_clock='ignore')
+
+trig_picks = [i for i in raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
+
+
     # def trigger_tile(self):
     #     "Each tile has a Type:ChanName:Up/Down:OutputName"
     #     tile = QHBoxLayout()
@@ -213,39 +288,6 @@ class event_coding_Window(QMainWindow):
         
         # #Finalize
         # main_layout.addLayout(bottom_buttons_layout)
-
-
-    def select_meg_dset(self):
-        meg_fname = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select a MEG folder (.ds)')
-        self.meg_fname = meg_fname
-        meg_display_name = meg_fname.split('/')[-1]
-        self.meg_display_name.setText(meg_display_name)
-        print(meg_fname)
-        if meg_fname != None:
-            self.meg_raw = mne.io.read_raw_ctf(meg_fname, clean_names=True, 
-                                               system_clock='ignore', preload=False)
-        self.trig_ch_names = [i for i in self.meg_raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
-        self.fill_trig_chan_layout()
-        # self.update_subjects_layout()
-
-
-def window():
-    app = QApplication(sys.argv)
-    win = event_coding_Window() 
-    win.show()
-    sys.exit(app.exec_())
-    
-window()
-
-
-#%% Testing
-meg_fname = '/fast2/BIDS/sub-ON02747/ses-01/meg/sub-ON02747_ses-01_task-airpuff_run-01_meg.ds/'
-raw = mne.io.read_raw_ctf(meg_fname, clean_names=True, system_clock='ignore')
-
-trig_picks = [i for i in raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
-
-
-
 
     
 # def cmdline_main():
