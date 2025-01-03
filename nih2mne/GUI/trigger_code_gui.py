@@ -174,11 +174,12 @@ class event_coding_Window(QMainWindow):
                 event_vals = sorted(event_vals)
                 dig_event_counts = dig_dframe.condition.value_counts()
                 for evt_name in event_vals:
-                    self.tile_dict[i]= trig_tile(chan_name=f'{i} [{evt_name}]', 
+                    evt_key = f'{i}_{evt_name}'
+                    self.tile_dict[evt_key]= trig_tile(chan_name=f'{i} [{evt_name}]', 
                                                  include_polarity=True,
                                                  event_count=dig_event_counts[evt_name], 
                                                  meg_fname = self.meg_fname)
-                    self.dig_trigger_layout.addLayout(self.tile_dict[i])
+                    self.dig_trigger_layout.addLayout(self.tile_dict[evt_key])
             else:
                 print(f'Not processing channel {i}')
     
@@ -193,18 +194,20 @@ class event_coding_Window(QMainWindow):
         self.event_namelist = namelist
         
         #Check for duplicated names
-        for i in namelist:
-            if i==None:
-                namelist.remove(i)
-            if i.strip()=='':
-                namelist.remove(i)        
+        for i in reversed(range(len(namelist))):
+            if namelist[i]==None:
+                del(namelist[i])
+            if namelist[i]=='':
+                del(namelist[i])        
         if len(namelist) != len(set(namelist)):
             raise ValueError('The event names cannot have duplicates') 
-            
+        
+
+        
+        #Empty the layout list, so it doesn't append the previous
         num_keep_buttons = self.keep_events_layout.count()
-        print(num_keep_buttons)
         if num_keep_buttons > 1:
-            for i in reversed(range(1,num_keep_buttons)):  #Skip the label
+            for i in reversed(range(1,num_keep_buttons)):  #Skip the label - remove from the end
                 item = self.keep_events_layout.takeAt(i)
                 self.keep_events_layout.removeItem(item)
                 if item.widget():
@@ -230,7 +233,7 @@ class event_coding_Window(QMainWindow):
         self.trig_ch_names = [i for i in self.meg_raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
         self.fill_trig_chan_layout()
         
-        self.b_update_event_names = QPushButton('Update Event Names')
+        self.b_update_event_names = QPushButton('Update Event Names: Will erase below')
         self.b_update_event_names.clicked.connect(self.update_event_names)
         self.trig_parsemarks_layout.addWidget(self.b_update_event_names)
         self.trig_parsemarks_layout.addWidget(QLabel('Create New Events from Other Events'))
