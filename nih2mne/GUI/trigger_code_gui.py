@@ -112,8 +112,6 @@ class trig_tile(QHBoxLayout):
         self.trigger_polarity = 'down'
         self.b_upgoing_trigger.setCheckState(0)
     
-    def compute_value_count(self):
-        pass
         
         
         
@@ -148,6 +146,13 @@ class event_coding_Window(QMainWindow):
         main_layout.addLayout(self.ana_trigger_layout)
         self.dig_trigger_layout = QVBoxLayout()
         main_layout.addLayout(self.dig_trigger_layout)
+        
+        self.trig_parsemarks_layout = QVBoxLayout()
+        main_layout.addLayout(self.trig_parsemarks_layout)
+        
+        self.keep_events_layout = QVBoxLayout()
+        main_layout.addLayout(self.keep_events_layout)
+                
         return main_layout
     
     def fill_trig_chan_layout(self):
@@ -160,6 +165,8 @@ class event_coding_Window(QMainWindow):
                 self.tile_dict[i]=trig_tile(chan_name=i,include_polarity=True,
                                             meg_fname=self.meg_fname)
                 self.ana_trigger_layout.addLayout(self.tile_dict[i])
+                if i=='UADC016':
+                    self.tile_dict[i].event_name.setText('projector')
             ### Digital Channels - Breakout the Codes ###
             elif i.startswith('UPPT'):
                 dig_dframe = detect_digital(self.meg_fname, channel=i)
@@ -174,22 +181,42 @@ class event_coding_Window(QMainWindow):
                     self.dig_trigger_layout.addLayout(self.tile_dict[i])
             else:
                 print(f'Not processing channel {i}')
-                
     
-    
-                    
-                    
-                    
-                
-                
-                
-
-    
-    
-                                            
+    def update_event_names(self):
+        '''Set action for updating event names.  This will write all of the 
+        events to the an event list and update the parse_marks and evt_keep
+        panels'''
+        namelist = []
+        for key in self.tile_dict.keys():
+            tmp_txt = self.tile_dict[key].event_name.text()
+            namelist.append(tmp_txt)
+        self.event_namelist = namelist
         
-
-
+        #Check for duplicated names
+        for i in namelist:
+            if i==None:
+                namelist.remove(i)
+            if i.strip()=='':
+                namelist.remove(i)        
+        if len(namelist) != len(set(namelist)):
+            raise ValueError('The event names cannot have duplicates') 
+            
+        num_keep_buttons = self.keep_events_layout.count()
+        print(num_keep_buttons)
+        if num_keep_buttons > 1:
+            for i in reversed(range(1,num_keep_buttons)):  #Skip the label
+                item = self.keep_events_layout.takeAt(i)
+                self.keep_events_layout.removeItem(item)
+                if item.widget():
+                    item.widget().deleteLater()
+        self.keep_events_layout.update()
+            
+        #Add each event to the layout - checkable allows for depressed pushbuttons
+        for i in namelist:
+            tmp=QPushButton(i)
+            tmp.setCheckable(True)
+            self.keep_events_layout.addWidget(tmp)
+            del tmp
 
     def select_meg_dset(self):
         meg_fname = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select a MEG folder (.ds)')
@@ -202,7 +229,14 @@ class event_coding_Window(QMainWindow):
                                                system_clock='ignore', preload=False)
         self.trig_ch_names = [i for i in self.meg_raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
         self.fill_trig_chan_layout()
-        # self.update_subjects_layout()
+        
+        self.b_update_event_names = QPushButton('Update Event Names')
+        self.b_update_event_names.clicked.connect(self.update_event_names)
+        self.trig_parsemarks_layout.addWidget(self.b_update_event_names)
+        self.trig_parsemarks_layout.addWidget(QLabel('Create New Events from Other Events'))
+        
+        self.keep_events_layout.addWidget(QLabel('Events To Write'))
+        
 
 
 def window():
