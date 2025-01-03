@@ -61,9 +61,12 @@ from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital,
 import glob
 import mne
 
+############## Setup Main Classes ################
+
+
 
 class trig_tile(QHBoxLayout):
-    '''Analogue trigger tile for the analogue panel'''
+    '''Trigger tile for the analogue and digital panels'''
     def __init__(self, chan_name=None, include_polarity=True, 
                  event_count=None, meg_fname=None):
         super(trig_tile, self).__init__()
@@ -111,7 +114,44 @@ class trig_tile(QHBoxLayout):
     def set_down_trigger_polarity(self):
         self.trigger_polarity = 'down'
         self.b_upgoing_trigger.setCheckState(0)
+
+class parsemarks_tile(QHBoxLayout):
+    '''Parsemarks tile 
     
+    | EventsList | MarkOn | EventsList | MarkOn | Time1 | Time2 | Count | Name |
+    | ComboBox   | CheckB | ComboBox   | CheckB  | LineE | LineE | QLabel | LineE | 
+    
+    '''
+    def __init__(self, event_namelist=None):
+        super(parsemarks_tile, self).__init__()
+        
+        #Assemble Tile
+        # self.layout = QHBoxLayout()
+        self.evt_namelist = event_namelist
+        
+        self.b_evt1_name = QComboBox()
+        self.b_evt1_name.addItems(event_namelist)
+        self.addWidget(self.b_evt1_name)
+        
+        self.b_mark_on_lead = QCheckBox()
+        # self.b_mark_on_lead.clicked.connect(.....)
+        self.addWidget(self.b_mark_on_lead)
+        
+        self.b_evt2_name = QComboBox()
+        self.b_evt2_name.addItems(event_namelist)
+        self.addWidget(self.b_evt2_name)
+        
+        self.b_mark_on_lag = QCheckBox()
+        # self.b_mark_on_lag.clicked.connect(....)
+        self.addWidget(self.b_mark_on_lag)
+        
+        # self.b_window_t1 = QLineEdit(0)
+        # self.b_window_t2 = QLineEdit(0.5)
+        
+        
+        
+        
+############# Setup Window ######################            
         
         
         
@@ -220,6 +260,9 @@ class event_coding_Window(QMainWindow):
             tmp.setCheckable(True)
             self.keep_events_layout.addWidget(tmp)
             del tmp
+        
+        tmp = parsemarks_tile(event_namelist=namelist)
+        self.trig_parsemarks_layout.addLayout(tmp)
 
     def select_meg_dset(self):
         meg_fname = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select a MEG folder (.ds)')
