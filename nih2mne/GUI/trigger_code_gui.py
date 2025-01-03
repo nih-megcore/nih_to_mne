@@ -37,7 +37,9 @@ Layout:
         Invoke MNE display
     WriteScript:
         Create a trigger processing script
-        
+
+
+TODO: Temporal coding on PPT -- a 1 followed by a 5 is a Y event        
 
 """
 
@@ -78,12 +80,9 @@ class trig_tile(QHBoxLayout):
         self.addWidget(QLabel('Down'))
         
         # 
-        self.addWidget(QLabel('Event Name: '))
+        self.addWidget(QLabel('   Event Name:'))
         self.event_name = QLineEdit()
         self.addWidget(self.event_name)
-                       
-            
-        
 
     def set_up_trigger_polarity(self):
         self.trigger_polarity = 'up'
@@ -105,6 +104,8 @@ class event_coding_Window(QMainWindow):
         self.setGeometry(100,100, 1000, 1000) #250*gridsize_col, 100*gridsize_row)
         self.setWindowTitle('Event Coding GUI')
         
+        self.tile_dict = {}
+        
         # Finalize Widget and dispaly
         main_layout = self.setup_full_layout()
         widget = QWidget()
@@ -123,19 +124,26 @@ class event_coding_Window(QMainWindow):
         meg_choose_layout.addWidget(self.meg_display_name)
         main_layout.addLayout(meg_choose_layout)
         
-        self.trigger_layout = QVBoxLayout()
-        main_layout.addLayout(self.trigger_layout)
+        self.ana_trigger_layout = QVBoxLayout()
+        main_layout.addLayout(self.ana_trigger_layout)
+        self.dig_trigger_layout = QVBoxLayout()
+        main_layout.addLayout(self.dig_trigger_layout)
         return main_layout
     
     def fill_trig_chan_layout(self):
         # Display the trig chans
-        self.trigger_layout.addWidget(QLabel('Trigger Channels'))
+        self.ana_trigger_layout.addWidget(QLabel('Analogue Channels'))
+        self.dig_trigger_layout.addWidget(QLabel('Digital Channels'))
         for i in self.trig_ch_names:
-            t_type = i[1:4]
-            print(f'{i}: {t_type}')
-            self.trigger_layout.addLayout(trig_tile(
-                                            chan_name=i,
-                                            include_polarity=True))
+            if i.startswith('UADC'):
+                self.tile_dict[i]=trig_tile(chan_name=i,include_polarity=True)
+                self.ana_trigger_layout.addLayout(self.tile_dict[i])
+            elif i.startswith('UPPT'):
+                pass
+                # self.tile_dict[i]= ;lkj;lkj ;lj ;l ##########<<<<<<<<<<
+                # self.dig_trigger_layout.addLayout(self.    lkjlkj lj )
+    
+    
                                             
         
     # def trigger_tile(self):
@@ -212,10 +220,11 @@ class event_coding_Window(QMainWindow):
         self.meg_fname = meg_fname
         meg_display_name = meg_fname.split('/')[-1]
         self.meg_display_name.setText(meg_display_name)
+        print(meg_fname)
         if meg_fname != None:
             self.meg_raw = mne.io.read_raw_ctf(meg_fname, clean_names=True, 
                                                system_clock='ignore', preload=False)
-        self.trig_ch_names = [i for i in raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
+        self.trig_ch_names = [i for i in self.meg_raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
         self.fill_trig_chan_layout()
         # self.update_subjects_layout()
 
