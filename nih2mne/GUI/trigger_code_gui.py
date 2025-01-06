@@ -229,7 +229,7 @@ class event_coding_Window(QMainWindow):
             elif i.startswith('UPPT'):
                 dig_dframe = detect_digital(self.meg_fname, channel=i)
                 event_vals = list(dig_dframe.condition.unique())
-                event_vals = sorted(event_vals)
+                event_vals = sorted(event_vals, key=int)
                 dig_event_counts = dig_dframe.condition.value_counts()
                 for evt_name in event_vals:
                     evt_key = f'{i}_{evt_name}'
