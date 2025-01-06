@@ -251,7 +251,7 @@ class event_coding_Window(QMainWindow):
             namelist.append(tmp_txt)
         self.event_namelist = namelist
         
-        #Check for duplicated names
+        #Check for duplicated names from raw trigger panel
         for i in reversed(range(len(namelist))):
             if namelist[i]==None:
                 del(namelist[i])
@@ -260,9 +260,13 @@ class event_coding_Window(QMainWindow):
         if len(namelist) != len(set(namelist)):
             raise ValueError('The event names cannot have duplicates') 
         
-
+        ############# Parsemarks Layout ##########################
+        tmp = parsemarks_tile(event_namelist=namelist)
+        self.trig_parsemarks_layout.addLayout(tmp)        
         
-        #Empty the layout list, so it doesn't append the previous
+        
+        ############# Keep Events Layout #########################
+        #Empty the keep events layout list, so it doesn't append the previous
         num_keep_buttons = self.keep_events_layout.count()
         if num_keep_buttons > 1:
             for i in reversed(range(1,num_keep_buttons)):  #Skip the label - remove from the end
@@ -272,15 +276,16 @@ class event_coding_Window(QMainWindow):
                     item.widget().deleteLater()
         self.keep_events_layout.update()
             
-        #Add each event to the layout - checkable allows for depressed pushbuttons
+        #Add each event to the final keep events layout 
+        #checkable allows for depressed pushbuttons
         for i in namelist:
             tmp=QPushButton(i)
             tmp.setCheckable(True)
             self.keep_events_layout.addWidget(tmp)
             del tmp
         
-        tmp = parsemarks_tile(event_namelist=namelist)
-        self.trig_parsemarks_layout.addLayout(tmp)
+
+        
 
     def select_meg_dset(self):
         meg_fname = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select a MEG folder (.ds)')
