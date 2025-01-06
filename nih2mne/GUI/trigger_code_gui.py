@@ -244,7 +244,15 @@ class event_coding_Window(QMainWindow):
     def update_event_names(self):
         '''Set action for updating event names.  This will write all of the 
         events to the an event list and update the parse_marks and evt_keep
-        panels'''
+        panels. 
+        raw_event_list: directly evaluated from the raw trigger lines
+        parsed_event_list: parse_marks derived events
+        ## logfile_event_list: Future implementation
+        ## temporal_coding_event_list : Future implementation
+        
+        event_list: combination of the above
+        
+        '''
         namelist = []
         for key in self.tile_dict.keys():
             tmp_txt = self.tile_dict[key].event_name.text()
@@ -261,8 +269,17 @@ class event_coding_Window(QMainWindow):
             raise ValueError('The event names cannot have duplicates') 
         
         ############# Parsemarks Layout ##########################
-        tmp = parsemarks_tile(event_namelist=namelist)
-        self.trig_parsemarks_layout.addLayout(tmp)        
+        #Build the parsemarks tile - then add two external buttons 
+        tmp_pm_tile = parsemarks_tile(event_namelist=namelist)
+        tmp_full_pm_layout = QHBoxLayout()
+        tmp_full_pm_layout.addLayout(tmp_pm_tile)
+        b_parsemarks_set = QPushButton('SET')
+        tmp_full_pm_layout.addWidget(b_parsemarks_set)
+        b_parsemarks_add = QPushButton('ADD')
+        b_parsemarks_add.clicked.connect(self.add_parsemarks_line)
+        tmp_full_pm_layout.addWidget(b_parsemarks_add)
+             # SET and ADD --- connect button actions
+        self.trig_parsemarks_layout.addLayout(tmp_full_pm_layout)        
         
         
         ############# Keep Events Layout #########################
@@ -284,7 +301,8 @@ class event_coding_Window(QMainWindow):
             self.keep_events_layout.addWidget(tmp)
             del tmp
         
-
+    def add_parsemarks_line(self):
+        '''Add and additional line to the parsemarks panel '''
         
 
     def select_meg_dset(self):
