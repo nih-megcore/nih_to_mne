@@ -48,7 +48,7 @@ Set all dig trigs to invert together
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QCheckBox
-
+from functools import partial
 import sys
 # from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project
 import os, os.path as op
@@ -269,41 +269,68 @@ class event_coding_Window(QMainWindow):
             raise ValueError('The event names cannot have duplicates') 
         
         ############# Parsemarks Layout ##########################
-        #Build the parsemarks tile - then add two external buttons 
-        tmp_pm_tile = parsemarks_tile(event_namelist=namelist)
-        tmp_full_pm_layout = QHBoxLayout()
-        tmp_full_pm_layout.addLayout(tmp_pm_tile)
-        b_parsemarks_set = QPushButton('SET')
-        tmp_full_pm_layout.addWidget(b_parsemarks_set)
-        b_parsemarks_add = QPushButton('ADD')
-        b_parsemarks_add.clicked.connect(self.add_parsemarks_line)
-        tmp_full_pm_layout.addWidget(b_parsemarks_add)
-             # SET and ADD --- connect button actions
-        self.trig_parsemarks_layout.addLayout(tmp_full_pm_layout)        
-        
+        self.parsemarks_tile_list = []
+        self.add_parsemarks_line()
         
         ############# Keep Events Layout #########################
         #Empty the keep events layout list, so it doesn't append the previous
-        num_keep_buttons = self.keep_events_layout.count()
-        if num_keep_buttons > 1:
-            for i in reversed(range(1,num_keep_buttons)):  #Skip the label - remove from the end
-                item = self.keep_events_layout.takeAt(i)
-                self.keep_events_layout.removeItem(item)
-                if item.widget():
-                    item.widget().deleteLater()
-        self.keep_events_layout.update()
-            
+        self.update_keep_events_list(flush=True)
+
         #Add each event to the final keep events layout 
         #checkable allows for depressed pushbuttons
-        for i in namelist:
+        # for i in namelist:
+        #     tmp=QPushButton(i)
+        #     tmp.setCheckable(True)
+        #     self.keep_events_layout.addWidget(tmp)
+        #     del tmp
+            
+    def update_keep_events_list(self, flush=False):
+        num_keep_buttons = self.keep_events_layout.count()
+        if flush==True:
+            if num_keep_buttons > 1:
+                for i in reversed(range(1,num_keep_buttons)):  #Skip the label - remove from the end
+                    item = self.keep_events_layout.takeAt(i)
+                    self.keep_events_layout.removeItem(item)
+                    if item.widget():
+                        item.widget().deleteLater()
+
+        for i in self.event_namelist: #amelist:
             tmp=QPushButton(i)
             tmp.setCheckable(True)
             self.keep_events_layout.addWidget(tmp)
             del tmp
+        self.keep_events_layout.update()
+        
         
     def add_parsemarks_line(self):
-        '''Add and additional line to the parsemarks panel '''
+        '''Add an additional line to the parsemarks panel 
+        Create parsemarks tile and append ADD and SET buttons
+        Finally add new name to the event list'''
+        if len(self.parsemarks_tile_list)>0:
+            self.set_parsemarks_line() #Add the name of the previous entry to the namelist
+            
+        tmp_pm_tile = parsemarks_tile(event_namelist=self.event_namelist)
+        tmp_full_pm_layout = QHBoxLayout()
+        tmp_full_pm_layout.addLayout(tmp_pm_tile)
         
+        b_parsemarks_set = QPushButton('SET')
+        b_parsemarks_set.clicked.connect(self.set_parsemarks_line) 
+        tmp_full_pm_layout.addWidget(b_parsemarks_set)
+        b_parsemarks_add = QPushButton('ADD')
+        b_parsemarks_add.clicked.connect(self.add_parsemarks_line)
+        tmp_full_pm_layout.addWidget(b_parsemarks_add)
+        self.trig_parsemarks_layout.addLayout(tmp_full_pm_layout)  
+        self.parsemarks_tile_list.append(tmp_pm_tile)  #Add the new entry to the list
+          
+    def set_parsemarks_line(self):
+        '''Add the parsemarks name to the name list and update Keep list panel'''
+        last_button = self.parsemarks_tile_list[-1]
+        last_event_name = last_button.event_name.text() #event_name_widget.text()
+        self.event_namelist.append(last_event_name)
+        self.update_keep_events_list(flush=True)
+        self.keep_events_layout.update()
+                
+
 
     def select_meg_dset(self):
         meg_fname = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select a MEG folder (.ds)')
