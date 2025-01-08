@@ -289,7 +289,7 @@ class event_coding_Window(QMainWindow):
                     if item.widget():
                         item.widget().deleteLater()
 
-        for i in self.event_namelist: #amelist:
+        for i in self.event_namelist: 
             tmp=QPushButton(i)
             tmp.setCheckable(True)
             self.keep_events_layout.addWidget(tmp)
@@ -357,6 +357,22 @@ class event_coding_Window(QMainWindow):
         Part 6: Write the markerfile to the input dataset
         '''
         
+        ##### Finalize selection list #####
+        self.events_to_write = []
+        for i in range(len(self.keep_events_layout)):
+            tmp = self.keep_events_layout.takeAt(i)
+            if tmp==None:
+                continue
+            if tmp.widget():
+                button = tmp.widget()
+            else:
+                continue
+            if hasattr(button, 'isChecked'):
+                print('ischecked is there')
+                if button.isChecked():
+                    self.events_to_write.append(button.text())
+        print(self.events_to_write)
+        
         ##### Python Header Section #####
         header=["#!/usr/bin/env python3\n",
                 "# -*- coding: utf-8 -*-\n",
@@ -386,7 +402,7 @@ class event_coding_Window(QMainWindow):
         ##### Analogue Triggers #####
         ana_trig_code = []
         for i, tile in self.tile_dict.items():
-            if i.startswith('UADC'):
+            if i.startswith('UADC') and (tile.event_name.text() in self.events_to_write) :
                 markname = tile.event_name.text()
                 if tile.b_downgoing_trigger.checkState()==2:
                     invert_val = True
@@ -400,7 +416,7 @@ class event_coding_Window(QMainWindow):
         ##### Digital Triggers #####       #####!!!!!!    IF NAME does not exist - dont write
         dig_trig_code = []
         for i, tile in self.tile_dict.items():
-            if i.startswith('UPPT'):
+            if i.startswith('UPPT') and (tile.event_name.text() in self.events_to_write):
                 markname = tile.event_name.text()
                 # if self.b_downgoing_trigger.checkState()==2:
                 #     invert_val = True
