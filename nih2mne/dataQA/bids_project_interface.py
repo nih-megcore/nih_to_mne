@@ -210,7 +210,13 @@ class qa_megraw_object:
 
     def __repr__(self):
         tmp_ = f'megraw: {self.task} : {self.fname}'
-        bads_len = self.BADS['JUMPS']['CHANS'].__len__()
+        if hasattr(self, 'BADS'):
+            if 'JUMPS' in self.BADS:
+                bads_len = self.BADS['JUMPS']['CHANS'].__len__()
+            else:
+               bads_len='Untested' 
+        else:
+            bads_len='Untested'
         if bads_len !=0:
             tmp_ += f' :: JUMPS: {bads_len}'
         return tmp_
@@ -256,9 +262,10 @@ class meglist_class:
                 num_chans = len(montage)
             else:
                 num_chans = 20 
-            tmp.plot(highpass=hp, lowpass=lp, n_channels=num_chans)
+            test_plot = tmp.plot(highpass=hp, lowpass=lp, n_channels=num_chans)
         else:
-            dset.raw.plot(highpass=hp, lowpass=lp)    
+            test_plot = dset.raw.plot(highpass=hp, lowpass=lp) 
+        return test_plot
     
     @property
     def meg_count(self):
