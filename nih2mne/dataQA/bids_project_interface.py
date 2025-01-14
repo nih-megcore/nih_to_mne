@@ -253,18 +253,18 @@ class meglist_class:
         else:
             dset = self.meg_list[idx]
         dset.load()
+        self.current_meg_dset = dset.raw.copy()
         if montage != None:
             if type(montage) != list:
-                _tmp = montage(dset.raw)  #Call the function to eval montage
+                _tmp = montage(self.current_meg_dset)  #Call the function to eval montage
                 montage = _tmp
-            tmp = dset.raw.copy().pick_channels(montage, ordered=True)
             if len(montage) < 80:
                 num_chans = len(montage)
             else:
                 num_chans = 20 
-            test_plot = tmp.plot(highpass=hp, lowpass=lp, n_channels=num_chans)
+            test_plot = self.current_meg_dset.plot(highpass=hp, lowpass=lp, n_channels=num_chans)
         else:
-            test_plot = dset.raw.plot(highpass=hp, lowpass=lp) 
+            test_plot = self.current_meg_dset.plot(highpass=hp, lowpass=lp) 
         return test_plot
     
     @property

@@ -24,7 +24,7 @@ Layout:
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
-    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit
+    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QMessageBox
 
 import sys
 from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project
@@ -33,6 +33,8 @@ import numpy as np
 from nih2mne.utilities.montages import montages
 from nih2mne.dataQA.qa_config_reader import qa_dataset, read_yml
 import glob
+import time
+from PyQt5.QtCore import QTimer
 
 
 
@@ -180,8 +182,11 @@ class Subject_GUI(QWidget):
         self.b_plot_montage = QComboBox()
         self.b_plot_montage.addItems(montages.keys())
         meg_display_layout.addWidget(self.b_plot_montage)
+        self.b_write_bads = QPushButton('WriteBads')
+        self.b_write_bads.clicked.connect(self.msg_confirm_write_bads)         
+        meg_display_layout.addWidget(self.b_write_bads)
         main_layout.addLayout(meg_display_layout)
-        
+
         # Add an events display -- SEt this to update after selection
         self.b_meg_events = QLabel(self.get_meg_events())
         self.b_chooser_meg.currentIndexChanged.connect(self.update_chooser_meg_idx)
@@ -228,7 +233,60 @@ class Subject_GUI(QWidget):
             fmax = None
         else:
             fmax = float(fmax)
-        self.bids_info.plot_meg(idx=idx, hp=fmin, lp=fmax, montage=montage_choice)
+        
+        tmp = self.bids_info.plot_meg(idx=idx, hp=fmin, lp=fmax, montage=montage_choice)
+        # i=0   #try to get the 
+        # while not tmp._closed:
+        #     print(i)
+        #     QTimer.singleShot(2000)
+
+        
+    def msg_confirm_write_bads(self):
+        # Send a confirmation pushbutton panel signal to write bad channels
+        idx = self.b_chooser_meg.currentIndex()
+        
+        msg = QMessageBox()
+        msg.setText("Warning!: Do you want to write Bad Chans and Bad Epochs to your raw data")
+        _bads = self.bids_info.current_meg_dset.info['bads']
+        annots = self.bids_info.current_meg_dset.annotations
+        #BAD epochs --- here write to annotations
+        
+        #Bad epochs and channels are written after confirmation response        
+        msg.setDetailedText(f'filename: {self.bids_info.meg_list[idx].fname}\n Bad Chans {_bads}')
+        msg.setStandardButtons(QMessageBox.No | QMessageBox.Save)
+        msg.setDefaultButton(QMessageBox.No)
+        msg.buttonClicked.connect(self.return_message_box_response)
+        msg.exec_()
+    
+    def return_message_box_response(self, i):
+        idx = self.b_chooser_meg.currentIndex()
+        # assert self.bids_info.meg_list[idx].fname =     #FIX #####################################
+        
+        raw = self.bids_info.meg_list[idx].raw
+        fname = self.bids_info.meg_list[idx].rel_path
+        _bads = self.bids_info.current_meg_dset.info['bads']
+        
+        if i.text()=='&No':
+            print(f'NOT saving bads to raw data')
+        elif i.text()=='&Save':
+            print(f'Save bad chans from Data Editor: {_bads}')
+            self.write_bad_chans_to_raw(fname=fname, bad_chs=_bads)
+        else:
+            print(f'No operation performed')
+            
+    def write_bad_chans_to_raw(self, fname=None, bad_chs=None):
+        if fname==None:
+            raise ValueError
+        idx = self.b_chooser_meg.currentIndex()
+        print(fname)
+        bads_fname = op.join(fname, 'BadChannels')
+        bads_str = ''.join([i+'\n' for i in bad_chs])
+        with open(bads_fname, 'w') as f:
+            f.writelines(bads_str)
+            
+    # def write_bad_segments(self, fname=None, annotations=None):
+        
+        
         
     def plot_fids(self):
         self.bids_info.plot_mri_fids()
@@ -473,8 +531,15 @@ class BIDS_Project_Window(QMainWindow):
             i+=1
         return self.subjs_layout
             
+#%%
 
+bids_pro = bids_project(bids_root='/fast2/BIDS')
+app = QApplication(sys.argv)
+win = BIDS_Project_Window(bids_project = bids_pro) 
+win.show()
+sys.exit(app.exec_())
 
+#%%
 
 def window(bids_project=None, num_rows=6, num_cols=4):
     os.chdir(bids_project.bids_root)
@@ -502,8 +567,6 @@ def cmdline_main():
 if __name__ == '__main__':
     cmdline_main()
 
-
-# bids_pro = bids_project(bids_root='/fast2/BIDS')
 
     
 
