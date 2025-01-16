@@ -5,12 +5,15 @@
 @author: jstout
 
 TODO: 
-    1)Functionalize the window loop operations, so they can be called outside 
-    of the while loop - basically this is preventing the read_cfg operation from
-    changing the layout.
-    2)Button to launch full logfile read
+    1)Button to launch full logfile read
 
-                       
+####### BASIC Class explanation ###########
+qa_mri_class - mri finder and json QA and freesurfer qa
+meg_class - minimal wrapper
+meg_list_class - List of meg_class
+_subject_bids_info  - MIXIN of qa_mri_class/meg_class/meg_list_class
+subject_bids_info  - Factory method to load saved or generate from new
+subject_tile                         
 """
 import os,os.path as op
 import glob
@@ -29,19 +32,12 @@ from collections import OrderedDict
 CFG_VERSION = 1.0
 
 jump_thresh = 1.5e-07 #Abs value thresh
-n_jobs = 4
 
-
-'''
-qa_mri_class - mri finder and json QA and freesurfer qa
-meg_class - minimal wrapper
-meg_list_class - List of meg_class
-_subject_bids_info  - MIXIN of qa_mri_class/meg_class/meg_list_class
-subject_bids_info  - Factory method to load saved or generate from new
-subject_tile  
-'''
-    
-
+# Configure for slurm setup
+if 'OMP_NUM_THREADS' in os.environ:
+    n_jobs = os.environ['OMP_NUM_THREADS']
+else: 
+    n_jobs = -1
 
 
                            
@@ -264,15 +260,18 @@ class meglist_class:
             else:
                 num_chans = 20 
             self.current_meg_dset.pick_channels(montage, ordered=True)
-            # Conditionally Filter 60Hz
-            print(f_mains)
+            
+            # Conditionally Filter 60Hz if notch button checked.  
             self.current_meg_dset.load_data()
-            if f_mains!=False: self.current_meg_dset.notch_filter(float(f_mains), n_jobs=n_jobs)
+            # Check if any main "M" channels available - notch will fail
+            misc_only=True if len([i for i in montage if i.startswith('M')])==0 else False
+            if (f_mains!=False) and (not misc_only): self.current_meg_dset.notch_filter(float(f_mains), n_jobs=n_jobs)
+            
             # Plot
             test_plot = self.current_meg_dset.plot(highpass=hp, lowpass=lp, n_channels=num_chans)
         else:
             self.current_meg_dset.load_data()
-            # Conditionally filter 60hz
+            # Conditionally filter 60hz if notch button checked
             if f_mains!=False: self.current_meg_dset.notch_filter(float(f_mains), n_jobs=n_jobs)
             # Plot
             test_plot = self.current_meg_dset.plot(highpass=hp, lowpass=lp) 
