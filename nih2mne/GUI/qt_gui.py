@@ -249,10 +249,10 @@ class Subject_GUI(QWidget):
         msg.setText("Warning!: Do you want to write Bad Chans and Bad Epochs to your raw data")
         _bads = self.bids_info.current_meg_dset.info['bads']
         annots = self.bids_info.current_meg_dset.annotations
-        #BAD epochs --- here write to annotations
+        _bad_epochs = [i['description'] for i in annots if i['description'].lower().startswith('bad_')]
         
         #Bad epochs and channels are written after confirmation response        
-        msg.setDetailedText(f'filename: {self.bids_info.meg_list[idx].fname}\n Bad Chans {_bads}')
+        msg.setDetailedText(f'filename: {self.bids_info.meg_list[idx].fname}\n Bad Chans {_bads}\n Bad Epochs {len(_bad_epochs)}')
         msg.setStandardButtons(QMessageBox.No | QMessageBox.Save)
         msg.setDefaultButton(QMessageBox.No)
         msg.buttonClicked.connect(self.return_message_box_response)
@@ -547,11 +547,11 @@ class BIDS_Project_Window(QMainWindow):
             
 #%%
 
-# bids_pro = bids_project(bids_root='/fast2/BIDS')
-# app = QApplication(sys.argv)
-# win = BIDS_Project_Window(bids_project = bids_pro) 
-# win.show()
-# sys.exit(app.exec_())
+bids_pro = bids_project(bids_root='/fast2/BIDS')
+app = QApplication(sys.argv)
+win = BIDS_Project_Window(bids_project = bids_pro) 
+win.show()
+sys.exit(app.exec_())
 
 #%%
 
