@@ -128,6 +128,7 @@ class qa_megraw_object:
         chan_picks = [i for i in self.raw.ch_names if i[0]=='M']
         self._chan_picks = [i for i in chan_picks if len(i)==5]  #Some datasets have extra odd chans
         self._megall_picks = self._ref_picks+self._chan_picks
+        self._orig_bads = self.raw.info['bads']
         
     def _calc_bad_segments(self):
         'Template for calculation'

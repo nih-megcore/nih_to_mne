@@ -5,8 +5,6 @@ Created on Thu Oct 10 13:45:31 2024
 
 @author: jstout
 
-TODO -- 
-check the MEG datasets and assess bad subjs data (bad chans etc)
 
 Layout:
     BIDS_project_window: 
@@ -149,6 +147,11 @@ class Subject_GUI(QWidget):
             top_button_layout.addLayout(mri_picker_layout)
         #Set an else statement to force an override
         
+        # <<<<<<<<_-- Finish BIDSapp section
+        # self.b_launch_bids_app = QPushButton('Run BIDSapp')
+        # self.b_launch_bids_app.clicked.connect(self.open_bids_app_dialog)
+        # top_button_layout.addWidget(self.b_launch_bids_app)
+        
         main_layout.addLayout(top_button_layout)
         # main_layout.addWidget(self.b_save)
         main_layout.addWidget(QLabel(bids_info.__repr__()))
@@ -276,6 +279,10 @@ class Subject_GUI(QWidget):
         _bads = self.bids_info.current_meg_dset.info['bads']
         _annots = self.bids_info.current_meg_dset.annotations
         
+        #Raw data has all chans, add to the possibly subselected current meg
+        _orig_bads =   self.bids_info.meg_list[idx]._orig_bads
+        _bads = list(set(_bads+_orig_bads))
+                
         if i.text()=='&No':
             print(f'NOT saving bads to raw data')
         elif i.text()=='&Save':
@@ -300,6 +307,8 @@ class Subject_GUI(QWidget):
         
         # Change the annotations to dataframe, filter for bads, format for CTF and write
         annots_dframe = pd.DataFrame(annotations)
+        if len(annots_dframe)==0:  #Deal with case with no events
+            return
         annots_dframe['description_lower']=annots_dframe.description.str.lower()
         bads_dframe = annots_dframe[annots_dframe.description_lower.str[0:4]=='bad_']
         bads_dframe['offset'] = bads_dframe.onset + bads_dframe.duration
