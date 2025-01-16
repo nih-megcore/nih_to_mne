@@ -35,7 +35,7 @@ jump_thresh = 1.5e-07 #Abs value thresh
 
 # Configure for slurm setup
 if 'OMP_NUM_THREADS' in os.environ:
-    n_jobs = os.environ['OMP_NUM_THREADS']
+    n_jobs = int(os.environ['OMP_NUM_THREADS'])
 else: 
     n_jobs = -1
 

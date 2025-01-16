@@ -565,11 +565,11 @@ class BIDS_Project_Window(QMainWindow):
             
 #%%
 
-bids_pro = bids_project(bids_root='/fast2/BIDS')
-app = QApplication(sys.argv)
-win = BIDS_Project_Window(bids_project = bids_pro) 
-win.show()
-sys.exit(app.exec_())
+#bids_pro = bids_project(bids_root='/fast2/BIDS')
+#app = QApplication(sys.argv)
+#win = BIDS_Project_Window(bids_project = bids_pro) 
+#win.show()
+#sys.exit(app.exec_())
 
 #%%
 
