@@ -262,6 +262,7 @@ class meglist_class:
                 num_chans = len(montage)
             else:
                 num_chans = 20 
+            self.current_meg_dset.pick_channels(montage, ordered=True)
             test_plot = self.current_meg_dset.plot(highpass=hp, lowpass=lp, n_channels=num_chans)
         else:
             test_plot = self.current_meg_dset.plot(highpass=hp, lowpass=lp) 
