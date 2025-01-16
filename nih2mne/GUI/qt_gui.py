@@ -24,7 +24,7 @@ Layout:
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
-    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QMessageBox
+    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QMessageBox, QCheckBox
 
 import sys
 from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project
@@ -179,6 +179,10 @@ class Subject_GUI(QWidget):
         meg_display_layout.addWidget(QLabel('fmax'))
         self.b_fmax = QLineEdit()
         meg_display_layout.addWidget(self.b_fmax)
+        meg_display_layout.addWidget(QLabel('notch'))
+        self.b_f_mains = QCheckBox()
+        self.b_f_mains.setCheckState(2)
+        meg_display_layout.addWidget(self.b_f_mains)
         self.b_plot_montage = QComboBox()
         self.b_plot_montage.addItems(montages.keys())
         meg_display_layout.addWidget(self.b_plot_montage)
@@ -234,7 +238,12 @@ class Subject_GUI(QWidget):
         else:
             fmax = float(fmax)
         
-        tmp = self.bids_info.plot_meg(idx=idx, hp=fmin, lp=fmax, montage=montage_choice)
+        if self.b_f_mains.isChecked() == True:
+            _f_mains = 60.0
+        else:
+            _f_mains = False
+        tmp = self.bids_info.plot_meg(idx=idx, hp=fmin, lp=fmax, montage=montage_choice, 
+                                      f_mains=_f_mains)
         # i=0   #try to get the 
         # while not tmp._closed:
         #     print(i)

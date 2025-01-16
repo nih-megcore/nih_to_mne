@@ -29,6 +29,7 @@ from collections import OrderedDict
 CFG_VERSION = 1.0
 
 jump_thresh = 1.5e-07 #Abs value thresh
+n_jobs = 4
 
 
 '''
@@ -247,7 +248,7 @@ class meglist_class:
         else:
             return self.meg_list[dset_idx]
     
-    def plot_meg(self, idx=None, hp=None, lp=None, montage=None):
+    def plot_meg(self, idx=None, hp=None, lp=None, montage=None, f_mains=False):
         if idx == None:
             dset = self._pick_meg_from_list('Enter the number associated with the MEG dataset to plot: ')
         else:
@@ -263,8 +264,17 @@ class meglist_class:
             else:
                 num_chans = 20 
             self.current_meg_dset.pick_channels(montage, ordered=True)
+            # Conditionally Filter 60Hz
+            print(f_mains)
+            self.current_meg_dset.load_data()
+            if f_mains!=False: self.current_meg_dset.notch_filter(float(f_mains), n_jobs=n_jobs)
+            # Plot
             test_plot = self.current_meg_dset.plot(highpass=hp, lowpass=lp, n_channels=num_chans)
         else:
+            self.current_meg_dset.load_data()
+            # Conditionally filter 60hz
+            if f_mains!=False: self.current_meg_dset.notch_filter(float(f_mains), n_jobs=n_jobs)
+            # Plot
             test_plot = self.current_meg_dset.plot(highpass=hp, lowpass=lp) 
         return test_plot
     
