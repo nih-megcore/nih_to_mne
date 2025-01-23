@@ -19,6 +19,7 @@ Install nih_to_mne<br>
 
 ## GUI Components For Creating and QA-ing BIDS data
 Overview Here: https://megcore.nih.gov/index.php/BIDS_GUIs
+Include: Trigger Parsing, BIDS creation, and BIDS QA
 
 ![test](images/Project_panel_view.png)
 ![test](images/Subject_panel_switch_task_epochs.png)
