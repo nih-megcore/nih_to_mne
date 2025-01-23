@@ -20,6 +20,11 @@ Install nih_to_mne<br>
 ## GUI Components For Creating and QA-ing BIDS data
 Overview Here: https://megcore.nih.gov/index.php/BIDS_GUIs
 
+![test](images/Project_panel_view.png)
+![test](images/Subject_panel_switch_task_epochs.png)
+![test](images/Plot_mri_views.png)
+
+
 ## Adds calc_mnetrans.py, bstags.py, and make_meg_bids.py to the commandline
 
 ### calc_mnetrans.py
