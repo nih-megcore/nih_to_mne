@@ -437,6 +437,7 @@ class event_coding_Window(QMainWindow):
                 "import nih2mne\n",
                 '''from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital,
                     check_analog_inverted, threshold_detect, append_conditions)\n''',
+                '''from nih2mne.utilities.markerfile_write import main as write_markerfile\n'''
                 "\n\n",
                 "meg_fname = sys.argv[1]\n\n"
                 ]
@@ -478,23 +479,19 @@ class event_coding_Window(QMainWindow):
                 tmp_code = f"dframe_list.append(tmp_dframe)"
                 dig_trig_code.append(tmp_code)
         
-        # Combine the above dataframes so that parse marks can use both ana/dig
-        parse_marks_code = []
-        parse_marks_code.append(f"dframe = append_conditions(dframe_list)")
-        
         #####  Parsed Triggers  #######
         parsed_trig_code = []
+        # Append the above triggers for parsemarks reference
+        parsed_trig_code.append(f"dframe = append_conditions(dframe_list)")
         for parse_tile in self.parsemarks_tile_list:
             markname = parse_tile.event_name.text()
             if markname in self.events_to_write:
                 print(markname)
                 
                 lead_cond = parse_tile.b_evt1_name.currentText()
-                # on_lead = parse_tile.layout().itemAt(1).widget().isChecked()
                 lag_cond = parse_tile.b_evt2_name.currentText()
-                # on_lag = parse_tile.layout().itemAt(3).widget().isChecked()
                 window_start = float(parse_tile.b_window_t1.text())
-                window_end = float(parse_tile.b_window_t2.text())#layout().itemAt(5).widget().text())
+                window_end = float(parse_tile.b_window_t2.text())
                 window = [window_start, window_end]
                 if parse_tile.b_mark_on_lead.isChecked():
                     on_val = 'lead'
@@ -505,12 +502,25 @@ class event_coding_Window(QMainWindow):
                 
                 tmp_code = f"parse_marks(dframe=dframe, lead_condition='{lead_cond}', lag_condition='{lag_cond}', window={window},  marker_on='{on_val}')"
                 parsed_trig_code.append(tmp_code)
+                tmp_code = "dframe.dropna(inplace=True)"
+                parsed_trig_code.append(tmp_code)
                 
-                # print(f"lead_cond {lead_cond} lag_cond {lag_cond}")
+        ##### Keep Events Section ######
+        keep_evts_code = []
+        tmp_ = \
+f"""
+final_dframe_list = []
+for evt_name in {self.events_to_write}:
+    keep_dframe=dframe[dframe.description==evt_name]
+    final_dframe_list.append(keep_dframe)
+final_dframe = append_conditions(final_dframe_list)
+"""
+        keep_evts_code.append(tmp_)
+        keep_evts_code.append('write_markerfile(dframe=final_dframe, ds_filename=meg_fname)')
         
                 
         ##### Combine Initial Trigger Processing #####
-        init_trig_code = ana_trig_code + dig_trig_code + parsed_trig_code
+        init_trig_code = ana_trig_code + dig_trig_code + parsed_trig_code + keep_evts_code
         fname = "/tmp/testfile.py"
         with open(fname, 'a') as f:
             for i in init_trig_code:
@@ -591,7 +601,6 @@ def test_window():
         
         if tmp_mark_on[idx] == 'lead':
             test_parse_marks_tile.b_mark_on_lead.setChecked(True)
-            # QTest.mouseClick(test_parse_marks_tile.b_mark_on_lead, Qt.LeftButton)
         else:
             test_parse_marks_tile.b_mark_on_lag.setChecked(True)
             QTest.mouseClick(test_parse_marks_tile.b_mark_on_lag, Qt.LeftButton)
