@@ -169,7 +169,7 @@ class parsemarks_tile(QHBoxLayout):
         
 
 class event_coding_Window(QMainWindow):
-    def __init__(self):
+    def __init__(self, cmdline_meg_fname=False):
         super(event_coding_Window, self).__init__()
         self.setGeometry(100,100, 1000, 1000) #250*gridsize_col, 100*gridsize_row)
         self.setWindowTitle('Event Coding GUI')
@@ -181,6 +181,24 @@ class event_coding_Window(QMainWindow):
         widget = QWidget()
         widget.setLayout(main_layout)
         self.setCentralWidget(widget)
+        
+        ####### -- FOR TESTING ONLY -- #######
+        if cmdline_meg_fname != False:   
+            self.meg_fname = cmdline_meg_fname
+            meg_display_name = cmdline_meg_fname.split('/')[-1]
+            self.meg_display_name.setText(meg_display_name)
+            self.meg_raw = mne.io.read_raw_ctf(cmdline_meg_fname, clean_names=True, 
+                                               system_clock='ignore', preload=False, 
+                                               verbose=False)
+            self.trig_ch_names = [i for i in self.meg_raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
+            self.fill_trig_chan_layout()
+            self.b_update_event_names = QPushButton('Update Event Names: Will erase below')
+            self.b_update_event_names.clicked.connect(self.update_event_names)
+            self.trig_parsemarks_layout.addWidget(self.b_update_event_names)
+            self.trig_parsemarks_layout.addWidget(QLabel('Create New Events from Other Events'))
+            self.keep_events_layout.addWidget(QLabel('Events To Write'))
+        ####### -- FOR TESTING ONLY -- #######
+            
     
     def setup_full_layout(self):
         main_layout = QVBoxLayout()
@@ -188,7 +206,9 @@ class event_coding_Window(QMainWindow):
         # Setup File Chooser
         meg_choose_layout = QHBoxLayout()
         self.b_choose_meg = QPushButton('Select MEG')
-        self.b_choose_meg.clicked.connect(self.select_meg_dset)
+        # self.b_choose_meg.clicked.connect(self.select_meg_dset)
+        self.b_choose_meg.clicked.connect(lambda: self.select_meg_dset(meg_fname=None))
+        
         meg_choose_layout.addWidget(self.b_choose_meg)
         self.meg_display_name = QLabel('')
         meg_choose_layout.addWidget(self.meg_display_name)
@@ -272,6 +292,7 @@ class event_coding_Window(QMainWindow):
         
         ############# Parsemarks Layout ##########################
         self.parsemarks_tile_list = []
+        self.parsemarks_full_layout_list = []
         self.add_parsemarks_line()
         
         ############# Keep Events Layout #########################
@@ -316,6 +337,7 @@ class event_coding_Window(QMainWindow):
         tmp_full_pm_layout.addWidget(b_parsemarks_add)
         self.trig_parsemarks_layout.addLayout(tmp_full_pm_layout)  
         self.parsemarks_tile_list.append(tmp_pm_tile)  #Add the new entry to the list
+        self.parsemarks_full_layout_list.append(tmp_full_pm_layout)  #Hate that this has to be added
           
     def set_parsemarks_line(self):
         '''Add the parsemarks name to the name list and update Keep list panel'''
@@ -327,8 +349,10 @@ class event_coding_Window(QMainWindow):
                 
 
 
-    def select_meg_dset(self):
-        meg_fname = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select a MEG folder (.ds)')
+    def select_meg_dset(self, meg_fname=None):
+        if meg_fname==None:
+            print('Here is the dialogue')
+            meg_fname = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select a MEG folder (.ds)')
         self.meg_fname = meg_fname
         meg_display_name = meg_fname.split('/')[-1]
         self.meg_display_name.setText(meg_display_name)
@@ -346,6 +370,37 @@ class event_coding_Window(QMainWindow):
         self.trig_parsemarks_layout.addWidget(QLabel('Create New Events from Other Events'))
         
         self.keep_events_layout.addWidget(QLabel('Events To Write'))
+        
+    # def print_event_lists(self):
+    #     for i in self.tile_dict.items()
+        
+    #     ana_trig_code = []
+    #     for i, tile in self.tile_dict.items():
+    #         if i.startswith('UADC') and (tile.event_name.text() in self.events_to_write) :
+    #             markname = tile.event_name.text()
+    #             if tile.b_downgoing_trigger.checkState()==2:
+    #                 invert_val = True
+    #             else:
+    #                 invert_val = False
+    #             tmp_code = f"tmp_dframe = threshold_detect(dsname=meg_fname, channel='{i}', mark='{markname}', invert={invert_val})"
+    #             ana_trig_code.append(tmp_code)
+    #             tmp_code = f"dframe_list.append(tmp_dframe)"
+    #             ana_trig_code.append(tmp_code)
+                
+    #     ##### Digital Triggers #####       #####!!!!!!    IF NAME does not exist - dont write
+    #     dig_trig_code = []
+    #     for i, tile in self.tile_dict.items():
+    #         if i.startswith('UPPT') and (tile.event_name.text() in self.events_to_write):
+    #             markname = tile.event_name.text()
+    #             # if self.b_downgoing_trigger.checkState()==2:
+    #             #     invert_val = True
+    #             tmp_code = f"tmp_dframe = detect_digital(filename=meg_fname, channel='{i}', mark='{markname}')"
+    #             dig_trig_code.append(tmp_code)        
+    #             tmp_code = f"dframe_list.append(tmp_dframe)"
+    #             dig_trig_code.append(tmp_code)
+        
+        
+        
         
     def write_parser_script(self):
         '''    
@@ -399,9 +454,11 @@ class event_coding_Window(QMainWindow):
         init_code.append('dframe_list=[]')
                          
         
-        ##### Analogue Triggers #####
+        ##### Analog Triggers #####
         ana_trig_code = []
+        print(self.events_to_write)
         for i, tile in self.tile_dict.items():
+            print(i, tile.event_name.text())
             if i.startswith('UADC') and (tile.event_name.text() in self.events_to_write) :
                 markname = tile.event_name.text()
                 if tile.b_downgoing_trigger.checkState()==2:
@@ -417,6 +474,7 @@ class event_coding_Window(QMainWindow):
         dig_trig_code = []
         for i, tile in self.tile_dict.items():
             if i.startswith('UPPT') and (tile.event_name.text() in self.events_to_write):
+                
                 markname = tile.event_name.text()
                 # if self.b_downgoing_trigger.checkState()==2:
                 #     invert_val = True
@@ -438,11 +496,21 @@ class event_coding_Window(QMainWindow):
                 
 
                 
-            
+# app = QApplication(sys.argv)
+# win = event_coding_Window(cmdline_meg_fname='sub-ON80038_ses-01_task-sternberg_run-01_meg.ds')  
+# win.tile_dict          
+
+# i=0
+# for key in win.tile_dict.keys():
+#     tile = win.tile_dict[key]
+#     tile.event_name.setText(f'New_{i}')
+#     print(tile.event_name.text())
+#     i+=1
+    
         
     
     
-    
+#%%    
 
 
 def window():
@@ -452,6 +520,133 @@ def window():
     sys.exit(app.exec_())
     
 window()
+
+#%% Test 
+import pytest
+
+def test_window():
+    import nih2mne
+    from PyQt5.QtTest import QTest
+    from PyQt5.QtCore import Qt
+    raw_fname = op.join(nih2mne.__path__[0], 'test_data','20010101','ABABABAB_haririhammer_20010101_002.ds')
+    # raw = mne.io.read_raw_ctf(raw_fname, preload=True, system_clock='ignore',clean_names=True)
+    app = QApplication(sys.argv)
+    win = event_coding_Window(cmdline_meg_fname=raw_fname)
+    
+    # Set the tile_dict labels
+    for key,tile in win.tile_dict.items():
+        
+        print(key)
+        tile.event_name.setText(f'evt_{key}')
+        print(tile.event_name.text())
+    
+    self = win        
+    tmp_events_to_write = ['evt_UADC016','evt_UPPT001_11', 'evt_parse_test2']
+    
+    # Press the Update event names to initialize parse marks panel
+    QTest.mouseClick(self.b_update_event_names, Qt.LeftButton)
+    
+    # Set parse marks test event names
+    tmp_parsemarks_set_names = ['evt_parse_test1', 'evt_parse_test2', 'evt_parse_test3']
+    for idx, parsemarks_name in enumerate(tmp_parsemarks_set_names):
+        test_parse_marks_tile = self.parsemarks_tile_list[-1]
+        test_parse_marks_tile.event_name.setText(parsemarks_name)
+        # QTest.mouseClick(win.add_parsemarks_line.b_parsemarks_add, QtLeftButton)
+        
+        # The last item is the parsemarks event name
+        evt_name_idx = self.parsemarks_full_layout_list[-1].layout().count() - 1
+        widg = self.parsemarks_full_layout_list[-1].itemAt(evt_name_idx).widget()
+        QTest.mouseClick(widg, Qt.LeftButton)
+    
+    ## Test that the names have been set correctly
+    assert len(self.parsemarks_tile_list) == len(tmp_parsemarks_set_names) + 1
+    for i in range(len(tmp_parsemarks_set_names)-1):
+        assert self.parsemarks_tile_list[i].event_name.text() == tmp_parsemarks_set_names[i]
+    
+    
+    # Set the keep datasets using QTest Mouseclick
+    for i in range(self.keep_events_layout.layout().count()):
+        evt_name = self.keep_events_layout.layout().itemAt(i).widget().text()
+        print(f'Count {i}: {evt_name}')
+        if evt_name in tmp_events_to_write:
+            tmp=self.keep_events_layout.layout().itemAt(i).widget()
+            QTest.mouseClick(tmp, Qt.LeftButton)
+            try:
+                assert tmp.isChecked()
+            except:
+                print(tmp.text())
+
+    test_checked=[]             
+    for i in range(self.keep_events_layout.layout().count()):
+        try:
+            if self.keep_events_layout.layout().itemAt(i).widget().isChecked():
+                print(f'{ self.keep_events_layout.layout().itemAt(i).widget().text()}')
+                test_checked.append(self.keep_events_layout.layout().itemAt(i).widget().text())
+        except:
+            pass  #This is in case the widget doesn't have the isChecked tag
+    
+    # Confirm that the clicking sets the appropriate checks to be written
+    assert set(test_checked) == set(tmp_events_to_write)
+    
+    
+    
+    
+    
+    
+    update_keep_events_list(self, flush=False)  # Run this when the keep events are checked
+    
+        self.events_to_write = []
+        for i in range(len(self.keep_events_layout)):
+            tmp = self.keep_events_layout.takeAt(i)
+            if tmp==None:
+                continue
+            if tmp.widget():
+                button = tmp.widget()
+            else:
+                continue
+            if hasattr(button, 'isChecked'):
+                print('ischecked is there')
+                if button.isChecked():
+                    self.events_to_write.append(button.text())
+    
+        
+    for items in 
+            
+        #     test_parse_marks_tile.   #add line
+        
+        # win.add_parsemarks_line.b_parsemarks_add
+    
+    
+    
+    # Set the boxes to checked for the following
+    for key, tile in win.tile_dict.items():
+        if key in tmp_events_to_write:
+            tile.
+    
+    
+    for i in range(len(self.keep_events_layout)):
+        tmp = self.keep_events_layout.takeAt(i)
+        if tmp==None:
+            continue
+        if tmp.widget():
+            button = tmp.widget()
+        else:
+            continue
+        if hasattr(button, 'isChecked'):
+            print('ischecked is there')
+            if button.isChecked():
+                self.events_to_write.append(button.text())
+    print(self.events_to_write)
+    
+    
+    
+    
+        
+    
+
+
+# app = QApplication(sys.argv)
+# win = event_coding_Window() 
 
 
 #%% Testing
