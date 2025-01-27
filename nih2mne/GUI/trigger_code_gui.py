@@ -412,20 +412,14 @@ class event_coding_Window(QMainWindow):
         Part 6: Write the markerfile to the input dataset
         '''
         
-        ##### Finalize selection list #####
+        ##### Finalize selections list ###### 
         self.events_to_write = []
-        for i in range(len(self.keep_events_layout)):
-            tmp = self.keep_events_layout.takeAt(i)
-            if tmp==None:
-                continue
-            if tmp.widget():
-                button = tmp.widget()
-            else:
-                continue
-            if hasattr(button, 'isChecked'):
-                print('ischecked is there')
-                if button.isChecked():
-                    self.events_to_write.append(button.text())
+        for i in range(self.keep_events_layout.layout().count()):
+            try:
+                if self.keep_events_layout.layout().itemAt(i).widget().isChecked():
+                    self.events_to_write.append(self.keep_events_layout.layout().itemAt(i).widget().text())
+            except:
+                pass  #This is in case the widget doesn't have the isChecked tag
         print(self.events_to_write)
         
         ##### Python Header Section #####
@@ -456,10 +450,10 @@ class event_coding_Window(QMainWindow):
         
         ##### Analog Triggers #####
         ana_trig_code = []
-        print(self.events_to_write)
+        # print(self.events_to_write)
         for i, tile in self.tile_dict.items():
-            print(i, tile.event_name.text())
             if i.startswith('UADC') and (tile.event_name.text() in self.events_to_write) :
+                print(i, tile.event_name.text())
                 markname = tile.event_name.text()
                 if tile.b_downgoing_trigger.checkState()==2:
                     invert_val = True
@@ -474,7 +468,7 @@ class event_coding_Window(QMainWindow):
         dig_trig_code = []
         for i, tile in self.tile_dict.items():
             if i.startswith('UPPT') and (tile.event_name.text() in self.events_to_write):
-                
+                print(i, tile.event_name.text())
                 markname = tile.event_name.text()
                 # if self.b_downgoing_trigger.checkState()==2:
                 #     invert_val = True
@@ -482,6 +476,20 @@ class event_coding_Window(QMainWindow):
                 dig_trig_code.append(tmp_code)        
                 tmp_code = f"dframe_list.append(tmp_dframe)"
                 dig_trig_code.append(tmp_code)
+                
+        #####  Parsed Triggers  #######
+        parsed_trig_code = []
+        for tile in self.parsemarks_tile_list:
+            if tile.event_name.text() in self.events_to_write:
+                print(tile.event_name.text())
+                markname = tile.event_name.text()
+                # if self.b_downgoing_trigger.checkState()==2:
+                #     invert_val = True
+                # tmp_code = f"tmp_dframe = detect_digital(filename=meg_fname, channel='{i}', mark='{markname}')"
+                # dig_trig_code.append(tmp_code)        
+                # tmp_code = f"dframe_list.append(tmp_dframe)"
+                # dig_trig_code.append(tmp_code)
+        
                 
         ##### Combine Initial Trigger Processing #####
         init_trig_code = ana_trig_code + dig_trig_code
@@ -558,11 +566,17 @@ def test_window():
         widg = self.parsemarks_full_layout_list[-1].itemAt(evt_name_idx).widget()
         QTest.mouseClick(widg, Qt.LeftButton)
     
-    ## Test that the names have been set correctly
+    ## Test that the parsemarks names have been set correctly
     assert len(self.parsemarks_tile_list) == len(tmp_parsemarks_set_names) + 1
     for i in range(len(tmp_parsemarks_set_names)-1):
         assert self.parsemarks_tile_list[i].event_name.text() == tmp_parsemarks_set_names[i]
-    
+        
+    ## Test that all names are set correctly
+    test_all_event_list = ['evt_UADC006', 'evt_UADC007', 'evt_UADC016', 'evt_UPPT001_1',
+                      'evt_UPPT001_11', 'evt_UPPT001_12', 'evt_UPPT001_21',
+                      'evt_UPPT001_22', 'evt_parse_test1', 'evt_parse_test2',
+                      'evt_parse_test3']
+    assert set(win.event_namelist) == set(test_all_event_list)
     
     # Set the keep datasets using QTest Mouseclick
     for i in range(self.keep_events_layout.layout().count()):
@@ -588,141 +602,14 @@ def test_window():
     # Confirm that the clicking sets the appropriate checks to be written
     assert set(test_checked) == set(tmp_events_to_write)
     
+    # Confirm that the 
+    del self.events_to_write
+    self.write_parser_script()
     
     
-    
-    
-    
-    update_keep_events_list(self, flush=False)  # Run this when the keep events are checked
-    
-        self.events_to_write = []
-        for i in range(len(self.keep_events_layout)):
-            tmp = self.keep_events_layout.takeAt(i)
-            if tmp==None:
-                continue
-            if tmp.widget():
-                button = tmp.widget()
-            else:
-                continue
-            if hasattr(button, 'isChecked'):
-                print('ischecked is there')
-                if button.isChecked():
-                    self.events_to_write.append(button.text())
-    
-        
-    for items in 
-            
-        #     test_parse_marks_tile.   #add line
-        
-        # win.add_parsemarks_line.b_parsemarks_add
-    
-    
-    
-    # Set the boxes to checked for the following
-    for key, tile in win.tile_dict.items():
-        if key in tmp_events_to_write:
-            tile.
-    
-    
-    for i in range(len(self.keep_events_layout)):
-        tmp = self.keep_events_layout.takeAt(i)
-        if tmp==None:
-            continue
-        if tmp.widget():
-            button = tmp.widget()
-        else:
-            continue
-        if hasattr(button, 'isChecked'):
-            print('ischecked is there')
-            if button.isChecked():
-                self.events_to_write.append(button.text())
-    print(self.events_to_write)
-    
-    
-    
-    
-        
     
 
 
-# app = QApplication(sys.argv)
-# win = event_coding_Window() 
-
-
-#%% Testing
-meg_fname = '/fast2/BIDS/sub-ON02747/ses-01/meg/sub-ON02747_ses-01_task-airpuff_run-01_meg.ds/'
-raw = mne.io.read_raw_ctf(meg_fname, clean_names=True, system_clock='ignore')
-
-trig_picks = [i for i in raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
-
-
-    # def trigger_tile(self):
-    #     "Each tile has a Type:ChanName:Up/Down:OutputName"
-    #     tile = QHBoxLayout()
-        
-        
-        
-        # self.b_choose_bids_root = QPushButton('BIDS Directory')
-        # self.b_choose_bids_root.clicked.connect(self.select_bids_root)
-        # self.b_choose_qa_file = QPushButton('QA file')
-        # self.b_choose_qa_file.clicked.connect(self.select_qa_file)
-        # self.b_subject_number = QLabel(f'Subject Totals: #{len(self.bids_project.subjects)}')
-        # top_buttons_layout.addWidget(self.b_choose_bids_root)
-        # top_buttons_layout.addWidget(self.b_choose_qa_file)
-        # top_buttons_layout.addWidget(self.b_subject_number)
-        # self.b_task_chooser = QComboBox()
-        # self.b_task_chooser.addItems(self.task_set)
-        # self.b_task_chooser.currentIndexChanged.connect(self.filter_task_qa_vis)
-        # top_buttons_layout.addWidget(self.b_task_chooser)
-        # self.b_out_project_chooser = QComboBox()
-        # #Add Project output directory
-        # # tmp_ = glob.glob('*', root_dir=op.join(self.bids_project.bids_root, 'derivatives'))
-        # # derivatives_dirs = [i for i in tmp_ if op.isdir(op.join(self.bids_project.bids_root, 'derivatives', i))]
-        # # for i in ['freesurfer', 'megQA']: 
-        # #     if i in derivatives_dirs: derivatives_dirs.remove(i)
-        # # self.b_out_project_chooser.addItems(derivatives_dirs)
-        # # top_buttons_layout.addWidget(self.b_out_project_chooser)
-        
-        
-        
-        # main_layout.addLayout(top_buttons_layout)
-        
-        # # Add Subject Chooser Grid Layer
-        # subjs_layout = self.init_subjects_layout()
-        # main_layout.addLayout(subjs_layout)
-        
-        # # Add Bottom Row Buttons
-        # #-Freesurfer-
-        # bottom_buttons_layout = QHBoxLayout()
-        # _needs_fs = len(self.bids_project.issues['Freesurfer_notStarted'])
-        # self.b_run_freesurfer = QPushButton(f'Run Freesurfer (N={_needs_fs})')
-        # self.b_run_freesurfer.clicked.connect(self.proc_freesurfer)
-        # bottom_buttons_layout.addWidget(self.b_run_freesurfer)
-        # #-MRI Prep-
-        # self.b_run_mriprep = QPushButton('Run MRIPrep')
-        # self.b_run_mriprep.clicked.connect(self.proc_mriprep)
-        # bottom_buttons_layout.addWidget(self.b_run_mriprep)
-        # #-MRI Prep Vol/Surf selection
-        # self.b_mri_volSurf_selection = QComboBox()
-        # self.b_mri_volSurf_selection.addItems(['Surf','Vol'])
-        # bottom_buttons_layout.addWidget(self.b_mri_volSurf_selection)
-        # #-MEGNet Cleaning-
-        # self.b_run_megnet = QPushButton('Run MEGnet')
-        # self.b_run_megnet.clicked.connect(self.proc_megnet)
-        # bottom_buttons_layout.addWidget(self.b_run_megnet)
-        # #-Next / Prev Page buttons
-        # self.b_next_page = QPushButton('Next')
-        # self.b_next_page.clicked.connect(self.increment_page_idx)
-        # self.b_prev_page = QPushButton('Prev')
-        # self.b_prev_page.clicked.connect(self.decrement_page_idx)
-        # bottom_buttons_layout.addWidget(self.b_prev_page)
-        # bottom_buttons_layout.addWidget(self.b_next_page)
-        # #-Page Counter-
-        # self.b_current_page_idx = QLabel(f'Page: {self.page_idx} / {self.last_page_idx}')
-        # bottom_buttons_layout.addWidget(self.b_current_page_idx)
-        
-        # #Finalize
-        # main_layout.addLayout(bottom_buttons_layout)
 
     
 # def cmdline_main():
