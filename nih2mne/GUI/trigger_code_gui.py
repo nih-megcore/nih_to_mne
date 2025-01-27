@@ -55,7 +55,8 @@ import sys
 import os, os.path as op
 import numpy as np
 from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital, 
-                                                 check_analog_inverted, threshold_detect)
+                                                 check_analog_inverted, threshold_detect, 
+                                                 append_conditions)
 
 
 
@@ -476,23 +477,40 @@ class event_coding_Window(QMainWindow):
                 dig_trig_code.append(tmp_code)        
                 tmp_code = f"dframe_list.append(tmp_dframe)"
                 dig_trig_code.append(tmp_code)
-                
+        
+        # Combine the above dataframes so that parse marks can use both ana/dig
+        parse_marks_code = []
+        parse_marks_code.append(f"dframe = append_conditions(dframe_list)")
+        
         #####  Parsed Triggers  #######
         parsed_trig_code = []
-        for tile in self.parsemarks_tile_list:
-            if tile.event_name.text() in self.events_to_write:
-                print(tile.event_name.text())
-                markname = tile.event_name.text()
-                # if self.b_downgoing_trigger.checkState()==2:
-                #     invert_val = True
-                # tmp_code = f"tmp_dframe = detect_digital(filename=meg_fname, channel='{i}', mark='{markname}')"
-                # dig_trig_code.append(tmp_code)        
-                # tmp_code = f"dframe_list.append(tmp_dframe)"
-                # dig_trig_code.append(tmp_code)
+        for parse_tile in self.parsemarks_tile_list:
+            markname = parse_tile.event_name.text()
+            if markname in self.events_to_write:
+                print(markname)
+                
+                lead_cond = parse_tile.b_evt1_name.currentText()
+                # on_lead = parse_tile.layout().itemAt(1).widget().isChecked()
+                lag_cond = parse_tile.b_evt2_name.currentText()
+                # on_lag = parse_tile.layout().itemAt(3).widget().isChecked()
+                window_start = float(parse_tile.b_window_t1.text())
+                window_end = float(parse_tile.b_window_t2.text())#layout().itemAt(5).widget().text())
+                window = [window_start, window_end]
+                if parse_tile.b_mark_on_lead.isChecked():
+                    on_val = 'lead'
+                elif parse_tile.b_mark_on_lag.isChecked():
+                    on_val = 'lag'
+                else:
+                    raise ValueError('Cannot interpret lead/lag for parsemarks: {markname}')
+                
+                tmp_code = f"parse_marks(dframe=dframe, lead_condition='{lead_cond}', lag_condition='{lag_cond}', window={window},  marker_on='{on_val}')"
+                parsed_trig_code.append(tmp_code)
+                
+                # print(f"lead_cond {lead_cond} lag_cond {lag_cond}")
         
                 
         ##### Combine Initial Trigger Processing #####
-        init_trig_code = ana_trig_code + dig_trig_code
+        init_trig_code = ana_trig_code + dig_trig_code + parsed_trig_code
         fname = "/tmp/testfile.py"
         with open(fname, 'a') as f:
             for i in init_trig_code:
@@ -549,17 +567,34 @@ def test_window():
         print(tile.event_name.text())
     
     self = win        
-    tmp_events_to_write = ['evt_UADC016','evt_UPPT001_11', 'evt_parse_test2']
+    tmp_events_to_write = ['evt_UADC016','evt_UPPT001_11', 'evt_parse_test2', 'evt_parse_test3']
     
     # Press the Update event names to initialize parse marks panel
     QTest.mouseClick(self.b_update_event_names, Qt.LeftButton)
     
     # Set parse marks test event names
     tmp_parsemarks_set_names = ['evt_parse_test1', 'evt_parse_test2', 'evt_parse_test3']
+    tmp_mark_on = ['lead', 'lag','lead']
+    lead_lag_pairs = [['evt_UADC006', 'evt_UADC007'],
+                      ['evt_UADC016', 'evt_UPPT001_12'],
+                      ['evt_UADC016', 'evt_UADC007']]
+    
     for idx, parsemarks_name in enumerate(tmp_parsemarks_set_names):
         test_parse_marks_tile = self.parsemarks_tile_list[-1]
+        # Set the marker name for the tile
         test_parse_marks_tile.event_name.setText(parsemarks_name)
-        # QTest.mouseClick(win.add_parsemarks_line.b_parsemarks_add, QtLeftButton)
+        
+        #Set lead/lag
+        lead, lag = lead_lag_pairs[idx]
+        test_parse_marks_tile.b_evt1_name.setCurrentText(lead)
+        test_parse_marks_tile.b_evt2_name.setCurrentText(lag)
+        
+        if tmp_mark_on[idx] == 'lead':
+            test_parse_marks_tile.b_mark_on_lead.setChecked(True)
+            # QTest.mouseClick(test_parse_marks_tile.b_mark_on_lead, Qt.LeftButton)
+        else:
+            test_parse_marks_tile.b_mark_on_lag.setChecked(True)
+            QTest.mouseClick(test_parse_marks_tile.b_mark_on_lag, Qt.LeftButton)
         
         # The last item is the parsemarks event name
         evt_name_idx = self.parsemarks_full_layout_list[-1].layout().count() - 1
@@ -603,7 +638,7 @@ def test_window():
     assert set(test_checked) == set(tmp_events_to_write)
     
     # Confirm that the 
-    del self.events_to_write
+    # del self.events_to_write
     self.write_parser_script()
     
     
