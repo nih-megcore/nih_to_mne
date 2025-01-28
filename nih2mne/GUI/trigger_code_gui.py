@@ -44,6 +44,8 @@ Set action to invert trigger for counts
 Set all dig trigs to invert together   
 Create a parsemarks list and remove all after an erase command
 detect_digital currently does not support downgoing triggers
+
+Add trigger inversion for digital trigger
 """
 import glob
 import mne
@@ -454,7 +456,7 @@ class event_coding_Window(QMainWindow):
         ana_trig_code = []
         # print(self.events_to_write)
         for i, tile in self.tile_dict.items():
-            if i.startswith('UADC') and (tile.event_name.text() in self.events_to_write) :
+            if i.startswith('UADC'):# and (tile.event_name.text() in self.events_to_write) :
                 print(i, tile.event_name.text())
                 markname = tile.event_name.text()
                 if tile.b_downgoing_trigger.checkState()==2:
@@ -468,16 +470,17 @@ class event_coding_Window(QMainWindow):
                 
         ##### Digital Triggers #####       #####!!!!!!    IF NAME does not exist - dont write
         dig_trig_code = []
+        tmp_code = f"dig_dframe = detect_digital(filename=meg_fname, channel='UPPT001')" #, mark='{markname}')"
+        dig_trig_code.append(tmp_code)
         for i, tile in self.tile_dict.items():
-            if i.startswith('UPPT') and (tile.event_name.text() in self.events_to_write):
+            if i.startswith('UPPT'):
                 print(i, tile.event_name.text())
                 markname = tile.event_name.text()
-                # if self.b_downgoing_trigger.checkState()==2:
-                #     invert_val = True
-                tmp_code = f"tmp_dframe = detect_digital(filename=meg_fname, channel='{i}', mark='{markname}')"
+                dig_val = i.split('_')[-1]
+                tmp_code = f"dig_dframe.loc[dig_dframe.condition=='{dig_val}', 'condition']='{markname}'"
                 dig_trig_code.append(tmp_code)        
-                tmp_code = f"dframe_list.append(tmp_dframe)"
-                dig_trig_code.append(tmp_code)
+        tmp_code = f"dframe_list.append(dig_dframe)"
+        dig_trig_code.append(tmp_code)
         
         #####  Parsed Triggers  #######
         parsed_trig_code = []
@@ -500,7 +503,7 @@ class event_coding_Window(QMainWindow):
                 else:
                     raise ValueError('Cannot interpret lead/lag for parsemarks: {markname}')
                 
-                tmp_code = f"parse_marks(dframe=dframe, lead_condition='{lead_cond}', lag_condition='{lag_cond}', window={window},  marker_on='{on_val}')"
+                tmp_code = f"dframe = parse_marks(dframe=dframe, lead_condition='{lead_cond}', lag_condition='{lag_cond}', window={window},  marker_on='{on_val}', marker_name='{markname}', append_result=True)"
                 parsed_trig_code.append(tmp_code)
                 tmp_code = "dframe.dropna(inplace=True)"
                 parsed_trig_code.append(tmp_code)
@@ -511,7 +514,7 @@ class event_coding_Window(QMainWindow):
 f"""
 final_dframe_list = []
 for evt_name in {self.events_to_write}:
-    keep_dframe=dframe[dframe.description==evt_name]
+    keep_dframe=dframe[dframe.condition==evt_name]
     final_dframe_list.append(keep_dframe)
 final_dframe = append_conditions(final_dframe_list)
 """
@@ -520,7 +523,7 @@ final_dframe = append_conditions(final_dframe_list)
         
                 
         ##### Combine Initial Trigger Processing #####
-        init_trig_code = ana_trig_code + dig_trig_code + parsed_trig_code + keep_evts_code
+        init_trig_code = init_code + ana_trig_code + dig_trig_code + parsed_trig_code + keep_evts_code
         fname = "/tmp/testfile.py"
         with open(fname, 'a') as f:
             for i in init_trig_code:
