@@ -11,18 +11,9 @@ jobs:
           mamba-version: "*"
           channels: conda-forge,defaults
           channel-priority: true
-      - shell: bash -el {0}
       - name: Install dependencies and pull data
+        shell: bash -el {0}
         run: make install_test      
-          #- name: Check FS Cache
-          #id: cache-fsdownload
-          #uses: actions/cache@v3
-          #with:
-          #path: ~/FSData
-          #key:
-          #  FSData.tar.gz
-          # - if: ${{ steps.cache-fsdownload.outputs.cache-hit != 'true' }}
-          #  run: pip install gdown; gdown --folder ${{ secrets.GDRIVE_MRI }} -O ~/FSData
-      - shell: bash -el {0}
       - name: Pytest
+        shell: bash -el {0}
         run: make test

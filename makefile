@@ -33,7 +33,7 @@ test:
 	($(CONDA_ACTIVATE) nih2mne_test ; pytest -vv  )  
 
 test_headless:
-	($(CONDA_ACTIVATE) nih2mne_test ; pytest -vv ) #cd enigma_MEG; xvfb-run -a pytest -vv --report-log=/tmp/enigma_MEG_test_logfile.txt )
+	($(CONDA_ACTIVATE) nih2mne_test ; cd nih_to_mne; pytest -vv ) #cd enigma_MEG; xvfb-run -a pytest -vv --report-log=/tmp/enigma_MEG_test_logfile.txt )
 
 
 
