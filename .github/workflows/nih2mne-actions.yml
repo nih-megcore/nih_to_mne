@@ -5,17 +5,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v2
-      - name: Setup git repo python
-        run: make install_test      
-      - name: Check FS Cache
-        id: cache-fsdownload
-        uses: actions/cache@v3
+      - uses: conda-incubator/setup-miniconda@v3
         with:
-          path: ~/FSData
-          key:
-            FSData.tar.gz
-      - if: ${{ steps.cache-fsdownload.outputs.cache-hit != 'true' }}
-        run: pip install gdown; gdown --folder ${{ secrets.GDRIVE_MRI }} -O ~/FSData
+          python-version: 3.12
+          mamba-version: "*"
+          channels: conda-forge,defaults
+          channel-priority: true
+      - shell: bash -el {0}
+      - name: Install dependencies and pull data
+        run: make install_test      
+          #- name: Check FS Cache
+          #id: cache-fsdownload
+          #uses: actions/cache@v3
+          #with:
+          #path: ~/FSData
+          #key:
+          #  FSData.tar.gz
+          # - if: ${{ steps.cache-fsdownload.outputs.cache-hit != 'true' }}
+          #  run: pip install gdown; gdown --folder ${{ secrets.GDRIVE_MRI }} -O ~/FSData
+      - shell: bash -el {0}
       - name: Pytest
         run: make test
