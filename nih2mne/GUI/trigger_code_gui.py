@@ -51,7 +51,8 @@ import glob
 import mne
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
-    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QCheckBox
+    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QCheckBox, \
+    QFileDialog
 # from functools import partial
 import sys
 import os, os.path as op
@@ -374,36 +375,6 @@ class event_coding_Window(QMainWindow):
         
         self.keep_events_layout.addWidget(QLabel('Events To Write'))
         
-    # def print_event_lists(self):
-    #     for i in self.tile_dict.items()
-        
-    #     ana_trig_code = []
-    #     for i, tile in self.tile_dict.items():
-    #         if i.startswith('UADC') and (tile.event_name.text() in self.events_to_write) :
-    #             markname = tile.event_name.text()
-    #             if tile.b_downgoing_trigger.checkState()==2:
-    #                 invert_val = True
-    #             else:
-    #                 invert_val = False
-    #             tmp_code = f"tmp_dframe = threshold_detect(dsname=meg_fname, channel='{i}', mark='{markname}', invert={invert_val})"
-    #             ana_trig_code.append(tmp_code)
-    #             tmp_code = f"dframe_list.append(tmp_dframe)"
-    #             ana_trig_code.append(tmp_code)
-                
-    #     ##### Digital Triggers #####       #####!!!!!!    IF NAME does not exist - dont write
-    #     dig_trig_code = []
-    #     for i, tile in self.tile_dict.items():
-    #         if i.startswith('UPPT') and (tile.event_name.text() in self.events_to_write):
-    #             markname = tile.event_name.text()
-    #             # if self.b_downgoing_trigger.checkState()==2:
-    #             #     invert_val = True
-    #             tmp_code = f"tmp_dframe = detect_digital(filename=meg_fname, channel='{i}', mark='{markname}')"
-    #             dig_trig_code.append(tmp_code)        
-    #             tmp_code = f"dframe_list.append(tmp_dframe)"
-    #             dig_trig_code.append(tmp_code)
-        
-        
-        
         
     def write_parser_script(self):
         '''    
@@ -443,7 +414,7 @@ class event_coding_Window(QMainWindow):
                 "\n\n",
                 "meg_fname = sys.argv[1]\n\n"
                 ]
-        fname = "/tmp/testfile.py"
+        fname, _ = QFileDialog.getSaveFileName(self, "Save File", "trig_parser.sh", "Text Files (*.sh);;All Files (*)")#, options=options)
         with open(fname, 'w') as f:
             f.writelines(header)
         
@@ -524,7 +495,6 @@ final_dframe = append_conditions(final_dframe_list)
                 
         ##### Combine Initial Trigger Processing #####
         init_trig_code = init_code + ana_trig_code + dig_trig_code + parsed_trig_code + keep_evts_code
-        fname = "/tmp/testfile.py"
         with open(fname, 'a') as f:
             for i in init_trig_code:
                 f.write(i+'\n')
