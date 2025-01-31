@@ -137,6 +137,7 @@ class parsemarks_tile(QHBoxLayout):
         self.addWidget(self.b_evt1_name)
         
         self.b_mark_on_lead = QCheckBox()
+        self.b_mark_on_lead.setChecked(True)
         # self.b_mark_on_lead.clicked.connect(.....)
         self.addWidget(self.b_mark_on_lead)
         
