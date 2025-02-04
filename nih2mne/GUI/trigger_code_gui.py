@@ -560,6 +560,27 @@ class event_coding_Window(QMainWindow):
         tmp_code = f"dframe_list.append(dig_dframe)"
         dig_trig_code.append(tmp_code)
         
+        ##### Tidy up data   #######
+        time_corr_code = []
+        time_corr_code.append(f"dframe = append_conditions(dframe_list)")
+                
+        ##### Correct to Projector ######  <<<<<<<<<<<<<<<--- Use a function to do this -- remember to remove test_list
+        test_list = ['test2', 'projector', 'test1', 'test3']
+        corr2proj_dframe_list = []
+        for i in test_list: #self.corr2proj_list:
+            if i=='projector':
+                continue
+            tmp_code = f"tmp_dframe = parse_marks(dframe, lead_condition='projector', lag_condition='{i}', marker_on='lead', marker_name='{i}', append_result=False, window=[-.150, .2]).dropna()"
+            time_corr_code.append(tmp_code)
+            tmp_code = f"corr2proj_dframe_list.append(tmp_dframe)"
+            time_corr_code.append(tmp_code)
+        
+        
+        ##### Add offset to events ######
+        for i in self.add_fixed_delay_list:
+            time_corr_code.append(f"dframe[{i}].onset -= {float(self.offset_delay)}")        
+        
+        
         #####  Parsed Triggers  #######
         parsed_trig_code = []
         # Append the above triggers for parsemarks reference
