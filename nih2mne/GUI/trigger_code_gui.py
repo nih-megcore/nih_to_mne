@@ -283,9 +283,13 @@ class event_coding_Window(QMainWindow):
         self.b_corr2proj = QPushButton('Correct to Projector')
         self.b_corr2proj.clicked.connect(self.open_corr2proj)
         self.middle_operations.addWidget(self.b_corr2proj)
-        self.b_add_fixed_delay = QPushButton('Add Fixed Delay')
+        self.b_add_fixed_delay = QPushButton('Add Fixed Offset')
         self.b_add_fixed_delay.clicked.connect(self.open_add_fixed_delay)
-        self.middle_operations.addWidget(self.b_add_fixed_delay)        
+        self.middle_operations.addWidget(self.b_add_fixed_delay) 
+        self.delay_label = QLabel('Offset (ms):')
+        self.middle_operations.addWidget(self.delay_label)
+        self.b_fixed_delay_edit = QLineEdit()
+        self.middle_operations.addWidget(self.b_fixed_delay_edit)
         main_layout.addLayout(self.middle_operations)
         
         self.trig_parsemarks_layout = QVBoxLayout()
@@ -380,18 +384,32 @@ class event_coding_Window(QMainWindow):
     def open_add_fixed_delay(self):
         # Create a popup to select the events that will be corrected to a fixed delay
         self.update_event_names(events_only=True)
-        print(self.event_namelist)
         self.fixed_delay_selector = grid_selector(self.event_namelist)  
         self.fixed_delay_selector.b_set_selection.clicked.connect(self._set_fixedDelay_list)
     
     def _set_fixedDelay_list(self):
-        # for i self.fixed_delay_selector.grid_layout.layout()
-        # self.corr2proj_list = 
-        print('working')
-        # self.grid_layout
+        'Fixed delay added to self.add_fixed_delay_list'
+        layout = self.fixed_delay_selector.grid_layout
+        self.add_fixed_delay_list = []
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item.widget():
+                if hasattr(item.widget(), 'isChecked'):
+                    if item.widget().isChecked():
+                        self.add_fixed_delay_list.append(item.widget().text())
+        print(f'Setting fixed delay to the following: {self.add_fixed_delay_list}')
     
     def _set_correct2proj_list(self):
-        print('set_correct2proj_list')
+        'Correct to projector list assigned to self.corr2proj_list'
+        layout = self.corr2proj_selector.grid_layout
+        self.corr2proj_list = []
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item.widget():
+                if hasattr(item.widget(), 'isChecked'):
+                    if item.widget().isChecked():
+                        self.corr2proj_list.append(item.widget().text())
+        print(f'Correcting the following to projector timing: {self.corr2proj_list}')        
         
     def update_keep_events_list(self, flush=False):
         num_keep_buttons = self.keep_events_layout.count()
