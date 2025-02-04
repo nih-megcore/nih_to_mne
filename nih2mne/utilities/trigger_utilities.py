@@ -12,6 +12,7 @@ import numpy as np
 import pyctf
 from pyctf.util import *
 import scipy
+import copy
 
 
 '''
@@ -286,4 +287,155 @@ def crop_logfile_overflow(dframe, end_buffer=0.5):
     crop_bool = dframe[dframe.channel=='logfile'].onset > final_proj+end_buffer
     drop_idxs = crop_bool[crop_bool==True].index
     return dframe.drop(drop_idxs) 
+
+# =============================================================================
+# Higher level functions that rely on the above
+# =============================================================================
+def correct_to_projector(dframe, projector_eventID='projector', event_list=[],
+                         window=[-0.2, 0.2]):
+    '''
+    Take a list of events and correct them to the projector
+    
+    The items in the event list must be in the input dataframe.  The dataframe
+    is created using digital_detect and threshold_detect. The two dataframes
+    can be combined using append_conditions([dframe1, dframe2,...])
+
+    Parameters
+    ----------
+    dframe : pd.DataFrame
+        Dataframe.
+    projector_eventID : str
+        Event ID in dataframe for projector. The default is 'projector'.
+    event_list : list
+        Events to correct to projector timing. The default is [].
+
+    Returns
+    -------
+    out_dframe : pd.DataFrame
+        Corrected dataframe
+
+    '''
+    corr2proj_dframe_list = []
+    for evt_name in event_list:
+        if evt_name=='projector':
+            continue
+        evt_corr_dframe = parse_marks(dframe, lead_condition=projector_eventID, 
+                                 lag_condition=evt_name, marker_on='lead', 
+                                 marker_name=evt_name, append_result=False, 
+                                 window=window)
+        evt_corr_dframe = evt_corr_dframe.dropna()
+        corr2proj_dframe_list.append(evt_corr_dframe)
+    out_dframe = append_conditions(corr2proj_dframe_list)
+    
+    out_val_counts = out_dframe.condition.value_counts()
+    in_val_counts = dframe.query(f'condition in {event_list}')['condition'].value_counts()
+    
+    # Sanity check that all of your triggers are preserved
+    for evt_name in event_list:
+        in_count = in_val_counts.loc[evt_name]
+        out_count = out_val_counts.loc[evt_name]
+        if in_count != out_count:
+            print(f'warning:')
+            print(f'{evt_name} - IN={in_count} != OUT={out_count}')
+            print('It is possible that you may have selected a response channel to correct to projector')
+    
+    # Sanity check event order preserved
+    selection_dframe = dframe.query(f'condition in {event_list}')
+    selection_dframe.reset_index(inplace=True, drop=True)
+    if np.alltrue(selection_dframe.condition.values == out_dframe.condition.values):
+        timing_diff = out_dframe.onset.values - selection_dframe.onset.values 
+        timing_diff *= 1000
+        t_diff_mean = np.round(np.mean(timing_diff), 2)
+        t_diff_std = np.round(np.std(timing_diff), 2)
+        print(f'Correction performed: Mean={t_diff_mean} ms  Std={t_diff_std} ms')
+    else:
+        print('The resulting order has not been preserved')
+    
+    return out_dframe     
+
+def add_event_offset(dframe, event_list=[], offset=0.0):
+    '''
+    Add a static offset to events in the event list
+    Offset is in seconds
+    
+
+    Parameters
+    ----------
+    dframe : pd.DataFrame
+        dataframe 
+    event_list : list, optional
+        event name list. The default is [].
+    offset : TYPE, optional
+        DESCRIPTION. The default is 0.0.
+
+    Returns
+    -------
+    dataframe
+
+    '''
+    corr2proj_dframe_list = []
+    out_dframe = copy.deepcopy(dframe)
+    selection_dframe = out_dframe.query(f'condition in {event_list}')
+    out_dframe.loc[selection_dframe.index, 'onset']+=offset
+    return out_dframe
+    
+    
+    
+
+
+# tmp = correct_to_projector(dframe, event_list=['test3','test2'], window=[-0.3,0.3])
+# tmp = add_event_offset(dframe, event_list=['test2','test3'], offset=0.019)
+
+# def correct_events_to_projector(dframe, projector_channel='UADC016', 
+#                                 input_channel=None, proc_on_derived=False):
+#     '''
+    
+
+#     Parameters
+#     ----------
+#     dframe : pandas.DataFrame
+#         Events extracted from .
+#     projector_line : TYPE, optional
+#         DESCRIPTION. The default is 'UADC016'.
+#     input_channel : str or list, required
+#         Provide a single channel or a list of channels to correct to the 
+#         projector event timing. The default is None.
+
+#     Returns
+#     -------
+#     None.
+
+#     '''
+#     if (('<' in input_channel) or ('>' in input_channel)) and proc_on_derived==False:
+#         raise ValueError('Cannot process on derived channels')
+#     channel_set = set(dframe.channel.values)
+    
+#     if type(input_channel) is None:
+#         raise ValueError('Input channel is required')
+#     elif type(input_channel) is str:
+#         input_channel=[input_channel]
+    
+#     #Check if the channels are actually in the data
+#     for inchan in input_channel:
+#         assert inchan in channel_set
+    
+#     #Make a list of the modified data
+#     # for inchan in input_channel:
+        
+        
+        
+        
+        
+    
+#     # inchan_frame = dframe[dframe
+    
+#     # dframe.loc[
+#     # parse_marks(dframe, 
+#     #             lead_condition =     ,
+#     #             lag_condition =     , 
+#     #             )
+    
+    
+  
+    
     
