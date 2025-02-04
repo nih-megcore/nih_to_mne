@@ -52,7 +52,7 @@ import mne
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QCheckBox, \
-    QFileDialog
+    QFileDialog, QDialog
 # from functools import partial
 import sys
 import os, os.path as op
@@ -162,8 +162,62 @@ class parsemarks_tile(QHBoxLayout):
         
         self.event_name = QLineEdit()
         self.addWidget(self.event_name)
+
         
+class grid_selector(QMainWindow):
+    '''Helper function create a grid of items based on a list'''
+    def __init__(self, input_list=[], title=None, 
+                 gridsize_row=None, gridsize_col=None):
+        super(grid_selector, self).__init__()
+        self.setGeometry(100,100, 500, 500) 
+        self.setWindowTitle(title)
+        self.input_list = input_list
+        if (gridsize_col==None) or (gridsize_row==None):
+            self.gridsize_row, self.gridsize_col = self._get_rowcol()
+        else:
+            self.gridsize_row, self.gridsize_col = self.gridsize_row, gridsize_col
         
+        _ = self.make_choice_grid()
+        self.setCentralWidget(self.dialog)
+        self.show()
+    
+    def make_choice_grid(self):
+        self.dialog = QDialog() 
+        self.grid_layout = QGridLayout()
+        tile_idxs = np.arange(self.gridsize_row * self.gridsize_col)
+        tile_idxs_grid = tile_idxs.reshape(self.gridsize_row, self.gridsize_col)
+        row_idxs, col_idxs = np.unravel_index(tile_idxs, [self.gridsize_row, self.gridsize_col])
+        i=0 
+        for row_idx, col_idx in zip(row_idxs, col_idxs):
+            if i > len(self.input_list) -1:
+                tmp_ = QLabel('')
+            else:
+                tmp_ = QPushButton(self.input_list[i])
+                tmp_.setCheckable(True)
+            self.grid_layout.addWidget(tmp_, row_idx, col_idx)
+            i+=1
+        
+        layout = QVBoxLayout()
+        layout.addLayout(self.grid_layout)
+        self.b_set_selection = QPushButton('CLICK to set selection')
+        layout.addWidget(self.b_set_selection)
+        self.dialog.setLayout(layout)
+        
+        return self.grid_layout
+            
+    def _get_rowcol(self):
+        listlen = len(self.input_list)
+        if listlen < 4: 
+            return 2,2
+        if listlen < 16: 
+            return 4,4
+        if listlen < 32:
+            return 4,8
+        if listlen < 64: 
+            return 8,8
+        if listlen < 117: 
+            return 9, 13
+         
         
         
         
@@ -181,7 +235,7 @@ class event_coding_Window(QMainWindow):
         
         self.tile_dict = {}
         
-        # Finalize Widget and dispaly
+        # Finalize Widget and display
         main_layout = self.setup_full_layout()
         widget = QWidget()
         widget.setLayout(main_layout)
@@ -223,6 +277,16 @@ class event_coding_Window(QMainWindow):
         main_layout.addLayout(self.ana_trigger_layout)
         self.dig_trigger_layout = QVBoxLayout()
         main_layout.addLayout(self.dig_trigger_layout)
+        
+        # Middle operations after dig/ana setup
+        self.middle_operations = QHBoxLayout()
+        self.b_corr2proj = QPushButton('Correct to Projector')
+        self.b_corr2proj.clicked.connect(self.open_corr2proj)
+        self.middle_operations.addWidget(self.b_corr2proj)
+        self.b_add_fixed_delay = QPushButton('Add Fixed Delay')
+        self.b_add_fixed_delay.clicked.connect(self.open_add_fixed_delay)
+        self.middle_operations.addWidget(self.b_add_fixed_delay)        
+        main_layout.addLayout(self.middle_operations)
         
         self.trig_parsemarks_layout = QVBoxLayout()
         main_layout.addLayout(self.trig_parsemarks_layout)
@@ -268,7 +332,7 @@ class event_coding_Window(QMainWindow):
             else:
                 print(f'Not processing channel {i}')
     
-    def update_event_names(self):
+    def update_event_names(self, events_only=False):
         '''Set action for updating event names.  This will write all of the 
         events to the an event list and update the parse_marks and evt_keep
         panels. 
@@ -295,6 +359,9 @@ class event_coding_Window(QMainWindow):
         if len(namelist) != len(set(namelist)):
             raise ValueError('The event names cannot have duplicates') 
         
+        if events_only:
+            return
+        
         ############# Parsemarks Layout ##########################
         self.parsemarks_tile_list = []
         self.parsemarks_full_layout_list = []
@@ -303,8 +370,29 @@ class event_coding_Window(QMainWindow):
         ############# Keep Events Layout #########################
         #Empty the keep events layout list, so it doesn't append the previous
         self.update_keep_events_list(flush=True)
-
-            
+        
+    def open_corr2proj(self):
+        # Create a popup to select events that will be corrected to projector
+        self.update_event_names(events_only=True)
+        self.corr2proj_selector = grid_selector(self.event_namelist)  
+        self.corr2proj_selector.b_set_selection.clicked.connect(self._set_correct2proj_list)
+    
+    def open_add_fixed_delay(self):
+        # Create a popup to select the events that will be corrected to a fixed delay
+        self.update_event_names(events_only=True)
+        print(self.event_namelist)
+        self.fixed_delay_selector = grid_selector(self.event_namelist)  
+        self.fixed_delay_selector.b_set_selection.clicked.connect(self._set_fixedDelay_list)
+    
+    def _set_fixedDelay_list(self):
+        # for i self.fixed_delay_selector.grid_layout.layout()
+        # self.corr2proj_list = 
+        print('working')
+        # self.grid_layout
+    
+    def _set_correct2proj_list(self):
+        print('set_correct2proj_list')
+        
     def update_keep_events_list(self, flush=False):
         num_keep_buttons = self.keep_events_layout.count()
         if flush==True:
@@ -529,7 +617,7 @@ def window():
     win.show()
     sys.exit(app.exec_())
     
-# window()
+window()
 
 #%% Test 
 # import pytest
