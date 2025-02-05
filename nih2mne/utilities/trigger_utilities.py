@@ -316,6 +316,7 @@ def correct_to_projector(dframe, projector_eventID='projector', event_list=[],
 
     '''
     corr2proj_dframe_list = []
+    dframe = copy.deepcopy(dframe) #Operate on a copy of the dataframe
     for evt_name in event_list:
         if evt_name=='projector':
             continue
@@ -342,7 +343,7 @@ def correct_to_projector(dframe, projector_eventID='projector', event_list=[],
     # Sanity check event order preserved
     selection_dframe = dframe.query(f'condition in {event_list}')
     selection_dframe.reset_index(inplace=True, drop=True)
-    if np.alltrue(selection_dframe.condition.values == out_dframe.condition.values):
+    if np.all(selection_dframe.condition.values == out_dframe.condition.values):
         timing_diff = out_dframe.onset.values - selection_dframe.onset.values 
         timing_diff *= 1000
         t_diff_mean = np.round(np.mean(timing_diff), 2)
@@ -350,6 +351,11 @@ def correct_to_projector(dframe, projector_eventID='projector', event_list=[],
         print(f'Correction performed: Mean={t_diff_mean} ms  Std={t_diff_std} ms')
     else:
         print('The resulting order has not been preserved')
+    
+    # Add the conditions that were not in the event list back into new dataframe
+    unaffected_conditions = dframe.query(f'condition not in {event_list}')
+    out_dframe = append_conditions([out_dframe, unaffected_conditions])
+        
     
     return out_dframe     
 
