@@ -422,7 +422,7 @@ class event_coding_Window(QMainWindow):
                     if item.widget():
                         item.widget().deleteLater()
 
-        for i in self.event_namelist: 
+        for i in set(self.event_namelist): 
             tmp=QPushButton(i)
             tmp.setCheckable(True)
             self.keep_events_layout.addWidget(tmp)
