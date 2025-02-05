@@ -571,11 +571,15 @@ class event_coding_Window(QMainWindow):
             time_corr_code.append(tmp_code)        
         
         ##### Add offset to events ######
-        offset_val_ms = float(self.b_fixed_delay_edit.text())
-        if len(self.add_offset_list) > 0:
-            offset_val_s = offset_val_ms / 1000 # convert to seconds
-            tmp_code = f'dframe = add_event_offset(dframe, event_list={self.add_offset_list}, offset={offset_val_s})'
-            time_corr_code.append(tmp_code)
+        if self.b_fixed_delay_edit.text()=='':
+            offset_val_ms = 0
+        else: 
+            offset_val_ms = float(self.b_fixed_delay_edit.text())
+        if hasattr(self, 'add_offset_list'):
+            if len(self.add_offset_list) > 0:
+                offset_val_s = offset_val_ms / 1000 # convert to seconds
+                tmp_code = f'dframe = add_event_offset(dframe, event_list={self.add_offset_list}, offset={offset_val_s})'
+                time_corr_code.append(tmp_code)
         
         #####  Parsed Triggers  #######
         parsed_trig_code = []
