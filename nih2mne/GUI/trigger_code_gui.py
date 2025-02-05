@@ -533,9 +533,9 @@ class event_coding_Window(QMainWindow):
         
         ##### Analog Triggers #####
         ana_trig_code = []
-        # print(self.events_to_write)
+        ana_trig_code.append('##### Analog Trigger Coding ######')
         for i, tile in self.tile_dict.items():
-            if i.startswith('UADC'):# and (tile.event_name.text() in self.events_to_write) :
+            if i.startswith('UADC'):
                 print(i, tile.event_name.text())
                 markname = tile.event_name.text()
                 if markname == '':
@@ -549,8 +549,9 @@ class event_coding_Window(QMainWindow):
                 tmp_code = f"dframe_list.append(tmp_dframe)"
                 ana_trig_code.append(tmp_code)
                 
-        ##### Digital Triggers #####       #####!!!!!!    IF NAME does not exist - dont write
+        ##### Digital Triggers #####       
         dig_trig_code = []
+        dig_trig_code.append('##### Digital Trigger Coding ######')
         tmp_code = f"dig_dframe = detect_digital(filename=meg_fname, channel='UPPT001')" #, mark='{markname}')"
         dig_trig_code.append(tmp_code)
         for i, tile in self.tile_dict.items():
@@ -567,6 +568,7 @@ class event_coding_Window(QMainWindow):
         
         ##### Tidy up data   #######
         time_corr_code = []
+        time_corr_code.append('##### Projector Correction and Event Offset ######')
         time_corr_code.append(f"dframe = append_conditions(dframe_list)")
                 
         ##### Correct to Projector ###### 
@@ -587,6 +589,7 @@ class event_coding_Window(QMainWindow):
         
         #####  Parsed Triggers  #######
         parsed_trig_code = []
+        parsed_trig_code.append('##### Parse Marks Coding ######')
         # Append the above triggers for parsemarks reference
         # parsed_trig_code.append(f"dframe = append_conditions(dframe_list)")
         for parse_tile in self.parsemarks_tile_list:
@@ -615,6 +618,7 @@ class event_coding_Window(QMainWindow):
         keep_evts_code = []
         tmp_ = \
 f"""
+##### Set Events to Keep ######
 final_dframe_list = []
 for evt_name in {self.events_to_write}:
     keep_dframe=dframe[dframe.condition==evt_name]
@@ -631,25 +635,7 @@ final_dframe = append_conditions(final_dframe_list)
             for i in init_trig_code:
                 f.write(i+'\n')
                 f.write('\n')
-        
-        # tmp_code = 
-        # init_trig_code.ap
-                
 
-                
-# app = QApplication(sys.argv)
-# win = event_coding_Window(cmdline_meg_fname='sub-ON80038_ses-01_task-sternberg_run-01_meg.ds')  
-# win.tile_dict          
-
-# i=0
-# for key in win.tile_dict.keys():
-#     tile = win.tile_dict[key]
-#     tile.event_name.setText(f'New_{i}')
-#     print(tile.event_name.text())
-#     i+=1
-    
-        
-    
     
 #%%    
 
