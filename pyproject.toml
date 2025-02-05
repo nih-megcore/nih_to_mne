@@ -40,6 +40,7 @@ testing = ['datalad','pytest','pygit2']
 "standardize_eventID_list.py"='nih2mne.utilities.standardize_eventID_list:main_parser'
 "megcore_gui.py"='nih2mne.GUI.megcore_gui:meg_gui'
 "bids_qa_gui.py"='nih2mne.GUI.qt_gui:cmdline_main'
+"trigger_code_gui.py"='nih2mne.GUI.trigger_code_gui:cmdline_main'
 
 #'nih2mne/eyetracking_preprocessing.py',
 #'cmdline/make_bids_fs_swarm.sh',
