@@ -59,7 +59,8 @@ import os, os.path as op
 import numpy as np
 from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital, 
                                                  check_analog_inverted, threshold_detect, 
-                                                 append_conditions)
+                                                 append_conditions, correct_to_projector, 
+                                                 add_event_offset)
 
 
 
@@ -388,16 +389,16 @@ class event_coding_Window(QMainWindow):
         self.fixed_delay_selector.b_set_selection.clicked.connect(self._set_fixedDelay_list)
     
     def _set_fixedDelay_list(self):
-        'Fixed delay added to self.add_fixed_delay_list'
+        'Fixed delay added to self.add_offset_list'
         layout = self.fixed_delay_selector.grid_layout
-        self.add_fixed_delay_list = []
+        self.add_offset_list = []
         for i in range(layout.count()):
             item = layout.itemAt(i)
             if item.widget():
                 if hasattr(item.widget(), 'isChecked'):
                     if item.widget().isChecked():
-                        self.add_fixed_delay_list.append(item.widget().text())
-        print(f'Setting fixed delay to the following: {self.add_fixed_delay_list}')
+                        self.add_offset_list.append(item.widget().text())
+        print(f'Setting fixed delay to the following: {self.add_offset_list}')
     
     def _set_correct2proj_list(self):
         'Correct to projector list assigned to self.corr2proj_list'
@@ -516,7 +517,7 @@ class event_coding_Window(QMainWindow):
                 "import mne\n",
                 "import nih2mne\n",
                 '''from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital,
-                    check_analog_inverted, threshold_detect, append_conditions)\n''',
+                    check_analog_inverted, threshold_detect, append_conditions, correct_to_projector, add_event_offset)\n''',
                 '''from nih2mne.utilities.markerfile_write import main as write_markerfile\n'''
                 "\n\n",
                 "meg_fname = sys.argv[1]\n\n"
@@ -564,27 +565,22 @@ class event_coding_Window(QMainWindow):
         time_corr_code = []
         time_corr_code.append(f"dframe = append_conditions(dframe_list)")
                 
-        ##### Correct to Projector ######  <<<<<<<<<<<<<<<--- Use a function to do this -- remember to remove test_list
-        test_list = ['test2', 'projector', 'test1', 'test3']
-        corr2proj_dframe_list = []
-        for i in test_list: #self.corr2proj_list:
-            if i=='projector':
-                continue
-            tmp_code = f"tmp_dframe = parse_marks(dframe, lead_condition='projector', lag_condition='{i}', marker_on='lead', marker_name='{i}', append_result=False, window=[-.150, .2]).dropna()"
-            time_corr_code.append(tmp_code)
-            tmp_code = f"corr2proj_dframe_list.append(tmp_dframe)"
-            time_corr_code.append(tmp_code)
-        
+        ##### Correct to Projector ###### 
+        if len(self.corr2proj_list) > 0:
+            tmp_code = f'dframe = correct_to_projector(dframe, event_list={self.corr2proj_list}, window=[-0.2,0.2])'
+            time_corr_code.append(tmp_code)        
         
         ##### Add offset to events ######
-        for i in self.add_fixed_delay_list:
-            time_corr_code.append(f"dframe[{i}].onset -= {float(self.offset_delay)}")        
-        
+        offset_val_ms = float(self.b_fixed_delay_edit.text())
+        if len(self.add_offset_list) > 0:
+            offset_val_s = offset_val_ms / 1000 # convert to seconds
+            tmp_code = f'dframe = add_event_offset(dframe, event_list={self.add_offset_list}, offset={offset_val_s})'
+            time_corr_code.append(tmp_code)
         
         #####  Parsed Triggers  #######
         parsed_trig_code = []
         # Append the above triggers for parsemarks reference
-        parsed_trig_code.append(f"dframe = append_conditions(dframe_list)")
+        # parsed_trig_code.append(f"dframe = append_conditions(dframe_list)")
         for parse_tile in self.parsemarks_tile_list:
             markname = parse_tile.event_name.text()
             if markname in self.events_to_write:
@@ -622,7 +618,7 @@ final_dframe = append_conditions(final_dframe_list)
         
                 
         ##### Combine Initial Trigger Processing #####
-        init_trig_code = init_code + ana_trig_code + dig_trig_code + parsed_trig_code + keep_evts_code
+        init_trig_code = init_code + ana_trig_code + dig_trig_code + time_corr_code + parsed_trig_code + keep_evts_code
         with open(fname, 'a') as f:
             for i in init_trig_code:
                 f.write(i+'\n')
