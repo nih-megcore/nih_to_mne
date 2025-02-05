@@ -538,6 +538,8 @@ class event_coding_Window(QMainWindow):
             if i.startswith('UADC'):# and (tile.event_name.text() in self.events_to_write) :
                 print(i, tile.event_name.text())
                 markname = tile.event_name.text()
+                if markname == '':
+                    continue
                 if tile.b_downgoing_trigger.checkState()==2:
                     invert_val = True
                 else:
@@ -555,6 +557,8 @@ class event_coding_Window(QMainWindow):
             if i.startswith('UPPT'):
                 print(i, tile.event_name.text())
                 markname = tile.event_name.text()
+                if markname == '':
+                    continue
                 dig_val = i.split('_')[-1]
                 tmp_code = f"dig_dframe.loc[dig_dframe.condition=='{dig_val}', 'condition']='{markname}'"
                 dig_trig_code.append(tmp_code)        
