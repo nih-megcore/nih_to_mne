@@ -17,6 +17,8 @@ def txt_to_tag(txtname):
     ll = open(txtname).readlines()
     for l in ll:
         l = l.strip()
+        if l=='':
+            continue
         if l[0] == '#':
             if l == "# Coordinate system: NIfTI:Scanner":
                 scanner = True
