@@ -31,6 +31,8 @@ def txt_to_tag(txtname):
     tags = {}
     for l in ll:
         l = l.strip()
+        if l=='':
+            continue
         if l[0] != '#':
             l = l.split('\t')
             if l[0][-1]==' ':  #Remove trailing space that sometimes happens

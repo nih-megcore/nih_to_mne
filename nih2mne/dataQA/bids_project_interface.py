@@ -224,9 +224,17 @@ class meglist_class:
     def __init__(self, subject=None, bids_root=None):
         dsets = glob.glob(f'{op.join(bids_root, subject, "**", "*.ds")}',
                           recursive=True)
-        tmp = [qa_megraw_object(i) for i in dsets if op.basename(i) not in ['hz.ds','hz2.ds']]
+        tmp = [qa_megraw_object(i) for i in dsets if not self._is_hzfile(i) ]
         self.meg_list = tmp
         self.meg_emptyroom = [i for i in self.meg_list if i.is_emptyroom]
+    
+    def _is_hzfile(self, fname):
+        if fname in ['hz.ds', 'hz2.ds']:
+            return True
+        elif fname.startswith('hz_t'):
+            return True
+        else:
+            return False
     
     def _pick_meg_from_list(self, choice_quote='Choice:\n', add_allchoice=False, 
                             idx=None):
