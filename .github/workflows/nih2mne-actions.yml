@@ -19,7 +19,7 @@ jobs:
         shell: bash -el {0}
         run: conda install --override-channels --channel=conda-forge 'python<3.12' pytest 'mne=1.5' 'numba<0.60' 
       - name: Install Git
-        run: apt install git
+        run: sudo apt install git -y
       - name: Pip Install nih2mne
         shell: bash -el {0}
         run: $CONDA/bin/pip install git+https://github.com/nih-megcore/nih_to_mne.git
