@@ -10,10 +10,11 @@ import pytest
 import os, os.path as op
 import nih2mne
 import sys
-from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QApplication
-from nih2mne.GUI.trigger_code_gui import event_coding_Window
+#from PyQt5 import QtWidgets
+#from PyQt5.QtWidgets import QApplication
+#from nih2mne.GUI.trigger_code_gui import event_coding_Window
 
+@pytest.mark.skip(reason="Pyqt import lib issue")
 def test_window():
     from PyQt5.QtTest import QTest
     from PyQt5.QtCore import Qt

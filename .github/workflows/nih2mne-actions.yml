@@ -1,19 +1,29 @@
 name: nih2mne-tests
 on: [push]
 jobs:
-  pytest:
-    runs-on: ubuntu-latest
+  Pytest:
+    name: InstallAndTest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest"]
+        python-version: ["3.11"]
     steps:
-      - uses: actions/checkout@v4
       - uses: conda-incubator/setup-miniconda@v3
+      - uses: actions/checkout@v4
         with:
-          python-version: 3.12
-          mamba-version: "*"
-          channels: conda-forge,defaults
-          channel-priority: true
-      - name: Install dependencies and pull data
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+      - name: Install MNE
         shell: bash -el {0}
-        run: make install_test      
+        run: conda install --override-channels --channel=conda-forge 'python<3.12' pytest 'mne=1.5' 'numba<0.60' 
+      - name: Install Git
+        run: apt install git
+      - name: Pip Install nih2mne
+        shell: bash -el {0}
+        run: $CONDA/bin/pip install git+https://github.com/nih-megcore/nih_to_mne.git
       - name: Pytest
         shell: bash -el {0}
-        run: make test
+        run: $CONDA/bin/pytest
+  
