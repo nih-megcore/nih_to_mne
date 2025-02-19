@@ -80,8 +80,8 @@ def run_sbatch(cmd=None, mem=None, threads=None, time="02:00:00",
     else:
         if logdir==None:
             logdir=op.join(os.getcwd(), 'logdir')
-            if not op.exists(logdir):
-                os.mkdir(logdir)
+        if not op.exists(logdir):
+            os.mkdir(logdir)
         time_postfix = datetime.now().strftime('%Y_%m_%d_%H:%M:%S')
         error_fname = op.join(logdir, f"{logfile_prefix}_{time_postfix}.e")
         stdout_fname = op.join(logdir, f"{logfile_prefix}_{time_postfix}.o")
