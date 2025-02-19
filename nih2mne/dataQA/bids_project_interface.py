@@ -463,7 +463,7 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         cmd = f"export SUBJECTS_DIR={self.subjects_dir}; recon-all -all -i {self.mri} -s {self.subject}" 
         os.makedirs(self.subjects_dir, exist_ok=True)
         outcode = run_sbatch(cmd, mem=6, threads=2, time="24:00:00", 
-                             logdir=self.bids_root, logfile_prefix=f'fs_recon_{self.subject}')
+                             logdir=op.join(self.bids_root, 'logdir'), logfile_prefix=f'fs_recon_{self.subject}')
         return outcode    
     
     def plot_mri_fids(self):
