@@ -28,6 +28,7 @@ import pyctf
 import mne_bids
 from nih2mne.megcore_prep_mri_bids import mripreproc
 from collections import OrderedDict
+from datetime import datetime
 
 CFG_VERSION = 1.0
 
@@ -41,7 +42,8 @@ else:
 
 
                            
-def run_sbatch(cmd=None, mem=None, threads=None, time="02:00:00", sbatch_dep=None):
+def run_sbatch(cmd=None, mem=None, threads=None, time="02:00:00", 
+               sbatch_dep=None, logdir=None, logfile_prefix=None):
     '''
     Wrap an sbatch submission
 
@@ -57,6 +59,10 @@ def run_sbatch(cmd=None, mem=None, threads=None, time="02:00:00", sbatch_dep=Non
         Max time allotted for compute. The default is "02:00:00".
     sbatch_dep : TYPE, optional
         DESCRIPTION. The default is None.
+    logdir : str, optional
+        Output Folder for the error and stdout files
+    logfile_prefix : str, optional 
+        Prefix for logfile filename
 
     Returns
     -------
@@ -65,11 +71,29 @@ def run_sbatch(cmd=None, mem=None, threads=None, time="02:00:00", sbatch_dep=Non
 
     '''
     script = f'#! /bin/bash\n {cmd}\n'
-    submission = subprocess.run(["sbatch", f"--mem={mem}g", f"--time={time}", f"--cpus-per-task={threads}"],
-                                input=script,
-                                capture_output=True,
-                                text=True,
-                                encoding="utf-8")
+    if logdir==None and logfile_prefix==None:
+        submission = subprocess.run(["sbatch", f"--mem={mem}g", f"--time={time}", f"--cpus-per-task={threads}"],
+                                    input=script,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8")
+    else:
+        if logdir==None:
+            logdir=op.join(os.getcwd(), 'logdir')
+            if not op.exists(logdir):
+                os.mkdir(logdir)
+        time_postfix = datetime.now().strftime('%Y_%m_%d_%H:%M:%S')
+        error_fname = op.join(logdir, f"{logfile_prefix}_{time_postfix}.e")
+        stdout_fname = op.join(logdir, f"{logfile_prefix}_{time_postfix}.o")
+        
+        submission = subprocess.run(["sbatch", f"--mem={mem}g", f"--time={time}",
+                                     f"--cpus-per-task={threads}",
+                                     f"--error={error_fname}",
+                                     f"--output={stdout_fname}"],
+                                    input=script,
+                                    capture_output=True,
+                                    text=True,
+                                    encoding="utf-8")
     if submission.returncode == 0:
         print(f"slurm job id: {submission.stdout}")
         sbatch1_ID=submission.stdout
@@ -438,7 +462,8 @@ class _subject_bids_info(qa_mri_class, meglist_class):
     def proc_freesurfer(self): 
         cmd = f"export SUBJECTS_DIR={self.subjects_dir}; recon-all -all -i {self.mri} -s {self.subject}" 
         os.makedirs(self.subjects_dir, exist_ok=True)
-        outcode = run_sbatch(cmd, mem=6, threads=2, time="24:00:00")
+        outcode = run_sbatch(cmd, mem=6, threads=2, time="24:00:00", 
+                             logdir=self.bids_root, logfile_prefix=f'fs_recon_{self.subject}')
         return outcode    
     
     def plot_mri_fids(self):
