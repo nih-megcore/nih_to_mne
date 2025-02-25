@@ -11,7 +11,7 @@ import os.path as op
 import subprocess
 import shutil
 import pandas as pd
-
+import numpy as np
 
 def reformat_locs(output, start_idx=None):
     '''
@@ -60,7 +60,7 @@ def reformat_locs(output, start_idx=None):
     return trial_vals, dset
         
 def return_dframe(out_vals):
-    dframe = pd.DataFrame(columns=['dset','trial','nas_x','nas_y','nas_z',
+    dframe = pd.DataFrame(columns=['dset','trial','hz_val','nas_x','nas_y','nas_z',
                                    'lpa_x','lpa_y','lpa_z','rpa_x','rpa_y','rpa_z'])
     for fidloc in out_vals:
         trial_val=fidloc[0]
@@ -72,6 +72,7 @@ def return_dframe(out_vals):
             idx=len(dframe)
             fid_dict = trial_val[trial_num]
             dframe.loc[idx,'dset']=dset 
+            dframe.loc[idx,'hz_val']=op.basename(dset).replace('.ds','')
             dframe.loc[idx, 'trial']=trial_num.split()[-1]
             dframe.loc[idx,['nas_x','nas_y','nas_z']]=fid_dict['nasion']
             dframe.loc[idx,['lpa_x','lpa_y','lpa_z']]=fid_dict['left ear']
@@ -79,23 +80,57 @@ def return_dframe(out_vals):
             del fid_dict, idx
         del trial_val, dset
     return dframe
-        
 
-# def compute_movement(dframe):
+def _dist(val1, val2, num_dec=4):
+    'Compute Euclidean Distance'
+    dist_val = ((val1[0]-val2[0])**2 + (val1[1]-val2[1])**2 + (val1[2]-val2[2])**2)**0.5
+    return round(dist_val, num_dec)
+
+def calc_movement(row1, row2):
+    'Compute the distance between two rows of dataframe'
+    nas1 = row1[['nas_x','nas_y','nas_z']].values
+    lpa1 = row1[['lpa_x','lpa_y','lpa_z']].values
+    rpa1 = row1[['rpa_x','rpa_y','rpa_z']].values
+    
+    nas2 = row2[['nas_x','nas_y','nas_z']].values
+    lpa2 = row2[['lpa_x','lpa_y','lpa_z']].values
+    rpa2 = row2[['rpa_x','rpa_y','rpa_z']].values
+    
+    nas_m = _dist(nas1,nas2)
+    lpa_m = _dist(lpa1,lpa2)
+    rpa_m = _dist(rpa1,rpa2)
+    av_move = np.mean([nas_m,lpa_m, rpa_m]) 
+                      
+    print(f'NAS move: {nas_m}')
+    print(f'LPA move: {lpa_m}')
+    print(f'RPA move: {rpa_m}')
+    print(f'Average movement on coils: {av_move}')
+    return {'N':nas_m, 'L':lpa_m, 'R':rpa_m, 'Ave':av_move}
+    
+
+
+def compute_movement(dframe):
+    row1_idx = dframe.query('hz_val=="hz" and trial=="1"').index[0]
+    row2_idx = dframe.query('hz_val=="hz2" and trial=="1"').index[0]
+    row1 = dframe.loc[row1_idx]
+    row2 = dframe.loc[row2_idx]
+    move_dict = calc_movement(row1, row2)
+    return move_dict
     
     
     
 
-def main():
-    fname = sys.argv[1]
+def main(fname):
     hzfile = op.join(fname, 'hz.ds')
     acqfile = op.join(fname, 'hz.ds/hz.acq')
 
     cmd = f'calcHeadPos {fname} {acqfile}'
-
+    
+    #Check if CTF tools install
     if shutil.which('calcHeadPos') == '':
         raise EnvironmentError('CTF tools do not appear to be installed')
-
+        
+    #Run command and capture stdout
     submission = subprocess.run(cmd.split(),
                                 input='echo 0',
                                 capture_output=True,
@@ -104,7 +139,8 @@ def main():
 
     output = submission.stdout.split('\n')
     output = [i.replace('\t','') for i in output]
-
+    
+    #Capture section headings
     header_idxs, trial_idxs = [], []
     for idx, val in enumerate(output):
         if val.endswith('.ds'):
@@ -112,11 +148,17 @@ def main():
         if val.startswith('Trial '):
             trial_idxs.append(idx)
     
+    #
     out_vals = []
     for start_idx in header_idxs:
         out_vals.append(reformat_locs(output, start_idx=start_idx))
     
     dframe = return_dframe(out_vals)
+    move_dict = compute_movement(dframe)
+    
+if __name__=='__main__':
+    fname = sys.argv[1]
+    main(fname)
         
         
         
