@@ -12,6 +12,7 @@ import subprocess
 import shutil
 import pandas as pd
 import numpy as np
+import glob
 
 def reformat_locs(output, start_idx=None):
     '''
@@ -86,7 +87,7 @@ def _dist(val1, val2, num_dec=4):
     dist_val = ((val1[0]-val2[0])**2 + (val1[1]-val2[1])**2 + (val1[2]-val2[2])**2)**0.5
     return round(dist_val, num_dec)
 
-def calc_movement(row1, row2):
+def calc_movement(row1, row2, verbose=True):
     'Compute the distance between two rows of dataframe'
     nas1 = row1[['nas_x','nas_y','nas_z']].values
     lpa1 = row1[['lpa_x','lpa_y','lpa_z']].values
@@ -101,34 +102,55 @@ def calc_movement(row1, row2):
     rpa_m = _dist(rpa1,rpa2)
     av_move = np.round(np.mean([nas_m,lpa_m, rpa_m]) ,5)
     
-    print('Values in cm:')                  
-    print(f'NAS move: {nas_m}')
-    print(f'LPA move: {lpa_m}')
-    print(f'RPA move: {rpa_m}')
-    print(f'Average movement on coils: {av_move}')
-    
-    bads = {j:i for i,j in zip([nas_m, lpa_m, rpa_m, av_move],['nas','lpa','rpa','ave']) if i>0.5}
-    if len(bads)>0:
-        print(f'\nWarning: The following are over the standard limit (0.5cm): {list(bads.keys())}')
-        print('If you think this is a data error and not a subject movement related error: see calcHeadPos and changeHeadPos')
-    
+    if verbose==True:
+        print('Values in cm:')                  
+        print(f'NAS move: {nas_m}')
+        print(f'LPA move: {lpa_m}')
+        print(f'RPA move: {rpa_m}')
+        print(f'Average movement on coils: {av_move}')
+        
+        bads = {j:i for i,j in zip([nas_m, lpa_m, rpa_m, av_move],['nas','lpa','rpa','ave']) if i>0.5}
+        if len(bads)>0:
+            print(f'\nWarning: The following are over the standard limit (0.5cm): {list(bads.keys())}')
+            print('If you think this is a data error and not a subject movement related error: see calcHeadPos and changeHeadPos')
+        
     return {'N':nas_m, 'L':lpa_m, 'R':rpa_m, 'Ave':av_move}
     
 
 
-def compute_movement(dframe):
-    last_hz_trial = dframe.query('hz_val=="hz"').trial.astype(int).max()
-    last_hz_trial = str(last_hz_trial)
+def compute_movement(dframe, dframe2=None):
+    '''If only one dframe set, pull the last trial from hz.ds and the only trial
+    from hz2.ds.
     
-    row1_idx = dframe.query(f'hz_val=="hz" and trial=="{last_hz_trial}"').index[0]
-    row2_idx = dframe.query('hz_val=="hz2" and trial=="1"').index[0]
-    row1 = dframe.loc[row1_idx]
-    row2 = dframe.loc[row2_idx]
-    move_dict = calc_movement(row1, row2)
+    If a second dframe is present - this is comparing two runs.
+    Assess the last trial of both hz.ds files'''
+    if dframe2 is None:  
+        #Single Run pre/post acq
+        last_hz_trial = dframe.query('hz_val=="hz"').trial.astype(int).max()
+        last_hz_trial = str(last_hz_trial)
+        
+        row1_idx = dframe.query(f'hz_val=="hz" and trial=="{last_hz_trial}"').index[0]
+        row2_idx = dframe.query('hz_val=="hz2" and trial=="1"').index[0]
+        row1 = dframe.loc[row1_idx]
+        row2 = dframe.loc[row2_idx]
+        move_dict = calc_movement(row1, row2)
+    else:  
+        #Tow run comparison
+        last_hz_trial1 = dframe.query('hz_val=="hz"').trial.astype(int).max()
+        last_hz_trial1 = str(last_hz_trial1)
+        row1_idx = dframe.query(f'hz_val=="hz" and trial=="{last_hz_trial1}"').index[0]
+
+        last_hz_trial2 = dframe2.query('hz_val=="hz"').trial.astype(int).max()
+        last_hz_trial2 = str(last_hz_trial2)
+        row2_idx = dframe2.query(f'hz_val=="hz" and trial=="{last_hz_trial2}"').index[0]
+        
+        row1 = dframe.loc[row1_idx]
+        row2 = dframe2.loc[row2_idx]
+        move_dict = calc_movement(row1, row2, verbose=False)
     return move_dict
     
 
-def main(fname, csv_fname=None):
+def get_localizer_dframe(fname):
     hzfile = op.join(fname, 'hz.ds')
     acqfile = op.join(fname, 'hz.ds/hz.acq')
 
@@ -136,7 +158,6 @@ def main(fname, csv_fname=None):
     if shutil.which('calcHeadPos') == '':
         raise EnvironmentError('CTF tools do not appear to be installed')
         
-
     #Run command and capture stdout
     cmd = f'calcHeadPos {fname} {acqfile}'        
     submission = subprocess.run(cmd.split(),
@@ -162,31 +183,101 @@ def main(fname, csv_fname=None):
         out_vals.append(reformat_locs(output, start_idx=start_idx))
     
     dframe = return_dframe(out_vals)
-    move_dict = compute_movement(dframe)
-    if csv_fname != None:
-        dframe.to_csv(csv_fname)
-        print(f'Wrote output file to {csv_fname}')
-    
+    return dframe
+
+
+        
+def main(fname=None, csv_fname=None, task_name=None, data_dir=None):
+    '''
+    Run the 
+
+    Parameters
+    ----------
+    fname : TYPE
+        DESCRIPTION.
+    csv_fname : TYPE, optional
+        DESCRIPTION. The default is None.
+    assess_task : TYPE, optional
+        DESCRIPTION. The default is None.
+
+    Raises
+    ------
+    EnvironmentError
+        If ctftools not available.
+
+    Returns
+    -------
+    pandas dataframe
+
+    '''
+    if  fname != None:
+        dframe = get_localizer_dframe(fname)
+        move_dict = compute_movement(dframe)
+        if csv_fname != None:
+            dframe.to_csv(csv_fname)
+            print(f'Wrote output file to {csv_fname}')
+    if task_name != None:
+        if data_dir == None:
+            raise ValueError(f'If assess_task is used, data_dir must be assigned as well')
+        dsets = glob.glob(op.join(data_dir, f'*_{task_name}_*.ds'))
+        dframe_list = []
+        for dset in dsets:
+            dframe_list.append(get_localizer_dframe(dset))
+        
+        from itertools import combinations
+        compare_dframe = pd.DataFrame(columns=['RunNum1','RunNum2','distance','>0.5'])
+
+        for df1_2 in combinations(dframe_list,2):
+            df1, df2 = df1_2
+            runval1 = op.dirname(df1.loc[0].dset).split('_')[-1].replace('.ds','')
+            runval2 = op.dirname(df2.loc[0].dset).split('_')[-1].replace('.ds','')
+            move_dict = compute_movement(dframe=df1, dframe2=df2)
+            
+            idx=len(compare_dframe)
+            if move_dict['Ave']>0.5: 
+                exceeds='X' 
+            else:
+                exceeds=''
+            compare_dframe.loc[idx]=runval1, runval2, move_dict['Ave'], exceeds
+        compare_dframe.RunNum1 = compare_dframe.RunNum1.astype(int)
+        compare_dframe.RunNum2 = compare_dframe.RunNum2.astype(int)            
+        compare_dframe = compare_dframe.sort_values(by=['RunNum1','RunNum2'])
+        compare_dframe.reset_index(drop=True, inplace=True)
+        
+        print(compare_dframe)
+        
+        if csv_fname != None:
+            dframe.to_csv(csv_fname)
+            print(f'Wrote output file to {csv_fname}')
+            
     
 def entrypoint():
     import argparse
     parser = argparse.ArgumentParser(description='''Compute the head movement
                                      between beginning and end of run.  This is set
                                      as the last hz.ds trial and hz2.ds(Trial1).''')
-    parser.add_argument('-fname', 
-                        help='filename to report ')
-    parser.add_argument('-to_csv', 
-                        help='output fname entry of csv file',
+    single = parser.add_argument_group('Pre/Post Single run')
+    single.add_argument('-fname', 
+                        help='filename to report ',
+                        default=None)
+    single.add_argument('-to_csv', 
+                        help='output fname entry of csv file (optional)(works with task section as well)',
+                        default=None)
+    taskgroup = parser.add_argument_group('Movement over session of task')    
+    taskgroup.add_argument('-task', 
+                        help='Assess movement between different runs of a task',
+                        default=None)
+    taskgroup.add_argument('-data_dir',
+                        help='Used with task flag to find datasets',
                         default=None)
     args = parser.parse_args()
-    main(args.fname, csv_fname=args.to_csv)
+    main(fname=args.fname, csv_fname=args.to_csv, task_name=args.task, 
+         data_dir=args.data_dir)
     
     
     
 if __name__=='__main__':
     entrypoint()
-        
-        
         
 
     
