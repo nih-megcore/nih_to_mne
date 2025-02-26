@@ -167,7 +167,9 @@ def main(fname, csv_fname=None):
     
 def entrypoint():
     import argparse
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='''Compute the head movement
+                                     between beginning and end of run.  This is set
+                                     as hz.ds(Trial2) and hz2.ds(Trial1).''')
     parser.add_argument('-fname', 
                         help='filename to report ')
     parser.add_argument('-to_csv', 
