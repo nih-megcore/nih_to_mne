@@ -99,38 +99,42 @@ def calc_movement(row1, row2):
     nas_m = _dist(nas1,nas2)
     lpa_m = _dist(lpa1,lpa2)
     rpa_m = _dist(rpa1,rpa2)
-    av_move = np.mean([nas_m,lpa_m, rpa_m]) 
-                      
+    av_move = np.round(np.mean([nas_m,lpa_m, rpa_m]) ,5)
+    
+    print('Values in cm:')                  
     print(f'NAS move: {nas_m}')
     print(f'LPA move: {lpa_m}')
     print(f'RPA move: {rpa_m}')
     print(f'Average movement on coils: {av_move}')
+    
+    bads = {j:i for i,j in zip([nas_m, lpa_m, rpa_m, av_move],['nas','lpa','rpa','ave']) if i>0.5}
+    if len(bads)>0:
+        print(f'Warning: The following are over the standard limit: {list(bads.keys())}')
+    
     return {'N':nas_m, 'L':lpa_m, 'R':rpa_m, 'Ave':av_move}
     
 
 
 def compute_movement(dframe):
-    row1_idx = dframe.query('hz_val=="hz" and trial=="1"').index[0]
+    row1_idx = dframe.query('hz_val=="hz" and trial=="2"').index[0]
     row2_idx = dframe.query('hz_val=="hz2" and trial=="1"').index[0]
     row1 = dframe.loc[row1_idx]
     row2 = dframe.loc[row2_idx]
     move_dict = calc_movement(row1, row2)
     return move_dict
     
-    
-    
 
-def main(fname):
+def main(fname, csv_fname=None):
     hzfile = op.join(fname, 'hz.ds')
     acqfile = op.join(fname, 'hz.ds/hz.acq')
 
-    cmd = f'calcHeadPos {fname} {acqfile}'
-    
     #Check if CTF tools install
     if shutil.which('calcHeadPos') == '':
         raise EnvironmentError('CTF tools do not appear to be installed')
         
+
     #Run command and capture stdout
+    cmd = f'calcHeadPos {fname} {acqfile}'        
     submission = subprocess.run(cmd.split(),
                                 input='echo 0',
                                 capture_output=True,
@@ -148,17 +152,33 @@ def main(fname):
         if val.startswith('Trial '):
             trial_idxs.append(idx)
     
-    #
+    # Create a dictionary at the header breaks 
     out_vals = []
     for start_idx in header_idxs:
         out_vals.append(reformat_locs(output, start_idx=start_idx))
     
     dframe = return_dframe(out_vals)
     move_dict = compute_movement(dframe)
+    if csv_fname != None:
+        dframe.to_csv(csv_fname)
+        print(f'Wrote output file to {csv_fname}')
+    
+    
+def entrypoint():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-fname', 
+                        help='filename to report ')
+    parser.add_argument('-to_csv', 
+                        help='output fname entry of csv file',
+                        default=None)
+    args = parser.parse_args()
+    main(args.fname, csv_fname=args.to_csv)
+    
+    
     
 if __name__=='__main__':
-    fname = sys.argv[1]
-    main(fname)
+    entrypoint()
         
         
         
