@@ -109,7 +109,8 @@ def calc_movement(row1, row2):
     
     bads = {j:i for i,j in zip([nas_m, lpa_m, rpa_m, av_move],['nas','lpa','rpa','ave']) if i>0.5}
     if len(bads)>0:
-        print(f'Warning: The following are over the standard limit: {list(bads.keys())}')
+        print(f'\nWarning: The following are over the standard limit (0.5cm): {list(bads.keys())}')
+        print('If you think this is a data error and not a subject movement related error: see calcHeadPos and changeHeadPos')
     
     return {'N':nas_m, 'L':lpa_m, 'R':rpa_m, 'Ave':av_move}
     
