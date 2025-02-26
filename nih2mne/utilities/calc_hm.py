@@ -117,7 +117,10 @@ def calc_movement(row1, row2):
 
 
 def compute_movement(dframe):
-    row1_idx = dframe.query('hz_val=="hz" and trial=="2"').index[0]
+    last_hz_trial = dframe.query('hz_val=="hz"').trial.astype(int).max()
+    last_hz_trial = str(last_hz_trial)
+    
+    row1_idx = dframe.query(f'hz_val=="hz" and trial=="{last_hz_trial}"').index[0]
     row2_idx = dframe.query('hz_val=="hz2" and trial=="1"').index[0]
     row1 = dframe.loc[row1_idx]
     row2 = dframe.loc[row2_idx]
@@ -169,7 +172,7 @@ def entrypoint():
     import argparse
     parser = argparse.ArgumentParser(description='''Compute the head movement
                                      between beginning and end of run.  This is set
-                                     as hz.ds(Trial2) and hz2.ds(Trial1).''')
+                                     as the last hz.ds trial and hz2.ds(Trial1).''')
     parser.add_argument('-fname', 
                         help='filename to report ')
     parser.add_argument('-to_csv', 
