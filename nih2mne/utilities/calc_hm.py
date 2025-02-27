@@ -276,8 +276,10 @@ def main(fname=None, csv_fname=None, task_name=None, data_dir=None):
             except IOError as e:
                 fname = op.basename(dset)
                 movement_dframe.loc[len(movement_dframe)]=fname,'CalcError - MissingFile'
-                
         print(movement_dframe)
+        if csv_fname != None:
+            movement_dframe.to_csv(csv_fname)
+            print(f'Wrote output file to {csv_fname}')
         
         
         
