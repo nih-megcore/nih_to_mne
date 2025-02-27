@@ -290,11 +290,11 @@ def main(fname=None, csv_fname=None, task_name=None, data_dir=None):
                 movement_dframe.loc[idx, '>0.5cm']='???'
         print(movement_dframe)
         if bad_dsets > 0:
-            print(f'\n!!Warning!! There are potentially {bad_dsets}')
+            print(f'\n!!Warning!! There are potentially {bad_dsets} bad datasets')
             print('Combining these with other data can possibly lead to erroneous statistics')
         if csv_fname != None:
             movement_dframe.to_csv(csv_fname)
-            print(f'Wrote output file to {csv_fname}')
+            print(f'\nWrote output file to {csv_fname}')
         
         
         
@@ -323,6 +323,8 @@ def entrypoint():
                         If given without task flag, it will list WITHIN run pre/post max movement of all runs in the folder''',
                         default=None)
     args = parser.parse_args()
+    if (args.fname != None) and (args.data_dir != None):
+        raise ValueError('Use fname or data_dir, not both')
     main(fname=args.fname, csv_fname=args.to_csv, task_name=args.task, 
          data_dir=args.data_dir)
     
