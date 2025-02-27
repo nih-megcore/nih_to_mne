@@ -200,12 +200,15 @@ def main(fname=None, csv_fname=None, task_name=None, data_dir=None):
 
     Parameters
     ----------
-    fname : TYPE
-        DESCRIPTION.
-    csv_fname : TYPE, optional
-        DESCRIPTION. The default is None.
-    assess_task : TYPE, optional
-        DESCRIPTION. The default is None.
+    fname : path/str
+        Filename path as input
+    csv_fname : path, optional
+        Output csv file. The default is None.
+    task_name : str, optional
+        Task to filter datasets. The default is None.
+    data_dir : path
+        Folder to find datasets.
+        If task_name is provided, it is added to the glob filtering
 
     Raises
     ------
@@ -258,8 +261,8 @@ def main(fname=None, csv_fname=None, task_name=None, data_dir=None):
             dframe.to_csv(csv_fname)
             print(f'Wrote output file to {csv_fname}')
     if (task_name==None) and (data_dir != None):
-        print(f'Running ave movement over all dsets: {data_dir}')
         #Loop over all datasets and find within run average movement
+        print(f'Running ave movement over all dsets: {data_dir}')
         dsets = glob.glob(op.join(data_dir, '*.ds'))
         print(f'Found {len(dsets)} datasets')
         dframe_list = []
