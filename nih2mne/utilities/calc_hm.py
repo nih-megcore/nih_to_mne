@@ -100,21 +100,22 @@ def calc_movement(row1, row2, verbose=True):
     nas_m = _dist(nas1,nas2)
     lpa_m = _dist(lpa1,lpa2)
     rpa_m = _dist(rpa1,rpa2)
-    av_move = np.round(np.mean([nas_m,lpa_m, rpa_m]) ,5)
+    max_move = np.round(np.max([nas_m,lpa_m, rpa_m]) ,5)
     
     if verbose==True:
         print('Values in cm:')                  
         print(f'NAS move: {nas_m}')
         print(f'LPA move: {lpa_m}')
         print(f'RPA move: {rpa_m}')
-        print(f'Average movement on coils: {av_move}')
+        print(f'Max movement on coils: {max_move}')
         
-        bads = {j:i for i,j in zip([nas_m, lpa_m, rpa_m, av_move],['nas','lpa','rpa','ave']) if i>0.5}
+        bads = {j:i for i,j in zip([nas_m, lpa_m, rpa_m, max_move],['nas','lpa','rpa','max']) if i>0.5}
         if len(bads)>0:
-            print(f'\nWarning: The following are over the standard limit (0.5cm): {list(bads.keys())}')
+            print(f'\n!!Warning!!: The following are over the standard limit (0.5cm): {list(bads.keys())}')
+            print('This can represent bad data that should not be part of your analysis')
             print('If you think this is a data error and not a subject movement related error: see calcHeadPos and changeHeadPos')
         
-    return {'N':nas_m, 'L':lpa_m, 'R':rpa_m, 'Ave':av_move}
+    return {'N':nas_m, 'L':lpa_m, 'R':rpa_m, 'Max':max_move}
     
 
 
@@ -135,7 +136,7 @@ def compute_movement(dframe, dframe2=None, verbose=True):
             row2 = dframe.loc[row2_idx]
         except IndexError as e:
             print(f"{dframe.loc[0,'dset']}: Can't assess movement.  It is possible the run was terminated early")
-            return {'N':None, 'L':None, 'R':None, 'Ave':None}
+            return {'N':None, 'L':None, 'R':None, 'Max':None}
         move_dict = calc_movement(row1, row2, verbose=verbose)
     else:  
         #Tow run comparison
@@ -245,11 +246,11 @@ def main(fname=None, csv_fname=None, task_name=None, data_dir=None):
             move_dict = compute_movement(dframe=df1, dframe2=df2)
             
             idx=len(compare_dframe)
-            if move_dict['Ave']>0.5: 
+            if move_dict['Max']>0.5: 
                 exceeds='X' 
             else:
                 exceeds=''
-            compare_dframe.loc[idx]=runval1, runval2, move_dict['Ave'], exceeds
+            compare_dframe.loc[idx]=runval1, runval2, move_dict['Max'], exceeds
         compare_dframe.RunNum1 = compare_dframe.RunNum1.astype(int)
         compare_dframe.RunNum2 = compare_dframe.RunNum2.astype(int)            
         compare_dframe = compare_dframe.sort_values(by=['RunNum1','RunNum2'])
@@ -261,22 +262,36 @@ def main(fname=None, csv_fname=None, task_name=None, data_dir=None):
             dframe.to_csv(csv_fname)
             print(f'Wrote output file to {csv_fname}')
     if (task_name==None) and (data_dir != None):
-        #Loop over all datasets and find within run average movement
-        print(f'Running ave movement over all dsets: {data_dir}')
+        #Loop over all datasets and find within run max movement calc
+        print(f'Running movement calc over all dsets: {data_dir}')
         dsets = glob.glob(op.join(data_dir, '*.ds'))
         print(f'Found {len(dsets)} datasets')
         dframe_list = []
-        movement_dframe = pd.DataFrame(columns=['fname', 'ave_move'])
+        movement_dframe = pd.DataFrame(columns=['fname', 'max_move'])
         for dset in dsets:
             try:
                 tmp_dframe = get_localizer_dframe(dset)
                 move_dict = compute_movement(tmp_dframe, verbose=False)
                 fname = op.basename(dset)
-                movement_dframe.loc[len(movement_dframe)]=fname,move_dict['Ave']
+                movement_dframe.loc[len(movement_dframe)]=fname,move_dict['Max']
             except IOError as e:
                 fname = op.basename(dset)
                 movement_dframe.loc[len(movement_dframe)]=fname,'CalcError - MissingFile'
+        bad_dsets=0
+        for idx,row in movement_dframe.iterrows():
+            try:
+                val = float(row.max_move)
+                if val > 0.5:
+                    movement_dframe.loc[idx, '>0.5cm']='X'
+                    bad_dsets+=1
+                else:
+                    movement_dframe.loc[idx, '>0.5cm']=''
+            except:
+                movement_dframe.loc[idx, '>0.5cm']='???'
         print(movement_dframe)
+        if bad_dsets > 0:
+            print(f'\n!!Warning!! There are potentially {bad_dsets}')
+            print('Combining these with other data can possibly lead to erroneous statistics')
         if csv_fname != None:
             movement_dframe.to_csv(csv_fname)
             print(f'Wrote output file to {csv_fname}')
@@ -289,21 +304,23 @@ def entrypoint():
     import argparse
     parser = argparse.ArgumentParser(description='''Compute the head movement
                                      between beginning and end of run.  This is set
-                                     as the last hz.ds trial and hz2.ds(Trial1).''')
+                                     as the last hz.ds trial and hz2.ds(Trial1).
+                                     Requires CTF tools package''')
+    parser.add_argument('-to_csv', 
+                        help='output fname entry of csv file (optional)(works with single or multirun)',
+                        default=None)
     single = parser.add_argument_group('Pre/Post Single run')
     single.add_argument('-fname', 
-                        help='filename to report ',
+                        help='filename to report head movement',
                         default=None)
-    single.add_argument('-to_csv', 
-                        help='output fname entry of csv file (optional)(works with task section as well)',
-                        default=None)
-    other = parser.add_argument_group('Other options - mostly multirun assessment')    
+
+    other = parser.add_argument_group('Multirun  options')    
     other.add_argument('-task', 
-                        help='Assess movement between different runs of a task',
+                        help='Assess movement BETWEEN different runs of a task',
                         default=None)
     other.add_argument('-data_dir',
                         help='''Folder to find datasets.  Does not need to be used with fname flag.\n
-                        If given without task flag, it will list average movement of all runs in the folder''',
+                        If given without task flag, it will list WITHIN run pre/post max movement of all runs in the folder''',
                         default=None)
     args = parser.parse_args()
     main(fname=args.fname, csv_fname=args.to_csv, task_name=args.task, 
