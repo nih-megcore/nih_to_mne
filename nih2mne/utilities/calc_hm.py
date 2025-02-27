@@ -118,7 +118,7 @@ def calc_movement(row1, row2, verbose=True):
     
 
 
-def compute_movement(dframe, dframe2=None):
+def compute_movement(dframe, dframe2=None, verbose=True):
     '''If only one dframe set, pull the last trial from hz.ds and the only trial
     from hz2.ds.
     
@@ -133,7 +133,7 @@ def compute_movement(dframe, dframe2=None):
         row2_idx = dframe.query('hz_val=="hz2" and trial=="1"').index[0]
         row1 = dframe.loc[row1_idx]
         row2 = dframe.loc[row2_idx]
-        move_dict = calc_movement(row1, row2)
+        move_dict = calc_movement(row1, row2, verbose=verbose)
     else:  
         #Tow run comparison
         last_hz_trial1 = dframe.query('hz_val=="hz"').trial.astype(int).max()
@@ -217,6 +217,7 @@ def main(fname=None, csv_fname=None, task_name=None, data_dir=None):
             dframe.to_csv(csv_fname)
             print(f'Wrote output file to {csv_fname}')
     if task_name != None:
+        #Perform run to run movement within a task
         if data_dir == None:
             raise ValueError(f'If assess_task is used, data_dir must be assigned as well')
         dsets = glob.glob(op.join(data_dir, f'*_{task_name}_*.ds'))
@@ -249,6 +250,22 @@ def main(fname=None, csv_fname=None, task_name=None, data_dir=None):
         if csv_fname != None:
             dframe.to_csv(csv_fname)
             print(f'Wrote output file to {csv_fname}')
+    if (task_name==None) and (data_dir != None):
+        print(f'Running ave movement over all dsets: {data_dir}')
+        #Loop over all datasets and find within run average movement
+        dsets = glob.glob(op.join(data_dir, '*.ds'))
+        print(f'Found {len(dsets)} datasets')
+        dframe_list = []
+        movement_dframe = pd.DataFrame(columns=['fname', 'ave_move'])
+        for dset in dsets:
+            tmp_dframe = get_localizer_dframe(dset)
+            move_dict = compute_movement(tmp_dframe, verbose=False)
+            fname = op.basename(dset)
+            movement_dframe.loc[len(movement_dframe)]=fname,move_dict['Ave']
+        print(movement_dframe)
+        
+        
+        
             
     
 def entrypoint():
@@ -263,12 +280,13 @@ def entrypoint():
     single.add_argument('-to_csv', 
                         help='output fname entry of csv file (optional)(works with task section as well)',
                         default=None)
-    taskgroup = parser.add_argument_group('Movement over session of task')    
-    taskgroup.add_argument('-task', 
+    other = parser.add_argument_group('Other options - mostly multirun assessment')    
+    other.add_argument('-task', 
                         help='Assess movement between different runs of a task',
                         default=None)
-    taskgroup.add_argument('-data_dir',
-                        help='Used with task flag to find datasets',
+    other.add_argument('-data_dir',
+                        help='''Folder to find datasets.  Does not need to be used with fname flag
+                        If given without task flag, it will list average movement of all runs in the folder''',
                         default=None)
     args = parser.parse_args()
     main(fname=args.fname, csv_fname=args.to_csv, task_name=args.task, 
