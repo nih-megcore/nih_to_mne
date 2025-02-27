@@ -128,11 +128,14 @@ def compute_movement(dframe, dframe2=None, verbose=True):
         #Single Run pre/post acq
         last_hz_trial = dframe.query('hz_val=="hz"').trial.astype(int).max()
         last_hz_trial = str(last_hz_trial)
-        
         row1_idx = dframe.query(f'hz_val=="hz" and trial=="{last_hz_trial}"').index[0]
-        row2_idx = dframe.query('hz_val=="hz2" and trial=="1"').index[0]
         row1 = dframe.loc[row1_idx]
-        row2 = dframe.loc[row2_idx]
+        try:
+            row2_idx = dframe.query('hz_val=="hz2" and trial=="1"').index[0]
+            row2 = dframe.loc[row2_idx]
+        except IndexError as e:
+            print(f"{dframe.loc[0,'dset']}: Can't assess movement.  It is possible the run was terminated early")
+            return {'N':None, 'L':None, 'R':None, 'Ave':None}
         move_dict = calc_movement(row1, row2, verbose=verbose)
     else:  
         #Tow run comparison
@@ -153,6 +156,10 @@ def compute_movement(dframe, dframe2=None, verbose=True):
 def get_localizer_dframe(fname):
     hzfile = op.join(fname, 'hz.ds')
     acqfile = op.join(fname, 'hz.ds/hz.acq')
+    if not op.exists(hzfile):
+        raise IOError(f'{hzfile} does not exist')
+    if not op.exists(acqfile):
+        raise IOError(f'{acqfile} does not exist')
 
     #Check if CTF tools install
     if shutil.which('calcHeadPos') == '':
@@ -258,10 +265,15 @@ def main(fname=None, csv_fname=None, task_name=None, data_dir=None):
         dframe_list = []
         movement_dframe = pd.DataFrame(columns=['fname', 'ave_move'])
         for dset in dsets:
-            tmp_dframe = get_localizer_dframe(dset)
-            move_dict = compute_movement(tmp_dframe, verbose=False)
-            fname = op.basename(dset)
-            movement_dframe.loc[len(movement_dframe)]=fname,move_dict['Ave']
+            try:
+                tmp_dframe = get_localizer_dframe(dset)
+                move_dict = compute_movement(tmp_dframe, verbose=False)
+                fname = op.basename(dset)
+                movement_dframe.loc[len(movement_dframe)]=fname,move_dict['Ave']
+            except IOError as e:
+                fname = op.basename(dset)
+                movement_dframe.loc[len(movement_dframe)]=fname,'CalcError - MissingFile'
+                
         print(movement_dframe)
         
         
@@ -285,7 +297,7 @@ def entrypoint():
                         help='Assess movement between different runs of a task',
                         default=None)
     other.add_argument('-data_dir',
-                        help='''Folder to find datasets.  Does not need to be used with fname flag
+                        help='''Folder to find datasets.  Does not need to be used with fname flag.\n
                         If given without task flag, it will list average movement of all runs in the folder''',
                         default=None)
     args = parser.parse_args()
