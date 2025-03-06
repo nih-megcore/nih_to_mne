@@ -253,9 +253,9 @@ class meglist_class:
         self.meg_emptyroom = [i for i in self.meg_list if i.is_emptyroom]
     
     def _is_hzfile(self, fname):
-        if fname in ['hz.ds', 'hz2.ds']:
+        if op.basename(fname) in ['hz.ds', 'hz2.ds']:
             return True
-        elif fname.startswith('hz_t'):
+        elif op.basename(fname).startswith('hz_t'):
             return True
         else:
             return False
@@ -670,7 +670,8 @@ class bids_project():
                                          force_update=force_update)
                 self.subjects[subject] = tmp_
                 if not op.exists(tmp_.qa_default_fname): tmp_.save()
-            except:
+            except BaseException as e:
+                print(f'Error reading {subject}: \n {str(e)}')
                 self.error_subjects.append(subject)
         
         self._fs_status()
