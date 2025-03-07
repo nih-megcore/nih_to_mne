@@ -1,0 +1,6 @@
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y python3 pip git
+RUN git clone https://github.com/nih-megcore/nih_to_mne.git ~/nih_to_mne
+RUN pip install ~/nih_to_mne
+RUN make -C  ~/nih_to_mne/makefile get_data
