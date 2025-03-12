@@ -591,12 +591,18 @@ def get_subj_logger(subjid, log_dir=None, loglevel=logging.INFO):
 def _input_checks(args):
     '''Perform minimal checks of existing data to fail early before starting 
     the processing'''
-    assert op.exists(args.meg_input_dir)
+    if not op.exists(args.meg_input_dir):
+        raise ValueError(f'{args.meg_input_dir} does not exist')
     if args.mri_bsight !=None:
-        assert op.exists(args.mri_bsight_elec)
-        assert op.exists(args.mri_bsight)
+        if len(args.mri_bsight_elec.split()) > 1:
+            raise ValueError(f'Make sure there is not a space in filename {args.mri_bsight_elec}')
+        if not op.exists(args.mri_bsight_elec):
+            raise ValueError(f'{args.mri_bsight_elec}: does not exist')
+        if not op.exists(args.mri_bsight):
+            raise ValueError(f'{args.mri_bsight} : does not exist')
     else:
-        assert op.exists(args.mri_brik)
+        if not op.exists(args.mri_brik):
+            raise ValueError(f'{args.mri_brik} : does not exist')
         
 def _output_checks(meg_conv_dict):
     '''Check that all of the datasets have been converted and mri+json w/Fids'''
