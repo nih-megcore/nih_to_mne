@@ -2,7 +2,7 @@
 
 from ..make_meg_bids import sessdir2taskrundict
 from ..make_meg_bids import _check_multiple_subjects
-from ..make_meg_bids import get_subj_logger
+from ..make_meg_bids import get_subj_logger, _input_checks
 import logging 
 
 import pytest 
@@ -12,7 +12,8 @@ from nih2mne.make_meg_bids import process_meg_bids
 code_path = nih2mne.__path__[0]
 data_path = op.join(code_path, 'test_data')
 
-
+# Check for the test data
+assert nih2mne.test_data().is_present()
 
 global logger
 logger = get_subj_logger('TEST', log_dir='/tmp', loglevel=logging.WARN)
@@ -78,8 +79,35 @@ def test_sessdir2taskrundict():
          'SUBJ2_M100_20001010_006.ds']
     out_dict2 = sessdir2taskrundict(input_list2, subject_in='TEST')
     assert out_dict2 == g_truth
-    
 
+
+
+test_data = nih2mne.test_data()
+class test_args():
+    def __init__(self, meg_input_dir=None, mri_bsight=None, bsight_elec=None):
+        test_data = nih2mne.test_data()
+        self.meg_input_dir = meg_input_dir
+        self.mri_bsight = mri_bsight
+        self.mri_bsight_elec = bsight_elec
+        
+def test_input_checks_valid():
+    args = test_args(meg_input_dir = str(test_data.meg_data_dir),
+                     mri_bsight = str(test_data.mri_nii),
+                     bsight_elec = str(test_data.bsight_elec))
+    assert _input_checks(args) == None
+    
+# @pytest.mark.parametrize("meg_input_dir, mri_bsight, bsight_elec", [ 
+#     ('/test/ 2000000', 'test.nii', 'electrodes.txt'), 
+#     ('/test/2000000', 'test.ni', 'electrodes.txt'), 
+#     ('/test/2000000', 'test.nii', 'Subj electrodes.txt'), 
+#     ('/test/2000000', 'test.nii', 'electrodes.txt'), 
+#     ])
+# def test_input_check_invalid(meg_input_dir, mri_bsight, bsight_elec):
+#     args = test_args(meg_input_dir, mri_bsight, bsight_elec)
+#     assert not _input_checks(args)==None
+    
+    
+    
 
 
 def test_process_meg_bids(tmp_path):
