@@ -96,15 +96,21 @@ def test_input_checks_valid():
                      bsight_elec = str(test_data.bsight_elec))
     assert _input_checks(args) == None
     
-# @pytest.mark.parametrize("meg_input_dir, mri_bsight, bsight_elec", [ 
-#     ('/test/ 2000000', 'test.nii', 'electrodes.txt'), 
-#     ('/test/2000000', 'test.ni', 'electrodes.txt'), 
-#     ('/test/2000000', 'test.nii', 'Subj electrodes.txt'), 
-#     ('/test/2000000', 'test.nii', 'electrodes.txt'), 
-#     ])
-# def test_input_check_invalid(meg_input_dir, mri_bsight, bsight_elec):
-#     args = test_args(meg_input_dir, mri_bsight, bsight_elec)
-#     assert not _input_checks(args)==None
+@pytest.mark.parametrize("meg_input_dir, mri_bsight, bsight_elec", [ 
+    ('/test/ 2000000', 'test.nii', 'electrodes.txt'), 
+    ('/test/2000000', 'test.ni', 'electrodes.txt'), 
+    ('/test/2000000', 'test.nii', 'Subj electrodes.txt'), 
+    ('/test/2000000', 'test.nii', 'electrodes.txt'), 
+    ])
+def test_input_check_invalid(meg_input_dir, mri_bsight, bsight_elec):
+    args = test_args(meg_input_dir, mri_bsight, bsight_elec)
+    try:
+        _input_checks(args)
+        success = True
+    except:
+        success = False
+    if success==True:
+        raise ValueError
     
     
     
