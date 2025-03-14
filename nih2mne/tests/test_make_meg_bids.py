@@ -95,12 +95,13 @@ def test_input_checks_valid():
                      mri_bsight = str(test_data.mri_nii),
                      bsight_elec = str(test_data.bsight_elec))
     assert _input_checks(args) == None
-    
+
+bad_electrodes_file = op.join(nih2mne.__path__[0], 'tests', 'bsight_test_bad_coordsys.txt')
 @pytest.mark.parametrize("meg_input_dir, mri_bsight, bsight_elec", [ 
     ('/test/ 2000000', 'test.nii', 'electrodes.txt'), 
     ('/test/2000000', 'test.ni', 'electrodes.txt'), 
     ('/test/2000000', 'test.nii', 'Subj electrodes.txt'), 
-    ('/test/2000000', 'test.nii', 'electrodes.txt'), 
+    (str(test_data.meg_data_dir), str(test_data.mri_nii), bad_electrodes_file),
     ])
 def test_input_check_invalid(meg_input_dir, mri_bsight, bsight_elec):
     args = test_args(meg_input_dir, mri_bsight, bsight_elec)

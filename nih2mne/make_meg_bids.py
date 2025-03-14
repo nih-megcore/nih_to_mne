@@ -600,6 +600,16 @@ def _input_checks(args):
             raise ValueError(f'{args.mri_bsight_elec}: does not exist')
         if not op.exists(args.mri_bsight):
             raise ValueError(f'{args.mri_bsight} : does not exist')
+        with open(args.mri_bsight_elec, 'r') as f:
+            tmp = f.readlines()
+        _coord = [i for i in tmp if i.startswith('# Coordinate system:')][0]
+        vals = _coord.strip().split(':')[1:]
+        if len(vals)==2:
+            val1, val2 = vals
+        if len(vals)==3:
+            val1, val2 = vals[0], vals[2]
+        if val1.strip().upper()!='NIFTI' : raise ValueError('The brainsight electrodes file does not appear to be exported in the correct format.  Must be Nifti:scanner')
+        if val2.strip().upper()!='SCANNER': raise ValueError('The brainsight electrodes file does not appear to be exported in the correct format.  Must be Nifti:scanner')
     else:
         if not op.exists(args.mri_brik):
             raise ValueError(f'{args.mri_brik} : does not exist')
