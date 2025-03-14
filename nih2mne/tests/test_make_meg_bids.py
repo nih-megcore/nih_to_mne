@@ -83,6 +83,7 @@ def test_sessdir2taskrundict():
 
 
 test_data = nih2mne.test_data()
+good_updated_electrodes_file = op.join(nih2mne.__path__[0], 'tests','bsight_test_updated_good_coordsys.txt')
 class test_args():
     def __init__(self, meg_input_dir=None, mri_bsight=None, bsight_elec=None):
         test_data = nih2mne.test_data()
@@ -95,6 +96,12 @@ def test_input_checks_valid():
                      mri_bsight = str(test_data.mri_nii),
                      bsight_elec = str(test_data.bsight_elec))
     assert _input_checks(args) == None
+
+    args = test_args(meg_input_dir = str(test_data.meg_data_dir),
+                     mri_bsight = str(test_data.mri_nii),
+                     bsight_elec = good_updated_electrodes_file
+                     )
+    
 
 bad_electrodes_file = op.join(nih2mne.__path__[0], 'tests', 'bsight_test_bad_coordsys.txt')
 @pytest.mark.parametrize("meg_input_dir, mri_bsight, bsight_elec", [ 

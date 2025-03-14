@@ -1,0 +1,17 @@
+# Version: 14
+# Coordinate system: NIfTI:S:Scanner
+# Created by: Brainsight 2.5.5
+# Units: millimetres, degrees, milliseconds, and microvolts
+# Encoding: UTF-8
+# Notes: Each column is delimited by a tab. Each value within a column is delimited by a semicolon.
+# Electrode Name	Electrode Type	Session Name	Loc. X	Loc. Y	Loc. Z	m0n0	m0n1	m0n2	m1n0	m1n1	m1n2	m2n0	m2n1	m2n2
+Right Ear	EEG	Session 1	35.4196	113.4793	-152.5658	0.1418	-0.8583	-0.4931	0.0000	-0.4981	0.8671	-0.9899	-0.1230	-0.0706
+Headpoint1	EEG	Session 1	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)
+Left Ear	EEG	Session 1	173.2163	110.0248	-146.5442	0.1952	0.9804	0.0281	-0.0000	-0.0286	0.9996	0.9808	-0.1951	-0.0056
+Headpoint2	EEG	Session 1	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)
+Headpoint5	EEG	Session 1	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)
+Headpoint4	EEG	Session 1	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)
+Headpoint3	EEG	Session 1	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)
+Headpoint7	EEG	Session 1	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)
+Nasion	EEG	Session 1	100.7006	34.9441	-117.9930	0.9999	-0.0125	-0.0029	-0.0000	-0.2287	0.9735	-0.0128	-0.9734	-0.2287
+Headpoint6	EEG	Session 1	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)	(null)
