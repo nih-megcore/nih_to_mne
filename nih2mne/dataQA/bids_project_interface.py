@@ -552,15 +552,30 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         del dset
         
         for dset in dsets:
-            if dset.is_emptyroom:
-                continue
-            bids_path_meg = mne_bids.get_bids_path_from_fname(dset.fname)
-            deriv_path =  bids_path_meg.copy().update(root=self.deriv_root, check=False)
-            deriv_path.directory.mkdir(parents=True, exist_ok=True)
-            mripreproc(bids_path=bids_path_meg,
-                       t1_bids_path= mne_bids.get_bids_path_from_fname(self.mri),
-                       deriv_path = deriv_path, 
-                       surf=surf, subjects_dir=self.subjects_dir)
+            failed_mripreproc={}
+            try:
+                if dset.is_emptyroom:
+                    continue
+                bids_path_meg = mne_bids.get_bids_path_from_fname(dset.fname)
+                deriv_path =  bids_path_meg.copy().update(root=self.deriv_root, check=False)
+                deriv_path.directory.mkdir(parents=True, exist_ok=True)
+                mripreproc(bids_path=bids_path_meg,
+                           t1_bids_path= mne_bids.get_bids_path_from_fname(self.mri),
+                           deriv_path = deriv_path, 
+                           surf=surf, subjects_dir=self.subjects_dir)
+            except BaseException as e:
+                failed_mripreproc[dset] = str(e)
+        if len(failed_mripreproc) > 0:
+            import json
+            import datetime
+            print(failed_mripreproc)
+            logdir = op.join(self.deriv_root, 'logdir')
+            if not op.exists(logdir): os.mkdir(logdir)
+            dateval = datetime.datetime.now().strftime("%Y_%m_%d_%H:%M:%S")
+            logfile = op.join(logdir, f'mripreproc_{dateval}.json')
+            with open(logfile, 'w') as f:
+                json.dump(failed_mripreproc, f)
+                
                    
     def __repr__(self):
         return self.info
