@@ -427,35 +427,6 @@ def _is_exported_tag(tag_fname):
         return False
     
     
-
-# =============================================================================
-# TESTS for datasets    
-# =============================================================================
-
-testpath='/home/jstout/src/nih_to_mne/nih2mne/tests/calc_mne_trans_testfiles'
-def test_afni_tags_present():
-    neg_fname = op.join(testpath, 's1+orig.HEAD')
-    assert not _afni_tags_present(neg_fname)
-    pos_fname = op.join(testpath, 's2+orig.HEAD')
-    assert _afni_tags_present(pos_fname)
-              
-def test_assess_available_localizers():
-    testpath = '/home/jstout/src/nih_to_mne/nih2mne/tests/calc_mne_trans_testfiles'
-    assess_available_localizers(testpath)
-    
-def test_is_exported_bsight():
-    neg_fname = op.join(testpath,'README.txt') 
-    assert not _is_exported_bsight(neg_fname)
-    pos_fname = op.join(testpath, 's1.txt')
-    assert _is_exported_bsight(pos_fname)
-
-def test_is_tagfile():
-    neg_fname = op.join(testpath, 's1_mod.tag')
-    assert not _is_exported_tag(neg_fname)
-    pos_fname = op.join(testpath, 's1.tag')
-    assert _is_exported_tag(pos_fname)
-    
-    
     
 
 
