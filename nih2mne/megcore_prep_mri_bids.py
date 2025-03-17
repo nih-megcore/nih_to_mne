@@ -15,7 +15,13 @@ import nibabel as nib
 import subprocess
 # from nih2mne import get_njobs
 
-n_jobs=-1 
+# Configure for slurm setup
+if 'OMP_NUM_THREADS' in os.environ:
+    n_jobs = int(os.environ['OMP_NUM_THREADS'])
+else: 
+    n_jobs = -1
+
+
 
 desc = '''Preprocess all MRI related processing.  To generate a swarmfile, 
 use the swarmfile specific options (without setting filename).
