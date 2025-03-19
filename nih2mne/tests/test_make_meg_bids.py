@@ -2,15 +2,17 @@
 
 from ..make_meg_bids import sessdir2taskrundict
 from ..make_meg_bids import _check_multiple_subjects
-from ..make_meg_bids import get_subj_logger, _input_checks
+from ..make_meg_bids import get_subj_logger, _input_checks, process_mri_bids
 import logging 
 
+import nibabel as nib
 import pytest 
 import nih2mne
 import os.path as op
 from nih2mne.make_meg_bids import process_meg_bids
 code_path = nih2mne.__path__[0]
 data_path = op.join(code_path, 'test_data')
+import numpy as np 
 
 # Check for the test data
 assert nih2mne.test_data().is_present()
@@ -163,4 +165,26 @@ def test_process_meg_bids(tmp_path):
                      'sub-S01_ses-1_task-haririhammer_run-01_events.json']
     for i in dset_checklist:
         assert op.exists(bids_dir / f'sub-{bids_id}' / 'ses-1' /'meg' / i)
-
+        
+def test_process_mri_bids(tmp_path):
+    out_dir = tmp_path / "bids_test_dir"
+    out_dir.mkdir()
+    test_data = nih2mne.test_data()
+    
+    #Input setup
+    mri_path  = str(test_data.mri_nii)
+    bids_dir = out_dir / 'bids_dir'
+    bids_id = 'S01'
+    session = '1'
+    
+    process_mri_bids(bids_dir=bids_dir,
+                     nii_mri = mri_path,
+                         bids_id=bids_id, 
+                         session=session)
+    out_bids_mri = out_dir / 'bids_dir' / 'sub-S01' / 'ses-1' / 'anat' / 'sub-S01_ses-1_T1w.nii.gz'
+    assert op.exists(out_bids_mri)
+    gtruth_mri_load = nib.load(mri_path)
+    bids_mri_load = nib.load(out_bids_mri)
+    #Confirm nothing has been done to the transform
+    assert np.allclose(bids_mri_load.affine,gtruth_mri_load.affine)
+    

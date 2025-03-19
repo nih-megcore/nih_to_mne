@@ -507,7 +507,7 @@ def convert_brik(mri_fname, outdir=None):
     return outname
     
 #Currently only supports 1 session of MRI
-def process_mri_bids(bids_dir=None,
+def process_mri_bids_fs(bids_dir=None,
                      subjid=None,
                      bids_id=None, 
                      trans_fname=None,
@@ -543,6 +543,39 @@ def process_mri_bids(bids_dir=None,
     except BaseException as e:
         logger.error('MRI BIDS PROCESSING')
         err_logger.error(f'MRI BIDS PROCESSING: {str(e)}')
+
+def process_mri_bids(bids_dir=None,
+                     bids_id=None, 
+                     nii_mri = None,
+                     meg_fname=None,
+                     fids_loc=None, 
+                     session=None):
+    'This function directly writes the brainsight mri without freesurfer processing'
+    if not os.path.exists(bids_dir): os.mkdir(bids_dir)
+    
+    try:
+        ses=str(int(session)) #Confirm no leading zeros
+        t1w_bids_path = \
+            BIDSPath(subject=bids_id, session=ses, root=bids_dir, suffix='T1w')
+    
+        # Write regular
+        t1w_bids_path = write_anat(
+            image=nii_mri,
+            bids_path=t1w_bids_path,
+            deface=False, 
+            overwrite=True
+            )
+        
+    except BaseException as e:
+        logger.error('MRI BIDS PROCESSING')
+        err_logger.error(f'MRI BIDS PROCESSING: {str(e)}')
+
+# def process_mri_json():
+    
+    
+    
+
+
 
 def _check_multiple_subjects(meg_input_dir):
     '''Checks to see if multiple subjects were acquired in teh same dated 

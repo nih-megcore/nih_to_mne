@@ -472,7 +472,7 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         plot_fids_qa(subjid=self.subject,
                      bids_root=self.bids_root, 
                      outfile=None, block=True, mri_override=[self.mri])
-        # tmp_ = input('Hit any button to close')
+
     
     def plot_3D_coreg(self, idx=None):
         dset = self._pick_meg_from_list(choice_quote='Enter the number associated with the MEG dataset to plot coreg: \n',
@@ -739,30 +739,7 @@ class bids_project():
             else:
                 self.fs_recon['failed'].append(bidsi.subject)
     
-    # def prep_freesurfer(self):
-    #     for i in self.subjects:
-            
-            
-        
-            
-    
-    # # def _get_missing(self):
-    # #     dframe_missing = 
-        
-    
-    # def _check(self):
-    #     return None
-    
-    # def _return_issue(self):
-    #     return None
-        
-    
-                
-                
-# bids_pro = bids_project(bids_root = '/fast2/BIDS')     
-# bids_pro.compile_issues()  
-# bids_pro.issues     
-        
+
         
         
         
