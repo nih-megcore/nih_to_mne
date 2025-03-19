@@ -18,6 +18,7 @@ import logging
 import subprocess
 from pathlib import Path
 import sys
+import json
 
 import shutil
 import matplotlib
@@ -33,6 +34,8 @@ from nih2mne.utilities.clear_mrk_path import (calc_extra_mark_filelist,
                                               clean_filepath_header)
 from nih2mne.utilities.mri_defacing import mri_deface
 from nih2mne.utilities.qa_fids import plot_fids_qa
+
+import nibabel as nib
 
 global logger
 global err_logger
@@ -570,11 +573,39 @@ def process_mri_bids(bids_dir=None,
         logger.error('MRI BIDS PROCESSING')
         err_logger.error(f'MRI BIDS PROCESSING: {str(e)}')
 
-# def process_mri_json():
+def process_mri_json(elec_fname=None,
+                     mri_fname = None,
+                     ):
+    mri = nib.load(mri_fname)
+    dframe = pd.read_csv(elec_fname, skiprows=6, sep='\t')
+    locs_ras = {}
+    for val in ['Nasion', 'Left Ear', 'Right Ear']:
+        row = dframe[dframe['# Electrode Name']==val]
+        tmp = row['Loc. X'], row['Loc. Y'], row['Loc. Z']
+        output = [i.values[0] for i in tmp]
+        locs_ras[val] = np.array(output)
     
+    # set the fids as voxel coords
+    inv_rot = np.linalg.inv(mri.affine[0:3,0:3])
+    translation =  mri.affine[0:3,3]
+    nas_vox = np.matmul(inv_rot, locs_ras['Nasion']) - translation
+    lpa_vox = np.matmul(inv_rot, locs_ras['Left Ear']) - translation
+    rpa_vox = np.matmul(inv_rot, locs_ras['Right Ear']) - translation
     
+    fids_json_out = {"AnatomicalLandmarkCoordinates": {
+        "NAS":list(nas_vox),
+        "LPA":list(lpa_vox),
+        "RPA":list(rpa_vox)
+        }}
     
-
+    if mri_fname.endswith('.gz'):
+        json_fname = mri_fname.replace('.nii.gz', '.json')
+    else:
+        json_fname = mri_fname.replace('.nii','.json')
+    
+    # Write the json
+    with open(json_fname, 'w') as f:
+        json.dump(fids_json_out, f)
 
 
 def _check_multiple_subjects(meg_input_dir):

@@ -2,7 +2,7 @@
 
 from ..make_meg_bids import sessdir2taskrundict
 from ..make_meg_bids import _check_multiple_subjects
-from ..make_meg_bids import get_subj_logger, _input_checks, process_mri_bids
+from ..make_meg_bids import get_subj_logger, _input_checks, process_mri_bids, process_mri_json
 import logging 
 
 import nibabel as nib
@@ -13,6 +13,8 @@ from nih2mne.make_meg_bids import process_meg_bids
 code_path = nih2mne.__path__[0]
 data_path = op.join(code_path, 'test_data')
 import numpy as np 
+import json
+
 
 # Check for the test data
 assert nih2mne.test_data().is_present()
@@ -187,4 +189,31 @@ def test_process_mri_bids(tmp_path):
     bids_mri_load = nib.load(out_bids_mri)
     #Confirm nothing has been done to the transform
     assert np.allclose(bids_mri_load.affine,gtruth_mri_load.affine)
+
+def test_process_mri_json(tmp_path):
+    tmp_path_mri = tmp_path.parent / 'test_process_mri_bidscurrent' / 'bids_test_dir'
+    out_dir = tmp_path / "bids_test_dir"
+    # out_dir.mkdir(exist_ok=True)
+    
+    test_data = nih2mne.test_data()
+    elec_fname = str(test_data.mri_data_dir / 'ABABABAB_elec_corrected.txt')
+    mri_fname = str(tmp_path_mri / 'bids_dir' / 'sub-S01' / 'ses-1' / 'anat' / 'sub-S01_ses-1_T1w.nii.gz')
+    process_mri_json(elec_fname=elec_fname, mri_fname=mri_fname)
+    
+    out_json_fname = mri_fname.replace('.nii.gz','.json')
+    with open(out_json_fname) as f:
+        _json_vals = json.load(f)
+    assert 'AnatomicalLandmarkCoordinates' in  _json_vals.keys()
+    fids = _json_vals['AnatomicalLandmarkCoordinates']
+    assert 'NAS' in fids.keys() and 'LPA' in fids.keys() and 'RPA' in fids.keys()
+    assert np.allclose(fids['NAS'], [111.79899853515624,216.0946962158203,125.91931025390625])
+    assert np.allclose(fids['LPA'], [36.48359853515625, 138.14889621582032, 92.27751025390626])
+    assert np.allclose(fids['RPA'], [175.88069853515626, 122.28609621582031, 92.83361025390624])
+                       
+    
+    
+    
+    
+    
+    
     
