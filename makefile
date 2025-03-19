@@ -27,7 +27,7 @@ install_system_requirements:
 	dnf install git git-annex -y
 
 create_bids:
-	cd nih2mne/test_data ; make_meg_bids.py -bids_dir ./BIDS -subjid_input ABABABAB -meg_input_dir 20010101 -bids_id S01 -mri_bsight MRI/ABABABAB_refaced_T1w.nii.gz -mri_bsight MRI/ABABABAB_elec.txt
+	cd nih2mne/test_data ; make_meg_bids.py -bids_dir ./BIDS -subjid_input ABABABAB -meg_input_dir 20010101 -bids_id S01 -mri_bsight MRI/ABABABAB_refaced_T1w.nii.gz -mri_bsight_elec MRI/ABABABAB_elec.txt -ignore_eroom
 
 test:
 	($(CONDA_ACTIVATE) nih2mne_test ; pytest -vv  )  

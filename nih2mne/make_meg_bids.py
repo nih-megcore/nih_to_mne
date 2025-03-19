@@ -550,8 +550,6 @@ def process_mri_bids_fs(bids_dir=None,
 def process_mri_bids(bids_dir=None,
                      bids_id=None, 
                      nii_mri = None,
-                     meg_fname=None,
-                     fids_loc=None, 
                      session=None):
     'This function directly writes the brainsight mri without freesurfer processing'
     if not os.path.exists(bids_dir): os.mkdir(bids_dir)
@@ -568,6 +566,8 @@ def process_mri_bids(bids_dir=None,
             deface=False, 
             overwrite=True
             )
+        
+        return t1w_bids_path
         
     except BaseException as e:
         logger.error('MRI BIDS PROCESSING')
@@ -972,24 +972,34 @@ def main():
         _dsets = [i for i in _dsets if (('noise' not in op.basename(i).lower()) and ('empty' not in op.basename(i).lower())) ]
         template_meg = _dsets[0]
         
-        freesurfer_import(mri=nii_mri, 
-                          subjid=subjid, 
-                          tmp_subjects_dir=temp_subjects_dir, 
-                          afni_fname=args.mri_brik, 
-                          meg_fname=template_meg)
+        # freesurfer_import(mri=nii_mri, 
+        #                   subjid=subjid, 
+        #                   tmp_subjects_dir=temp_subjects_dir, 
+        #                   afni_fname=args.mri_brik, 
+        #                   meg_fname=template_meg)
         
-        trans_fname = make_trans_mat(mri=nii_mri, subjid=subjid, 
-                                     tmp_subjects_dir=temp_subjects_dir,
-                          afni_fname=args.mri_brik,
-                          bsight_elec=args.mri_bsight_elec, 
-                          meg_fname=template_meg)
+        # trans_fname = make_trans_mat(mri=nii_mri, subjid=subjid, 
+        #                              tmp_subjects_dir=temp_subjects_dir,
+        #                   afni_fname=args.mri_brik,
+        #                   bsight_elec=args.mri_bsight_elec, 
+        #                   meg_fname=template_meg)
         
-        process_mri_bids(bids_dir=args.bids_dir,
-                         subjid=subjid,
-                         bids_id=bids_id,  
-                         trans_fname=trans_fname,
-                         meg_fname=template_meg,
-                         session=args.bids_session)
+        # process_mri_bids(bids_dir=args.bids_dir,
+        #                  subjid=subjid,
+        #                  bids_id=bids_id,  
+        #                  trans_fname=trans_fname,
+        #                  meg_fname=template_meg,
+        #                  session=args.bids_session)
+        
+        t1_bids_path = process_mri_bids(bids_dir=args.bids_dir,
+                                     bids_id=bids_id, 
+                                     nii_mri = args.mri_bsight,
+                                     session=args.bids_session)
+        process_mri_json(elec_fname=args.mri_bsight_elec,
+                             mri_fname = str(t1_bids_path))
+        
+        
+
     
     #
     # Check results
