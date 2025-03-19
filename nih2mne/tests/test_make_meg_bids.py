@@ -196,7 +196,7 @@ def test_process_mri_json(tmp_path):
     # out_dir.mkdir(exist_ok=True)
     
     test_data = nih2mne.test_data()
-    elec_fname = str(test_data.mri_data_dir / 'ABABABAB_elec_corrected.txt')
+    elec_fname = str(test_data.mri_data_dir / 'ABABABAB_elec.txt')
     mri_fname = str(tmp_path_mri / 'bids_dir' / 'sub-S01' / 'ses-1' / 'anat' / 'sub-S01_ses-1_T1w.nii.gz')
     process_mri_json(elec_fname=elec_fname, mri_fname=mri_fname)
     
