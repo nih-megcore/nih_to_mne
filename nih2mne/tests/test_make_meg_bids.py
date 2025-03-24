@@ -3,6 +3,7 @@
 from ..make_meg_bids import sessdir2taskrundict
 from ..make_meg_bids import _check_multiple_subjects
 from ..make_meg_bids import get_subj_logger, _input_checks, process_mri_bids, process_mri_json
+from ..make_meg_bids import convert_brik  
 import logging 
 
 import nibabel as nib
@@ -209,8 +210,27 @@ def test_process_mri_json(tmp_path):
     assert np.allclose(fids['NAS'], [111.79899853515624,216.0946962158203,125.91931025390625])
     assert np.allclose(fids['LPA'], [36.48359853515625, 138.14889621582032, 92.27751025390626])
     assert np.allclose(fids['RPA'], [175.88069853515626, 122.28609621582031, 92.83361025390624])
-                       
     
+def test_convert_afni(tmp_path):
+    test_data = nih2mne.test_data()
+    import nibabel as nib
+    brik_fname = str(test_data.mri_brik)
+    nii_fname = str(test_data.mri_nii)
+    g_truth_brik = nib.load(brik_fname) 
+    g_truth_nii = nib.load(nii_fname)
+    
+    
+    out_nii_fname = convert_brik(brik_fname, outdir=tmp_path)
+    out_nii_dat = nib.load(out_nii_fname)
+    
+    assert np.allclose(g_truth_brik.affine, out_nii_dat.affine)
+    assert np.allclose(g_truth_brik.get_fdata().squeeze(), out_nii_dat.get_fdata().squeeze())
+    
+    assert np.allclose(g_truth_nii.affine, out_nii_dat.affine)
+    assert np.allclose(g_truth_nii.get_fdata().squeeze(), out_nii_dat.get_fdata().squeeze())
+    
+                         
+        
     
     
     

@@ -482,32 +482,32 @@ def make_trans_mat(mri=None, subjid=None, tmp_subjects_dir=None,
 def convert_brik(mri_fname, outdir=None):
     '''Convert the afni file to nifti
     The outdir should be the tempdir/mri_temp folder
-    Returns the converted afni file for input to freesurfer'''
-    if op.splitext(mri_fname)[-1] not in ['.BRIK', '.HEAD']:
+    Returns the converted afni file for input to bids'''
+    if op.splitext(mri_fname)[-1] not in ['.BRIK', '.HEAD', '.gz']:
         raise(TypeError('Must be an afni BRIK or HEAD file to convert'))
-    import shutil
-    if shutil.which('3dAFNItoNIFTI') is None:
-        raise(SystemError('It does not appear Afni is installed, cannot call\
-                          3dAFNItoNIFTI'))
+    if op.splitext(mri_fname)[-1]=='.gz':
+        if not mri_fname.lower().endswith('.brik.gz'):
+            raise(TypeError('.gz file must be a .BRIK.gz file'))
     basename = op.basename(mri_fname)
-    in_hdr,in_brk = mri_fname[:-4]+'HEAD', mri_fname[:-4]+'BRIK'
-    out_hdr = op.join(outdir, op.basename(in_hdr))
-    out_brk = op.join(outdir, op.basename(in_brk))
-    shutil.copy(in_hdr, out_hdr)
-    shutil.copy(in_brk, out_brk)
+    if mri_fname.endswith('.HEAD'):
+        if op.exists(mri_fname.replace('.HEAD','.BRIK')):
+            in_brk = mri_fname.replace('.HEAD','.BRIK')
+        elif op.exists(mri_fname.replace('.HEAD','.BRIK.gz')):
+            in_brk = mri_fname.replace('.HEAD','.BRIK.gz')
+        else:
+            raise ValueError(f'Cannot find .BRIK or .BRIK.gz associated with {mri_fname}')
+    else:
+        in_brk = mri_fname
     
-    #Required because afni only outputs to current directory
-    init_dir=os.getcwd()
-    try:
-        os.chdir(outdir)
-        outname = basename.split('+')[0]+'.nii'
-        outname = op.join(outdir, outname)
-        subcmd = f'3dAFNItoNIFTI {op.basename(out_brk)}'
-        subprocess.run(subcmd.split())
-        print(f'Converted {mri_fname} to nifti')
-    finally:
-        os.chdir(init_dir)
+    outname = basename.split('+')[0]+'.nii'
+    outname = op.join(outdir, outname)   
+    
+    # Load BRIk / Convert To NIfti / Save
+    mr_dset = nib.load(in_brk)
+    mr_nii = nib.Nifti1Image(mr_dset.get_fdata(), mr_dset.affine)
+    mr_nii.to_filename(outname)
     return outname
+    
     
 #Currently only supports 1 session of MRI
 def process_mri_bids_fs(bids_dir=None,
