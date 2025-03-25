@@ -516,6 +516,7 @@ def process_mri_bids_fs(bids_dir=None,
                      trans_fname=None,
                      meg_fname=None,
                      session=None):
+    #This is no longer the default/preferred method - use process_mri_bids
     if not os.path.exists(bids_dir): os.mkdir(bids_dir)
     
     try:
@@ -968,7 +969,7 @@ def main():
         # Finish MRI prep
         #
         # Get a template MEG dataset by filtering out noise and emptyroom datasets
-        _dsets = glob.glob(op.join(args.meg_input_dir, f'{args.subjid_input}*.ds'))
+        _dsets = glob.glob(op.join(args.meg_input_dir, f'{subjid}*.ds'))
         _dsets = [i for i in _dsets if (('noise' not in op.basename(i).lower()) and ('empty' not in op.basename(i).lower())) ]
         template_meg = _dsets[0]
         
@@ -993,7 +994,7 @@ def main():
         
         t1_bids_path = process_mri_bids(bids_dir=args.bids_dir,
                                      bids_id=bids_id, 
-                                     nii_mri = args.mri_bsight,
+                                     nii_mri = nii_mri,
                                      session=args.bids_session)
         process_mri_json(elec_fname=args.mri_bsight_elec,
                              mri_fname = str(t1_bids_path))

@@ -23,6 +23,7 @@ assert nih2mne.test_data().is_present()
 global logger
 logger = get_subj_logger('TEST', log_dir='/tmp', loglevel=logging.WARN)
 
+
 #def test_check_multiple_subjects():
     #Make this extensible - currently limited
     #Make a temp dir and link together the files from two different folders
@@ -172,7 +173,6 @@ def test_process_meg_bids(tmp_path):
 def test_process_mri_bids(tmp_path):
     out_dir = tmp_path / "bids_test_dir"
     out_dir.mkdir()
-    test_data = nih2mne.test_data()
     
     #Input setup
     mri_path  = str(test_data.mri_nii)
@@ -196,7 +196,7 @@ def test_process_mri_json(tmp_path):
     out_dir = tmp_path / "bids_test_dir"
     # out_dir.mkdir(exist_ok=True)
     
-    test_data = nih2mne.test_data()
+    
     elec_fname = str(test_data.mri_data_dir / 'ABABABAB_elec.txt')
     mri_fname = str(tmp_path_mri / 'bids_dir' / 'sub-S01' / 'ses-1' / 'anat' / 'sub-S01_ses-1_T1w.nii.gz')
     process_mri_json(elec_fname=elec_fname, mri_fname=mri_fname)
@@ -210,9 +210,12 @@ def test_process_mri_json(tmp_path):
     assert np.allclose(fids['NAS'], [111.79899853515624,216.0946962158203,125.91931025390625])
     assert np.allclose(fids['LPA'], [36.48359853515625, 138.14889621582032, 92.27751025390626])
     assert np.allclose(fids['RPA'], [175.88069853515626, 122.28609621582031, 92.83361025390624])
+
+# def test_process_mri_json_afni_input(tmp_path):
+    
+
     
 def test_convert_afni(tmp_path):
-    test_data = nih2mne.test_data()
     import nibabel as nib
     brik_fname = str(test_data.mri_brik)
     nii_fname = str(test_data.mri_nii)
@@ -228,6 +231,7 @@ def test_convert_afni(tmp_path):
     
     assert np.allclose(g_truth_nii.affine, out_nii_dat.affine)
     assert np.allclose(g_truth_nii.get_fdata().squeeze(), out_nii_dat.get_fdata().squeeze())
+    
     
                          
         
