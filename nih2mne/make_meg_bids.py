@@ -848,17 +848,6 @@ def make_bids(args):
         if args.mri_brik:
             host = os.uname().nodename
             
-            #Determine if on a biowulf node
-            if (host[0:2]=='cn') and (len(host)==6):
-                if 'LOADEDMODULES' in os.environ: lmods=os.environ['LOADEDMODULES']
-                
-                lmods = lmods.split(':')
-                lmods = [i.split('/')[0] for i in lmods]
-                if 'afni' not in lmods:
-                    raise ValueError('Load the afni module before performing')
-            elif not shutil.which('afni'):
-                raise ValueError('It does not look like Afni can be found')
-            
             #Convert the mri to nifti
             nii_mri = convert_brik(args.mri_brik, outdir=temp_mri_prep)
             logger.info(f'Converted {args.mri_brik} to {nii_mri}')
