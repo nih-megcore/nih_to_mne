@@ -16,6 +16,7 @@ code_path = nih2mne.__path__[0]
 data_path = op.join(code_path, 'test_data')
 import numpy as np 
 import json
+import shutil
 
 
 # Check for the test data
@@ -216,13 +217,28 @@ def test_process_mri_json_afni_input(tmp_path):
     head_fname = str(test_data.mri_head)
     #Using the nifti - which is the same in the data matrix/header
     mri_fname = str(test_data.mri_nii)  
+    test_mri_fname = op.join(tmp_path, op.basename(mri_fname))
+    shutil.copy(mri_fname, test_mri_fname)
+    
     coords_lps = coords_from_afni(head_fname)
     coords_rps = {}
     for key in coords_lps.keys():
-        tmp = coords_lps[key]
+        tmp = np.array(coords_lps[key])
         tmp[0:2]*=-1
         coords_rps[key]=tmp
-    process_mri_json(mri_fname = mri_fname, ras_coords = coords_rps)
+    process_mri_json(mri_fname = test_mri_fname, ras_coords = coords_rps)
+
+    out_json_fname = test_mri_fname.replace('.nii.gz','.json')
+    with open(out_json_fname) as f:
+        _json_vals = json.load(f)
+    assert 'AnatomicalLandmarkCoordinates' in  _json_vals.keys()
+    fids = _json_vals['AnatomicalLandmarkCoordinates']
+    assert 'NAS' in fids.keys() and 'LPA' in fids.keys() and 'RPA' in fids.keys()
+    #NOTE: The afni localizers are slightly off from the NII/Brainsight due to 
+    #not having subvoxel precision on the coil placement when creating the tagset
+    assert np.allclose(fids['NAS'], [111.99999953515625, 215.99999621582032, 126.00002025390626])
+    assert np.allclose(fids['LPA'], [35.99999853515625, 137.99999621582032, 92.00002025390626])
+    assert np.allclose(fids['RPA'], [175.99999853515624, 121.99999621582032, 93.00002025390626])
     
     
 def test_convert_afni(tmp_path):

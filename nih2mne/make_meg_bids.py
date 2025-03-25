@@ -576,15 +576,25 @@ def process_mri_bids(bids_dir=None,
 
 def process_mri_json(elec_fname=None,
                      mri_fname = None,
+                     ras_coords = None
                      ):
     mri = nib.load(mri_fname)
-    dframe = pd.read_csv(elec_fname, skiprows=6, sep='\t')
-    locs_ras = {}
-    for val in ['Nasion', 'Left Ear', 'Right Ear']:
-        row = dframe[dframe['# Electrode Name']==val]
-        tmp = row['Loc. X'], row['Loc. Y'], row['Loc. Z']
-        output = [i.values[0] for i in tmp]
-        locs_ras[val] = np.array(output)
+    if elec_fname != None:
+        dframe = pd.read_csv(elec_fname, skiprows=6, sep='\t')
+        locs_ras = {}
+        for val in ['Nasion', 'Left Ear', 'Right Ear']:
+            row = dframe[dframe['# Electrode Name']==val]
+            tmp = row['Loc. X'], row['Loc. Y'], row['Loc. Z']
+            output = [i.values[0] for i in tmp]
+            locs_ras[val] = np.array(output)
+    elif ras_coords != None:
+        print('Runnig ras coords')
+        assert 'Nasion' in ras_coords.keys()
+        assert 'Left Ear' in ras_coords.keys()
+        assert 'Right Ear' in ras_coords.keys()
+        locs_ras = ras_coords
+    else:
+        raise ValueError('Either elec_fname or ras_coords must be supplied')
     
     # set the fids as voxel coords
     inv_rot = np.linalg.inv(mri.affine[0:3,0:3])
