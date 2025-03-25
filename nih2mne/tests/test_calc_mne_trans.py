@@ -10,6 +10,8 @@ from ..calc_mnetrans import _afni_tags_present
 from ..calc_mnetrans import _is_exported_bsight
 from ..calc_mnetrans import _is_exported_tag
 from ..calc_mnetrans import assess_available_localizers
+from ..calc_mnetrans import coords_from_oblique_afni
+import nih2mne
 
 import pytest 
 import os, os.path as op
@@ -20,6 +22,8 @@ import numpy as np
 
 testpath = op.join(os.path.dirname(os.path.abspath(__file__)),
                    'calc_mne_trans_testfiles')
+
+test_data  = nih2mne.test_data()
 
 # Need more tests 
 # Assess available localizers
@@ -59,4 +63,14 @@ def test_is_tagfile():
     assert not _is_exported_tag(neg_fname)
     pos_fname = op.join(testpath, 's1.tag')
     assert _is_exported_tag(pos_fname)
+    
+def test_coords_from_oblique_afni():
+    afni_fname = test_data.mri_head
+    coords = coords_from_oblique_afni(afni_fname)
+    
+    #Outputs are in LPS
+    assert np.allclose(coords['Nasion'], [-9.039000999999999, -124.507, -11.147989999999993])
+    assert np.allclose(coords['Left Ear'], [66.961, -46.507000000000005, -45.14798999999999])
+    assert np.allclose(coords['Right Ear'], [-73.039, -30.507000000000005, -44.14798999999999])
+    
         

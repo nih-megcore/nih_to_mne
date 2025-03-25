@@ -22,6 +22,7 @@ class test_data():
         self.mri_trans = self.mri_data_dir / 'ABABABAB-trans.fif'
         self.bsight_elec = self.mri_data_dir / 'ABABABAB_elec.txt'
         self.mri_brik = self.mri_data_dir / 'ABABABAB_refaced+orig.BRIK.gz'
+        self.mri_head = self.mri_data_dir / 'ABABABAB_refaced+orig.HEAD'
         
     
     def is_present(self):

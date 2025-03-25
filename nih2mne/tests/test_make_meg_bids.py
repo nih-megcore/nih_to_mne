@@ -5,6 +5,7 @@ from ..make_meg_bids import _check_multiple_subjects
 from ..make_meg_bids import get_subj_logger, _input_checks, process_mri_bids, process_mri_json
 from ..make_meg_bids import convert_brik  
 import logging 
+from ..calc_mnetrans import coords_from_afni
 
 import nibabel as nib
 import pytest 
@@ -211,9 +212,18 @@ def test_process_mri_json(tmp_path):
     assert np.allclose(fids['LPA'], [36.48359853515625, 138.14889621582032, 92.27751025390626])
     assert np.allclose(fids['RPA'], [175.88069853515626, 122.28609621582031, 92.83361025390624])
 
-# def test_process_mri_json_afni_input(tmp_path):
+def test_process_mri_json_afni_input(tmp_path):
+    head_fname = str(test_data.mri_head)
+    #Using the nifti - which is the same in the data matrix/header
+    mri_fname = str(test_data.mri_nii)  
+    coords_lps = coords_from_afni(head_fname)
+    coords_rps = {}
+    for key in coords_lps.keys():
+        tmp = coords_lps[key]
+        tmp[0:2]*=-1
+        coords_rps[key]=tmp
+    process_mri_json(mri_fname = mri_fname, ras_coords = coords_rps)
     
-
     
 def test_convert_afni(tmp_path):
     import nibabel as nib
