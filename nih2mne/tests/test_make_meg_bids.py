@@ -6,6 +6,7 @@ from ..make_meg_bids import get_subj_logger, _input_checks, process_mri_bids, pr
 from ..make_meg_bids import convert_brik  
 import logging 
 from ..calc_mnetrans import coords_from_afni
+import glob
 
 import nibabel as nib
 import pytest 
@@ -221,12 +222,12 @@ def test_process_mri_json_afni_input(tmp_path):
     shutil.copy(mri_fname, test_mri_fname)
     
     coords_lps = coords_from_afni(head_fname)
-    coords_rps = {}
+    coords_ras = {}
     for key in coords_lps.keys():
         tmp = np.array(coords_lps[key])
         tmp[0:2]*=-1
-        coords_rps[key]=tmp
-    process_mri_json(mri_fname = test_mri_fname, ras_coords = coords_rps)
+        coords_ras[key]=tmp
+    process_mri_json(mri_fname = test_mri_fname, ras_coords = coords_ras)
 
     out_json_fname = test_mri_fname.replace('.nii.gz','.json')
     with open(out_json_fname) as f:
@@ -257,6 +258,31 @@ def test_convert_afni(tmp_path):
     
     assert np.allclose(g_truth_nii.affine, out_nii_dat.affine)
     assert np.allclose(g_truth_nii.get_fdata().squeeze(), out_nii_dat.get_fdata().squeeze())
+    
+
+
+@pytest.mark.parametrize("bids_dir, meg_input_dir, subjid_input, bids_id, mri_bsight, bsight_elec, mri_brik", [ 
+    ('bsight_test', test_data.meg_data_dir, None, 'BSIGHT1', test_data.mri_nii, test_data.bsight_elec, None), 
+    ('afni_test', test_data.meg_data_dir, None, 'AFNI1', None, None, test_data.mri_brik), 
+    ])
+def test_make_meg_bids_fullpipeline(bids_dir,meg_input_dir, subjid_input, bids_id, mri_bsight, bsight_elec, mri_brik, tmpdir):
+    out_dir = op.join(tmpdir, bids_dir)
+    cmd = f'make_meg_bids.py -bids_dir {out_dir} -subjid_input ABABABAB -meg_input_dir {meg_input_dir} -bids_id {bids_id} -mri_bsight {mri_bsight} -mri_bsight_elec {bsight_elec} -mri_brik {mri_brik} -ignore_eroom'
+    import subprocess
+    print(mri_brik)
+    
+    subprocess.run(cmd.split(), check=True)
+    anats = glob.glob(op.join(out_dir, f'sub-{bids_id}','ses-1','anat', '*'))
+    assert len([i for i in anats if i.endswith('.nii.gz')])==1
+    assert len([i for i in anats if i.endswith('.json')])==1
+    
+    dsets = glob.glob(op.join(out_dir, f'sub-{bids_id}', 'ses-1','meg','*.ds'))
+    for dset in dsets:
+        print(dset)
+        assert op.basename(dset).split('_task-')[-1].split('_')[0] in ['airpuff','haririhammer']
+                      
+              
+    
     
     
                          

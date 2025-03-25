@@ -91,6 +91,17 @@ def correct_keys(input_dict):
 def coords_from_afni(afni_fname):
     if os.path.splitext(afni_fname)[1] == '.BRIK':
         afni_fname = os.path.splitext(afni_fname)[0]+'.HEAD'
+    elif os.path.splitext(afni_fname)[1] == '.gz':
+        tmp_ = op.splitext(op.splitext(afni_fname)[0])
+        if tmp_[1]=='.BRIK':
+            afni_fname = tmp_[0]+'.HEAD'
+        else:
+            raise ValueError(f'Cannot identify the suffix properly for {afni_fname}')
+    elif op.splitext(afni_fname)[1]=='.HEAD':
+        pass
+    else:
+        raise ValueError(f'This doesnt seem to be a compatible file: {afni_fname}')
+    
     ## Process afni header  ## >>
     with open(afni_fname) as w:
         header_orig = w.readlines()

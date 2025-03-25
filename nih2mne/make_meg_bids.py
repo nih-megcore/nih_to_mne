@@ -27,7 +27,7 @@ from multiprocessing import Pool
 
 from mne_bids import write_anat, BIDSPath, write_raw_bids
 from nih2mne.calc_mnetrans import write_mne_fiducials 
-from nih2mne.calc_mnetrans import write_mne_trans
+from nih2mne.calc_mnetrans import write_mne_trans, coords_from_afni
 import nih2mne
 from nih2mne.utilities.clear_mrk_path import (calc_extra_mark_filelist,
                                               remove_extra_mrk_files, 
@@ -847,6 +847,13 @@ def main():
     
     
     args=parser.parse_args()
+    
+    #Handle None passing from cmdline to python
+    _named_arglist = [i for i in dir(args) if not i.startswith('_')]
+    for i in _named_arglist:
+        if getattr(args, i)=='None':
+            setattr(args, i, None)
+    
     if (not args.mri_brik) and (not args.mri_bsight) and (not args.ignore_mri_checks):
         raise ValueError('Must supply afni or brainsight coregistration')
         
@@ -958,6 +965,14 @@ def main():
             #Convert the mri to nifti
             nii_mri = convert_brik(args.mri_brik, outdir=temp_mri_prep)
             logger.info(f'Converted {args.mri_brik} to {nii_mri}')
+            
+            #Extract FIDS from Afni Head and convert to RAS
+            coords_lps = coords_from_afni(args.mri_brik)
+            coords_ras = {}
+            for key in coords_lps.keys():
+                tmp = np.array(coords_lps[key])
+                tmp[0:2]*=-1
+                coords_ras[key]=tmp
               
         #
         # Proc Brainsight Data
@@ -983,31 +998,19 @@ def main():
         _dsets = [i for i in _dsets if (('noise' not in op.basename(i).lower()) and ('empty' not in op.basename(i).lower())) ]
         template_meg = _dsets[0]
         
-        # freesurfer_import(mri=nii_mri, 
-        #                   subjid=subjid, 
-        #                   tmp_subjects_dir=temp_subjects_dir, 
-        #                   afni_fname=args.mri_brik, 
-        #                   meg_fname=template_meg)
-        
-        # trans_fname = make_trans_mat(mri=nii_mri, subjid=subjid, 
-        #                              tmp_subjects_dir=temp_subjects_dir,
-        #                   afni_fname=args.mri_brik,
-        #                   bsight_elec=args.mri_bsight_elec, 
-        #                   meg_fname=template_meg)
-        
-        # process_mri_bids(bids_dir=args.bids_dir,
-        #                  subjid=subjid,
-        #                  bids_id=bids_id,  
-        #                  trans_fname=trans_fname,
-        #                  meg_fname=template_meg,
-        #                  session=args.bids_session)
-        
         t1_bids_path = process_mri_bids(bids_dir=args.bids_dir,
                                      bids_id=bids_id, 
                                      nii_mri = nii_mri,
                                      session=args.bids_session)
-        process_mri_json(elec_fname=args.mri_bsight_elec,
-                             mri_fname = str(t1_bids_path))
+        if args.mri_bsight_elec != None:
+            process_mri_json(elec_fname=args.mri_bsight_elec,
+                                 mri_fname = str(t1_bids_path))
+        elif args.mri_brik != None:
+            process_mri_json(elec_fname=args.mri_bsight_elec,
+                                 mri_fname = str(t1_bids_path), 
+                                 ras_coords=coords_ras)
+
+            
         
         
 
