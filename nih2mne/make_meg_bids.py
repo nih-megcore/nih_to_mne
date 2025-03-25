@@ -751,116 +751,13 @@ def _get_conversion_dict(input_path=None, subject_in=None, bids_id=None,
 # Commandline Options
 # =============================================================================
 
-def main():
-    import argparse
-    parser = argparse.ArgumentParser('''
-        Convert MEG dataset to default Bids format using the MEG hash ID or 
-        entered subject ID as the bids ID.        
-        \n\nWARNING: Must use the -anonymize flag to anonymize otherwise this does NOT anonymize the data!!!
-        ''')
-    parser.add_argument('-bids_dir', help='Output bids_dir path', 
-                        default=op.join(os.getcwd(),'bids_dir'))
-    parser.add_argument('-meg_input_dir', 
-                        help='''Acquisition directory - typically designated
-                        by the acquisition date''', required=True)
-    parser.add_argument('-anonymize', 
-                        help='''Strip out subject ID information from the MEG
-                        data.  Currently this does not anonymize the MRI.
-                        Requires the CTF tools.''',
-                        default=False,
-                        action='store_true')
-    group1 = parser.add_argument_group('Afni Coreg')
-    group1.add_argument('-mri_brik', 
-                        help='''Afni coregistered MRI''')
-    group2 = parser.add_argument_group('Brainsight Coreg')
-    group2.add_argument('-mri_bsight',
-                        help='''Brainsight mri.  This should be a .nii file.
-                        The exported electrodes text file must be in the same 
-                        folder and end in .txt.  Otherwise, provide the 
-                        mri_sight_elec flag''')
-    group2.add_argument('-mri_bsight_elec',
-                       help='''Exported electrodes file from brainsight.
-                       This has the locations of the fiducials''', 
-                       required=False)
-    group2.add_argument('-ignore_mri_checks', action='store_true', default=False)
-    parser.add_argument('-bids_session',
-                        help='''Data acquisition session.  This is set to 1
-                        by default.  If the same subject had multiple sessions
-                        this must be set manually''',
-                        default=1,
-                        required=False)
-    parser.add_argument('-subjid_input',
-                        help='''The default subject ID is given by the MEG hash.
-                        If more than one subject is present in a folder, this
-                        option can be set to select a single subjects dataset.
-                        ''',
-                        required=False
-                        )
-    parser.add_argument('-bids_id',
-                        help='''The default subject ID is given by the MEG hash.
-                        To override the default subject ID, use this flag.\n\n                        
-                        If -anonymize is used, you must set the subjid'''
-                        )
-    parser.add_argument('-autocrop_zeros',
-                        help='''If files are terminated early, leaving zeros
-                        at the end of the file - this will detect and remove
-                        the trailing zeros.  !!!Files larger than 2G will Fail!!!''',
-                        action='store_true'
-                        )
-    group3 = parser.add_argument_group('Optional Overrides')
-    group3.add_argument('-ignore_eroom', 
-                        help='''If you are Not on Biowulf, use this option
-                        to prevent an error. Or if you collected your own empty
-                        room data with your dataset''',
-                        action='store_true', 
-                        default=False)
-    group3.add_argument('-supplement_eroom', 
-                        help='''If emptyroom present - ignore, else add emptyroom
-                        from the biowulf repository.''',
-                        action='store_true',
-                        default=False)
-    group3.add_argument('-freesurfer',
-                        help='''Perform recon-all pipeline on the T1w.
-                        This is required for the mri_prep portions below''', 
-                        action='store_true'
-                        )
-    group3.add_argument('-eventID_csv', 
-                        help='''Provide the standardized event IDs.
-                        This can be produced by running: standardize_eventID_list.py
-                        ''', 
-                        default=None)    
-    group4 = parser.add_argument_group('UNDER Construction - BIDS PostProcessing')
-    group4.add_argument('-project',
-                        help='''Output project name for the mri processing from mri_prep''', 
-                        default='megprocessing'
-                        )
-    group4.add_argument('-mri_prep_s',
-                        help='''Perform the standard SURFACE processing for
-                        meg analysis (watershed/bem/src/fwd)''', 
-                        action='store_true'
-                        )
-    group4.add_argument('-mri_prep_v',
-                        help='''Perform the standard VOLUME processing for
-                        meg analysis (watershed/bem/src/fwd)''', 
-                        action='store_true'
-                        )
+def make_bids(args):
     
+    #Set if not called through the cmdline
+    args = _clean_python_args(args) 
     
-    args=parser.parse_args()
-    
-    #Handle None passing from cmdline to python
-    _named_arglist = [i for i in dir(args) if not i.startswith('_')]
-    for i in _named_arglist:
-        if getattr(args, i)=='None':
-            setattr(args, i, None)
-    
-    if (not args.mri_brik) and (not args.mri_bsight) and (not args.ignore_mri_checks):
-        raise ValueError('Must supply afni or brainsight coregistration')
-        
     #Initialize
     if not op.exists(args.bids_dir): os.mkdir(args.bids_dir)
-    if args.anonymize==True and args.bids_id is None:
-        parser.error("-anonymize requires -bids_id")
     
     if args.anonymize==True:
         try:
@@ -895,7 +792,7 @@ def main():
     global temp_dir
     temp_dir=Path(args.bids_dir).parent / 'bids_prep_temp'
     temp_dir.mkdir(parents=True, exist_ok=True)
-    
+        
     #
     #   Input Checks
     #
@@ -1111,6 +1008,124 @@ def main():
         #            t1_bids_path=tmp_t1_path, 
         #            deriv_path=deriv_path, 
         #            surf=surf)
+    
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser('''
+        Convert MEG dataset to default Bids format using the MEG hash ID or 
+        entered subject ID as the bids ID.        
+        \n\nWARNING: Must use the -anonymize flag to anonymize otherwise this does NOT anonymize the data!!!
+        ''')
+    parser.add_argument('-bids_dir', help='Output bids_dir path', 
+                        default=op.join(os.getcwd(),'bids_dir'))
+    parser.add_argument('-meg_input_dir', 
+                        help='''Acquisition directory - typically designated
+                        by the acquisition date''', required=True)
+    parser.add_argument('-anonymize', 
+                        help='''Strip out subject ID information from the MEG
+                        data.  Currently this does not anonymize the MRI.
+                        Requires the CTF tools.''',
+                        default=False,
+                        action='store_true')
+    group1 = parser.add_argument_group('Afni Coreg')
+    group1.add_argument('-mri_brik', 
+                        help='''Afni coregistered MRI''')
+    group2 = parser.add_argument_group('Brainsight Coreg')
+    group2.add_argument('-mri_bsight',
+                        help='''Brainsight mri.  This should be a .nii file.
+                        The exported electrodes text file must be in the same 
+                        folder and end in .txt.  Otherwise, provide the 
+                        mri_sight_elec flag''')
+    group2.add_argument('-mri_bsight_elec',
+                       help='''Exported electrodes file from brainsight.
+                       This has the locations of the fiducials''', 
+                       required=False)
+    group2.add_argument('-ignore_mri_checks', action='store_true', default=False)
+    parser.add_argument('-bids_session',
+                        help='''Data acquisition session.  This is set to 1
+                        by default.  If the same subject had multiple sessions
+                        this must be set manually''',
+                        default=1,
+                        required=False)
+    parser.add_argument('-subjid_input',
+                        help='''The default subject ID is given by the MEG hash.
+                        If more than one subject is present in a folder, this
+                        option can be set to select a single subjects dataset.
+                        ''',
+                        required=False
+                        )
+    parser.add_argument('-bids_id',
+                        help='''The default subject ID is given by the MEG hash.
+                        To override the default subject ID, use this flag.\n\n                        
+                        If -anonymize is used, you must set the subjid'''
+                        )
+    parser.add_argument('-autocrop_zeros',
+                        help='''If files are terminated early, leaving zeros
+                        at the end of the file - this will detect and remove
+                        the trailing zeros.  !!!Files larger than 2G will Fail!!!''',
+                        action='store_true'
+                        )
+    group3 = parser.add_argument_group('Optional Overrides')
+    group3.add_argument('-ignore_eroom', 
+                        help='''If you are Not on Biowulf, use this option
+                        to prevent an error. Or if you collected your own empty
+                        room data with your dataset''',
+                        action='store_true', 
+                        default=False)
+    group3.add_argument('-supplement_eroom', 
+                        help='''If emptyroom present - ignore, else add emptyroom
+                        from the biowulf repository.''',
+                        action='store_true',
+                        default=False)
+    group3.add_argument('-freesurfer',
+                        help='''Perform recon-all pipeline on the T1w.
+                        This is required for the mri_prep portions below''', 
+                        action='store_true'
+                        )
+    group3.add_argument('-eventID_csv', 
+                        help='''Provide the standardized event IDs.
+                        This can be produced by running: standardize_eventID_list.py
+                        ''', 
+                        default=None)    
+    group4 = parser.add_argument_group('UNDER Construction - BIDS PostProcessing')
+    group4.add_argument('-project',
+                        help='''Output project name for the mri processing from mri_prep''', 
+                        default='megprocessing'
+                        )
+    group4.add_argument('-mri_prep_s',
+                        help='''Perform the standard SURFACE processing for
+                        meg analysis (watershed/bem/src/fwd)''', 
+                        action='store_true'
+                        )
+    group4.add_argument('-mri_prep_v',
+                        help='''Perform the standard VOLUME processing for
+                        meg analysis (watershed/bem/src/fwd)''', 
+                        action='store_true'
+                        )
+    
+    
+    args=parser.parse_args()
+    args = _clean_python_args(args)    
+
+    
+    if (not args.mri_brik) and (not args.mri_bsight) and (not args.ignore_mri_checks):
+        raise ValueError('Must supply afni or brainsight coregistration')
+        
+    if args.anonymize==True and args.bids_id is None:
+        parser.error("-anonymize requires -bids_id")
+        
+    make_bids(args)
+        
+def _clean_python_args(args):
+    #Handle None passing from cmdline to python
+    _named_arglist = [i for i in dir(args) if not i.startswith('_')]
+    for i in _named_arglist:
+        if getattr(args, i)=='None':
+            setattr(args, i, None)
+    return args
+
         
 if __name__ == '__main__':
     main()

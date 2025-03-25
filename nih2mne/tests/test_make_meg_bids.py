@@ -3,7 +3,7 @@
 from ..make_meg_bids import sessdir2taskrundict
 from ..make_meg_bids import _check_multiple_subjects
 from ..make_meg_bids import get_subj_logger, _input_checks, process_mri_bids, process_mri_json
-from ..make_meg_bids import convert_brik  
+from ..make_meg_bids import convert_brik, make_bids  
 import logging 
 from ..calc_mnetrans import coords_from_afni
 import glob
@@ -260,18 +260,37 @@ def test_convert_afni(tmp_path):
     assert np.allclose(g_truth_nii.get_fdata().squeeze(), out_nii_dat.get_fdata().squeeze())
     
 
+class make_args():
+    def __init__(self, bids_dir, meg_input_dir, subjid_input, bids_id, mri_bsight, bsight_elec, mri_brik):
+        self.bids_dir = str(bids_dir)
+        self.meg_input_dir = str(meg_input_dir)
+        self.subjid_input = subjid_input 
+        self.bids_id = bids_id 
+        self.bids_session = '1'
+        
+        self.mri_bsight = str(mri_bsight) if mri_bsight != None else None
+        self.mri_bsight_elec = str(bsight_elec) if bsight_elec != None else None
+        self.mri_brik = str(mri_brik) if mri_brik != None else None
+        self.anonymize = False
+        self.ignore_mri_checks = False
+        self.autocrop_zeros = False
+        self.ignore_eroom = True
+        self.eventID_csv = None
+        self.freesurfer = False
+        self.mri_prep_s = False
+        self.mri_prep_v = False
+
 
 @pytest.mark.parametrize("bids_dir, meg_input_dir, subjid_input, bids_id, mri_bsight, bsight_elec, mri_brik", [ 
-    ('bsight_test', test_data.meg_data_dir, None, 'BSIGHT1', test_data.mri_nii, test_data.bsight_elec, None), 
-    ('afni_test', test_data.meg_data_dir, None, 'AFNI1', None, None, test_data.mri_brik), 
+    ('bsight_test', test_data.meg_data_dir, 'ABABABAB', 'BSIGHT1', test_data.mri_nii, test_data.bsight_elec, None), 
+    ('afni_test', test_data.meg_data_dir, 'ABABABAB', 'AFNI1', None, None, test_data.mri_brik), 
     ])
 def test_make_meg_bids_fullpipeline(bids_dir,meg_input_dir, subjid_input, bids_id, mri_bsight, bsight_elec, mri_brik, tmpdir):
     out_dir = op.join(tmpdir, bids_dir)
     cmd = f'make_meg_bids.py -bids_dir {out_dir} -subjid_input ABABABAB -meg_input_dir {meg_input_dir} -bids_id {bids_id} -mri_bsight {mri_bsight} -mri_bsight_elec {bsight_elec} -mri_brik {mri_brik} -ignore_eroom'
-    import subprocess
-    print(mri_brik)
+    args = make_args(out_dir, meg_input_dir, subjid_input, bids_id, mri_bsight, bsight_elec, mri_brik)
+    make_bids(args)
     
-    subprocess.run(cmd.split(), check=True)
     anats = glob.glob(op.join(out_dir, f'sub-{bids_id}','ses-1','anat', '*'))
     assert len([i for i in anats if i.endswith('.nii.gz')])==1
     assert len([i for i in anats if i.endswith('.json')])==1
@@ -281,7 +300,10 @@ def test_make_meg_bids_fullpipeline(bids_dir,meg_input_dir, subjid_input, bids_i
         print(dset)
         assert op.basename(dset).split('_task-')[-1].split('_')[0] in ['airpuff','haririhammer']
                       
-              
+
+                
+# args = make_args('bsight_test', test_data.meg_data_dir, None, 'BSIGHT1', test_data.mri_nii, test_data.bsight_elec, None)
+    
     
     
     
