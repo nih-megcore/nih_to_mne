@@ -1,4 +1,7 @@
 [![nih2mne-tests](https://github.com/nih-megcore/nih_to_mne/actions/workflows/nih2mne-actions.yml/badge.svg?branch=master)](https://github.com/nih-megcore/nih_to_mne/actions/workflows/nih2mne-actions.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15090618.svg)](https://doi.org/10.5281/zenodo.15090618)
+
+
 
 ## Major Components
 ```
