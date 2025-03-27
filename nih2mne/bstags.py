@@ -20,8 +20,10 @@ def txt_to_tag(txtname):
         if l=='':
             continue
         if l[0] == '#':
-            if l == "# Coordinate system: NIfTI:Scanner":
-                scanner = True
+            _tmp = l.split(':')
+            if _tmp[0]=='# Coordinate system':
+                if (_tmp[1].strip() == 'NIfTI') and (_tmp[-1].strip() == 'Scanner'):
+                    scanner = True
     
     if not scanner:
         print("{} does not appear to be in NIfTI:Scanner coordinates".format(txtname))

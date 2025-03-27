@@ -18,12 +18,21 @@ import logging
 # =============================================================================
 test_dir = os.path.dirname(os.path.abspath(__file__))
 
-def test_txt_to_tag():
-    txtname=os.path.join(test_dir, 'test_txt.txt')
+@pytest.mark.parametrize("fname",
+                         ["test_txt.txt",
+                          "bsight_test_updated_good_coordsys.txt"
+                          ])
+def test_txt_to_tag(fname):
+    txtname=os.path.join(test_dir, fname)
     
-    test_tags = {'Nasion': "'Nasion' -1.5966 -123.1359 2.1943",
-                 'Left Ear': "'Left Ear' 80.8481 -39.0185 -48.2379",
-                 'Right Ear': "'Right Ear' -75.3443 -44.3777 -48.1843"}
+    if fname=='test_txt.txt':
+        test_tags = {'Nasion': "'Nasion' -1.5966 -123.1359 2.1943",
+                     'Left Ear': "'Left Ear' 80.8481 -39.0185 -48.2379",
+                     'Right Ear': "'Right Ear' -75.3443 -44.3777 -48.1843"}
+    elif fname == "bsight_test_updated_good_coordsys.txt":
+        test_tags = {'Right Ear': "'Right Ear' -35.4196 -113.4793 -152.5658",
+         'Left Ear': "'Left Ear' -173.2163 -110.0248 -146.5442",
+         'Nasion': "'Nasion' -100.7006 -34.9441 -117.993"} 
     
     tags = txt_to_tag(txtname)
     assert tags == test_tags
