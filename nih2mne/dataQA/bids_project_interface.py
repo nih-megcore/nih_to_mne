@@ -483,10 +483,23 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         trans = mne_bids.get_head_mri_trans(bids_path, t1_bids_path=t1_bids_path, 
                                             extra_params=dict(system_clock='ignore'),
                                             fs_subject=self.subject, fs_subjects_dir=self.subjects_dir)
-        mne.viz.plot_alignment(dset.raw.info, 
-                               trans=trans,subject=self.subject, 
-                               subjects_dir = self.subjects_dir, dig=True)
-        
+        fids_path = f'{bids_path.bids_root}/derivatives/freesurfer/subjects/{self.subject}/bem/{self.subject}-fiducials.fif'
+        if op.exists(fids_path):
+            _mrifidval=True
+        else:
+            _mrifidval=False
+        try:
+            mne.viz.plot_alignment(dset.raw.info, 
+                                   trans=trans,subject=self.subject, 
+                                   subjects_dir = self.subjects_dir, 
+                                   dig=True, mri_fiducials=_mrifidval)
+        except:
+            print('Initial plotting failed - turned off dig and mri_fiducials')
+            mne.viz.plot_alignment(dset.raw.info, 
+                                   trans=trans,subject=self.subject, 
+                                   subjects_dir = self.subjects_dir, 
+                                   dig=False, mri_fiducials=False)
+
     @property
     def info(self):
         tmp = f'Subject {self.subject}\n'
