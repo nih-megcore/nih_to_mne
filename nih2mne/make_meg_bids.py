@@ -601,7 +601,7 @@ def _extract_fidname(fidname=None, elec_names=None):
     lpa_template = ['lpa', 'left ear', 'leftear', 'lear']
     rpa_template = ['rpa', 'right ear', 'rightear', 'rear']
     nas_template = ['nas', 'nasion', 'nasoin']
-    elec_names = [i.lower() for i in elec_names]
+    elec_names = [i.lower().strip() for i in elec_names]
     if fidname=='nas':
         _template = nas_template
     elif fidname=='lpa':
@@ -615,23 +615,23 @@ def _extract_fidname(fidname=None, elec_names=None):
             return elec_names.index(guess)
     raise ValueError(f'{fidname} not in {_template}')
     
-    
 
 def _read_electrodes_file(elec_fname=None): 
     assert op.exists(elec_fname), f'The {elec_fname} does not exist'
     dframe = pd.read_csv(elec_fname, skiprows=6, sep='\t')
     locs_ras = {}
+    elec_names = dframe['# Electrode Name']
+    nas_row_idx = _extract_fidname('nas', elec_names)
+    lpa_row_idx = _extract_fidname('lpa', elec_names)
+    rpa_row_idx = _extract_fidname('rpa', elec_names)
+    _iterator = zip(['Nasion', 'Left Ear', 'Right Ear'], 
+                   [nas_row_idx, lpa_row_idx, rpa_row_idx])    
     try:
-        elec_names = dframe['# Electrode Name']
-        nas_row_idx = _extract_fidname('nas', elec_names)
-        lpa_row_idx = _extract_fidname('lpa', elec_names)
-        rpa_row_idx = _extract_fidname('rpa', elec_names)
-        for val in ['Nasion', 'Left Ear', 'Right Ear']:
-            row = dframe[dframe['# Electrode Name']==val]
-            tmp = row['Loc. X'], row['Loc. Y'], row['Loc. Z']
-            output = [i.values[0] for i in tmp]
+        for val,rowidx in _iterator:
+            row = dframe.loc[rowidx] 
+            output = row['Loc. X'], row['Loc. Y'], row['Loc. Z']
             locs_ras[val] = np.array(output)
-    except BaseException() as e:
+    except BaseException as e:
         print('Cannot process the electrodes file - appears not to use the correct format in template')
     return locs_ras
 

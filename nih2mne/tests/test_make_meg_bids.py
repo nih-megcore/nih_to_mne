@@ -19,6 +19,8 @@ import numpy as np
 import json
 import shutil
 
+from ..make_meg_bids import _read_electrodes_file
+from ..make_meg_bids import _extract_fidname
 
 # Check for the test data
 assert nih2mne.test_data().is_present()
@@ -214,7 +216,7 @@ def test_process_mri_json(tmp_path):
     assert np.allclose(fids['LPA'], [36.48359853515625, 138.14889621582032, 92.27751025390626])
     assert np.allclose(fids['RPA'], [175.88069853515626, 122.28609621582031, 92.83361025390624])
 
-def test_extract_fidname(fidname=None, elec_names=None):
+def test_extract_fidname():
     from nih2mne.make_meg_bids import _extract_fidname
     elec_names = ['left ear', 'right ear' , 'nasion']
     assert _extract_fidname('lpa', elec_names)==0
@@ -231,8 +233,27 @@ def test_extract_fidname(fidname=None, elec_names=None):
     assert _extract_fidname('rpa', elec_names)==1
     assert _extract_fidname('nas', elec_names)==2
     
-
-
+def test_read_electrodes_file():
+    dirname = op.dirname(__file__)
+    elec_fname = op.join(dirname, 'bsight_test_updated_good_coordsys.txt')
+    locs_ras = _read_electrodes_file(elec_fname)
+    assert np.alltrue(locs_ras['Nasion']==np.array(['100.7006', '34.9441', '-117.9930']))
+    assert np.alltrue(locs_ras['Left Ear']==np.array(['173.2163', '110.0248', '-146.5442']))
+    assert np.alltrue(locs_ras['Right Ear']==np.array(['35.4196', '113.4793', '-152.5658']))
+    
+    elec_fname = op.join(dirname, 'Exported_Electrodes.txt')
+    locs_ras = _read_electrodes_file(elec_fname)   
+    assert np.alltrue(locs_ras['Nasion']==np.array([-0.6248, 108.7596,   2.0581]))
+    assert np.alltrue(locs_ras['Left Ear']==np.array([-81.9025,  11.953 , -26.8693]))
+    assert np.alltrue(locs_ras['Right Ear']==np.array([79.3304,   6.8787, -28.0673]))
+    
+    #Use the downloaded CTF example data
+    elec_fname = str(test_data.mri_data_dir / 'ABABABAB_elec.txt')
+    locs_ras = _read_electrodes_file(elec_fname)
+    assert np.alltrue(locs_ras['Nasion']==np.array([  8.838 , 124.6017, -11.2287]))
+    assert np.alltrue(locs_ras['Left Ear']==np.array([ -66.4774,  46.6559, -44.8705 ]))
+    assert np.alltrue(locs_ras['Right Ear']==np.array([  72.9197,  30.7931, -44.3144]))
+    
 # def test_process_mri_json2(tmp_path):
 #     tmp_path_mri = tmp_path.parent / 'test_process_mri_bidscurrent' / 'bids_test_dir'
 #     out_dir = tmp_path / "bids_test_dir"
