@@ -630,7 +630,7 @@ def _read_electrodes_file(elec_fname=None):
         for val,rowidx in _iterator:
             row = dframe.loc[rowidx] 
             output = row['Loc. X'], row['Loc. Y'], row['Loc. Z']
-            locs_ras[val] = np.array(output)
+            locs_ras[val] = np.array(output, dtype=float)
     except BaseException as e:
         print('Cannot process the electrodes file - appears not to use the correct format in template')
     return locs_ras

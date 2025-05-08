@@ -237,9 +237,9 @@ def test_read_electrodes_file():
     dirname = op.dirname(__file__)
     elec_fname = op.join(dirname, 'bsight_test_updated_good_coordsys.txt')
     locs_ras = _read_electrodes_file(elec_fname)
-    assert np.alltrue(locs_ras['Nasion']==np.array(['100.7006', '34.9441', '-117.9930']))
-    assert np.alltrue(locs_ras['Left Ear']==np.array(['173.2163', '110.0248', '-146.5442']))
-    assert np.alltrue(locs_ras['Right Ear']==np.array(['35.4196', '113.4793', '-152.5658']))
+    assert np.alltrue(locs_ras['Nasion']==np.array([100.7006, 34.9441, -117.9930]))
+    assert np.alltrue(locs_ras['Left Ear']==np.array([173.2163, 110.0248, -146.5442]))
+    assert np.alltrue(locs_ras['Right Ear']==np.array([35.4196, 113.4793, -152.5658]))
     
     elec_fname = op.join(dirname, 'Exported_Electrodes.txt')
     locs_ras = _read_electrodes_file(elec_fname)   
