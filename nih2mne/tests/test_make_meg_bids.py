@@ -214,6 +214,45 @@ def test_process_mri_json(tmp_path):
     assert np.allclose(fids['LPA'], [36.48359853515625, 138.14889621582032, 92.27751025390626])
     assert np.allclose(fids['RPA'], [175.88069853515626, 122.28609621582031, 92.83361025390624])
 
+def test_extract_fidname(fidname=None, elec_names=None):
+    from nih2mne.make_meg_bids import _extract_fidname
+    elec_names = ['left ear', 'right ear' , 'nasion']
+    assert _extract_fidname('lpa', elec_names)==0
+    assert _extract_fidname('rpa', elec_names)==1
+    assert _extract_fidname('nas', elec_names)==2
+    
+    elec_names = ['lpa','rpa','nas']
+    assert _extract_fidname('lpa', elec_names)==0
+    assert _extract_fidname('rpa', elec_names)==1
+    assert _extract_fidname('nas', elec_names)==2
+    
+    elec_names = ['LPA','Right Ear','NAsion']
+    assert _extract_fidname('lpa', elec_names)==0
+    assert _extract_fidname('rpa', elec_names)==1
+    assert _extract_fidname('nas', elec_names)==2
+    
+
+
+# def test_process_mri_json2(tmp_path):
+#     tmp_path_mri = tmp_path.parent / 'test_process_mri_bidscurrent' / 'bids_test_dir'
+#     out_dir = tmp_path / "bids_test_dir"
+    
+#     elec_fname = str(test_data.mri_data_dir / 'ABABABAB_elec.txt')
+#     mri_fname = str(tmp_path_mri / 'bids_dir' / 'sub-S01' / 'ses-1' / 'anat' / 'sub-S01_ses-1_T1w.nii.gz')
+#     process_mri_json(elec_fname=elec_fname, mri_fname=mri_fname)
+    
+#     out_json_fname = mri_fname.replace('.nii.gz','.json')
+#     with open(out_json_fname) as f:
+#         _json_vals = json.load(f)
+#     assert 'AnatomicalLandmarkCoordinates' in  _json_vals.keys()
+#     fids = _json_vals['AnatomicalLandmarkCoordinates']
+#     assert 'NAS' in fids.keys() and 'LPA' in fids.keys() and 'RPA' in fids.keys()
+#     assert np.allclose(fids['NAS'], [111.79899853515624,216.0946962158203,125.91931025390625])
+#     assert np.allclose(fids['LPA'], [36.48359853515625, 138.14889621582032, 92.27751025390626])
+#     assert np.allclose(fids['RPA'], [175.88069853515626, 122.28609621582031, 92.83361025390624])
+    
+
+
 def test_process_mri_json_afni_input(tmp_path):
     head_fname = str(test_data.mri_head)
     #Using the nifti - which is the same in the data matrix/header

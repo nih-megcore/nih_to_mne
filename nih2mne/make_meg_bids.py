@@ -59,6 +59,7 @@ include_list_general = ['BadChannels', 'ClassFile.cls', 'MarkerFile.mrk', 'param
                 'processing.cfg', '*.hc', '*.res4', '*.meg4',  
                 '*.infods']  #'*.acq' -- this contains redundant info
 
+
 def sessdir2taskrundict(session_dir=None, subject_in=None):
     '''
     Convert a subject session to a dictionary with each run input name
@@ -573,12 +574,58 @@ def process_mri_bids(bids_dir=None,
     except BaseException as e:
         logger.error('MRI BIDS PROCESSING')
         err_logger.error(f'MRI BIDS PROCESSING: {str(e)}')
+        
+def _extract_fidname(fidname=None, elec_names=None):
+    '''
+    Find the index of the specified fiducial in electrode names
+    Use some versions of standard electrode namings
+
+    Parameters
+    ----------
+    fidname : str, required
+        Fiducial name [nas, lpa, rpa]
+    elec_names : list, required
+        Electrode names list extracted from the electrode txt file first column
+
+    Raises
+    ------
+    ValueError
+        DESCRIPTION.
+
+    Returns
+    -------
+    int
+        Index in the electrodes name list
+
+    '''
+    lpa_template = ['lpa', 'left ear', 'leftear', 'lear']
+    rpa_template = ['rpa', 'right ear', 'rightear', 'rear']
+    nas_template = ['nas', 'nasion', 'nasoin']
+    elec_names = [i.lower() for i in elec_names]
+    if fidname=='nas':
+        _template = nas_template
+    elif fidname=='lpa':
+        _template = lpa_template
+    elif fidname=='rpa':
+        _template = rpa_template
+    else:
+        raise ValueError('FID not in [nas, lpa, rpa]')
+    for guess in _template:
+        if guess in elec_names:
+            return elec_names.index(guess)
+    raise ValueError(f'{fidname} not in {_template}')
+    
+    
 
 def _read_electrodes_file(elec_fname=None): 
     assert op.exists(elec_fname), f'The {elec_fname} does not exist'
     dframe = pd.read_csv(elec_fname, skiprows=6, sep='\t')
     locs_ras = {}
     try:
+        elec_names = dframe['# Electrode Name']
+        nas_row_idx = _extract_fidname('nas', elec_names)
+        lpa_row_idx = _extract_fidname('lpa', elec_names)
+        rpa_row_idx = _extract_fidname('rpa', elec_names)
         for val in ['Nasion', 'Left Ear', 'Right Ear']:
             row = dframe[dframe['# Electrode Name']==val]
             tmp = row['Loc. X'], row['Loc. Y'], row['Loc. Z']
@@ -596,7 +643,7 @@ def process_mri_json(elec_fname=None,
     if elec_fname != None:
         locs_ras = _read_electrodes_file(elec_fname)
     elif ras_coords != None:
-        print('Runnig ras coords')
+        print('Running ras coords')
         assert 'Nasion' in ras_coords.keys()
         assert 'Left Ear' in ras_coords.keys()
         assert 'Right Ear' in ras_coords.keys()
