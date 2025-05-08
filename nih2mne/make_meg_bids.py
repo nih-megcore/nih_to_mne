@@ -654,9 +654,9 @@ def process_mri_json(elec_fname=None,
     # set the fids as voxel coords
     inv_rot = np.linalg.inv(mri.affine[0:3,0:3])
     translation =  mri.affine[0:3,3]
-    nas_vox = np.matmul(inv_rot, locs_ras['Nasion']) - translation
-    lpa_vox = np.matmul(inv_rot, locs_ras['Left Ear']) - translation
-    rpa_vox = np.matmul(inv_rot, locs_ras['Right Ear']) - translation
+    nas_vox = np.matmul(inv_rot, locs_ras['Nasion']) - np.matmul(inv_rot,translation)
+    lpa_vox = np.matmul(inv_rot, locs_ras['Left Ear']) - np.matmul(inv_rot,translation)
+    rpa_vox = np.matmul(inv_rot, locs_ras['Right Ear']) - np.matmul(inv_rot,translation)
     
     fids_json_out = {"AnatomicalLandmarkCoordinates": {
         "NAS":list(nas_vox),
