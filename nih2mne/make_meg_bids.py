@@ -574,19 +574,27 @@ def process_mri_bids(bids_dir=None,
         logger.error('MRI BIDS PROCESSING')
         err_logger.error(f'MRI BIDS PROCESSING: {str(e)}')
 
+def _read_electrodes_file(elec_fname=None): 
+    assert op.exists(elec_fname), f'The {elec_fname} does not exist'
+    dframe = pd.read_csv(elec_fname, skiprows=6, sep='\t')
+    locs_ras = {}
+    try:
+        for val in ['Nasion', 'Left Ear', 'Right Ear']:
+            row = dframe[dframe['# Electrode Name']==val]
+            tmp = row['Loc. X'], row['Loc. Y'], row['Loc. Z']
+            output = [i.values[0] for i in tmp]
+            locs_ras[val] = np.array(output)
+    except BaseException() as e:
+        print('Cannot process the electrodes file - appears not to use the correct format in template')
+    return locs_ras
+
 def process_mri_json(elec_fname=None,
                      mri_fname = None,
                      ras_coords = None
                      ):
     mri = nib.load(mri_fname)
     if elec_fname != None:
-        dframe = pd.read_csv(elec_fname, skiprows=6, sep='\t')
-        locs_ras = {}
-        for val in ['Nasion', 'Left Ear', 'Right Ear']:
-            row = dframe[dframe['# Electrode Name']==val]
-            tmp = row['Loc. X'], row['Loc. Y'], row['Loc. Z']
-            output = [i.values[0] for i in tmp]
-            locs_ras[val] = np.array(output)
+        locs_ras = _read_electrodes_file(elec_fname)
     elif ras_coords != None:
         print('Runnig ras coords')
         assert 'Nasion' in ras_coords.keys()
