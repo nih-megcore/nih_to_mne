@@ -20,7 +20,7 @@ def fixDsName(input_name):
     ds_base = op.basename(dsname)[:-3]
     
     fnames = os.listdir(dsname)
-    ds_suffixes=['acq','hc', 'hist','infods','meg4','newds','res4','eeg']
+    ds_suffixes=['acq','hc', 'hist','infods','meg4','newds','res4','eeg','xml']
     
     fnames_to_change = [i for i in fnames if i.split('.')[-1] in ds_suffixes]
     for f in fnames_to_change:
