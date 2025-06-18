@@ -1,8 +1,14 @@
 import argparse
+import os
+import sys
 from pathlib import Path
 
-from ..make_meg_bids import anonymize_meg
-from ..make_meg_bids import anonymize_finalize
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(SCRIPT_DIR))
+sys.path.append(os.path.dirname(os.path.dirname(SCRIPT_DIR)))
+
+from make_meg_bids import anonymize_meg
+from make_meg_bids import anonymize_finalize
 
 
 def cli():
@@ -29,10 +35,10 @@ if __name__ == '__main__':
     indir, outdir = cli()
 
     # crawl all subdirectories in indir looking for MEG data and call the anonymization function on each *.ds directory
-    inmegs = indir.glob('sub-*/meg/*.ds') + indir.glob('sub-*/ses-*/meg/*.ds')
+    inmegs = [g for g in indir.glob('sub-*/meg/*.ds')] + [g for g in indir.glob('sub-*/ses-*/meg/*.ds')]
 
     for inmeg in inmegs:
-        outmeg = outdir / inmeg.relative_to(indir)
+        outmeg = outdir / inmeg.relative_to(indir).parent
         outmeg.parent.mkdir(parents=True, exist_ok=True)
         print(f"Anonymizing {inmeg} to {outmeg}")
 
