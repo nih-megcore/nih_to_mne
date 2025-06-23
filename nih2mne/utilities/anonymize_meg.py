@@ -54,6 +54,7 @@ if __name__ == '__main__':
         anonymize_finalize(anonymize_meg(inmeg.resolve(), outmeg.resolve()))
 
     # copy over parent-level JSON and TSV files from the parents of *.ds folders
+    print(f"Copying in JSONs and TSVs from parent directories")
     for parent in parents:
         jsons_tsvs = [g for g in parent.glob('*.json')] + [g for g in parent.glob('*.tsv')]
         for in_json_tsv in jsons_tsvs:
