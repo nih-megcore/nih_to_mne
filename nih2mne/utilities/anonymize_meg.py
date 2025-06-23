@@ -1,5 +1,7 @@
 import argparse
+import numpy
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -40,6 +42,9 @@ if __name__ == '__main__':
     # crawl all subdirectories in indir looking for MEG data and call the anonymization function on each *.ds directory
     inmegs = [g for g in indir.glob('sub-*/meg/*.ds')] + [g for g in indir.glob('sub-*/ses-*/meg/*.ds')]
 
+    # collect all unique parents of meg/*.ds directories
+    parents = numpy.unique([inmeg.parent for inmeg in inmegs])
+
     for inmeg in inmegs:
         outmeg = outdir / inmeg.relative_to(indir).parent
         outmeg.parent.mkdir(parents=True, exist_ok=True)
@@ -47,5 +52,12 @@ if __name__ == '__main__':
 
         # anonymize the MEG data from inmeg to outmeg
         anonymize_finalize(anonymize_meg(inmeg.resolve(), outmeg.resolve()))
+
+    # copy over parent-level JSON and TSV files from the parents of *.ds folders
+    for parent in parents:
+        jsons_tsvs = [g for g in parent.glob('*.json')] + [g for g in parent.glob('*.tsv')]
+        for in_json_tsv in jsons_tsvs:
+            out_json_tsv = outdir / in_json_tsv.relative_to(indir)
+            shutil.copyfile(in_json_tsv.resolve(), out_json_tsv.resolve())
 
     print(f"Anonymization complete. Anonymized data saved to: {outdir}")
