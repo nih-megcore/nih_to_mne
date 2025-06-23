@@ -20,10 +20,13 @@ def cli():
     args = parser.parse_args()
 
     if not args.bids_indir.is_dir():
-        raise ValueError(f"Input BIDS directory {args.bids_indir} does not exist or is not a directory.")
+        raise ValueError(f"Input BIDS directory does not exist or is not a directory: {args.bids_indir}")
+
+    if str(args.bids_indir.resolve()) == str(args.bids_outdir.resolve()):
+        raise ValueError(f"Input BIDS directory and output BIDS directory are identical (which is not allowed): {args.bids_indir}")
 
     if not args.bids_outdir.parent.is_dir():
-        raise ValueError(f"Output BIDS directory's parent {args.bids_outdir.parent} does not exist or is not a directory.")
+        raise ValueError(f"Output BIDS directory's parent does not exist or is not a directory: {args.bids_outdir.parent}")
     else:
         args.bids_outdir.mkdir(parents=True, exist_ok=True)
 
@@ -45,4 +48,4 @@ if __name__ == '__main__':
         # anonymize the MEG data from inmeg to outmeg
         anonymize_finalize(anonymize_meg(inmeg.resolve(), outmeg.resolve()))
 
-    print(f"Anonymization complete. Anonymized data saved to {outdir}.")
+    print(f"Anonymization complete. Anonymized data saved to: {outdir}")
