@@ -5,12 +5,8 @@ import shutil
 import sys
 from pathlib import Path
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(SCRIPT_DIR))
-sys.path.append(os.path.dirname(os.path.dirname(SCRIPT_DIR)))
-
-from make_meg_bids import anonymize_meg
-from make_meg_bids import anonymize_finalize
+from nih2mne.make_meg_bids import anonymize_meg
+from nih2mne.make_meg_bids import anonymize_finalize
 
 
 def cli():
