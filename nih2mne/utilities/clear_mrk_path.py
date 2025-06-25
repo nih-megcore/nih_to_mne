@@ -7,7 +7,7 @@ Created on Mon Mar 30 15:55:29 2020
 """
 
 import glob, os
-
+import warnings
 
 def clean_filepath_header(mrk_file):
     '''Find the PATH OF DATASET flag and remove the next entry'''
@@ -29,9 +29,8 @@ def clean_filepath_header(mrk_file):
     data = [i[:-1] for i in data if i[-1:]=='\n']
     tmp.close()
     for val in data:
-        if len(val.split('/')) > 1: 
-            print('Could not clear the path or "/" is used in the file')
-            raise ValueError
+        if '/' in val:
+            warnings.warn(f'!!!There is a / in the file - this could be a file path in the data:\n {val}')
 
 def calc_extra_mark_filelist(filename, mrk_outfile='MarkerFile.mrk'):
     extra_mrk_files = glob.glob(os.path.join(filename,'*.mrk')) + \
