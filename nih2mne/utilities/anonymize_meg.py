@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from nih2mne.make_meg_bids import anonymize_meg
-from nih2mne.make_meg_bids import anonymize_finalize
+from nih2mne.make_meg_bids import anonymize_finalize, _clear_ClassFile
 
 
 def cli():
@@ -46,6 +46,9 @@ if __name__ == '__main__':
         outmeg = outdir / inmeg.relative_to(indir).parent
         outmeg.parent.mkdir(parents=True, exist_ok=True)
         print(f"Anonymizing {inmeg} to {outmeg}")
+        
+        # scrub early trail termination field that prevents anonymize from running
+        _clear_ClassFile(inmeg.resolve())
 
         # anonymize the MEG data from inmeg to outmeg
         anonymize_finalize(anonymize_meg(inmeg.resolve(), outmeg.resolve()))
