@@ -49,6 +49,10 @@ class deriv_anon():
             outfname = dset.replace(self.deriv_root, outdir)
             loader = self.type_dict[dset]['loader']
             datobj = loader(dset)
+            #Hack because of MNE issue
+            if hasattr(datobj, 'annotations'):
+                if datobj.annotations is None:
+                    delattr(datobj, '_annotations')
             datobj.anonymize()
             datobj.save(outfname)
             i+=1
