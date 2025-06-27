@@ -11,17 +11,50 @@ import glob
 import mne
 import re
 import warnings
+import argparse
+from mne.io.meas_info import anonymize_info
 
 
 class deriv_anon():
-    def __init__(self,deriv_root=None, anon_root=None):
+    def __init__(self,deriv_root=None, anon_root=None, fif_list=None, 
+                 overwrite=False):
+        '''
+        Anonymize the derivatives folder of any subject/date information. 
+        
+        Currently setup for raw / epochs / ica / 
+        
+        Example usage: 
+            da = deriv_anon('/bids_root/derivatives', anon_root='/tmp/anon')
+            da.check_types()
+            da.anonymize_data()
+
+        Parameters
+        ----------
+        deriv_root : str, optional
+            Path to derivative root. The default is None.
+        anon_root : str, optional
+            Path to output direoctory. The default is None.
+        fif_list : list, optional
+            Provide a list of files to anonymize.  This is useful if there were 
+            failures in previous attempts (eg. permission issues). The default is None.
+
+        Returns
+        -------
+        None.
+
+        '''
         assert deriv_root!=None, 'Must assign deriv_root'
         assert deriv_root!='/', 'Recursive search will do the full computer - do not use / as your deriv root'
 
         self.deriv_root=deriv_root
-        self.fif_list = glob.glob(op.join(self.deriv_root,'**','*.fif'), recursive=True)
+        if fif_list==None:
+            self.fif_list = glob.glob(op.join(self.deriv_root,'**','*.fif'), recursive=True)
+        else: 
+            self.fif_list = fif_list
         self.anon_root=anon_root
-        self.initialize_outdir()
+        if anon_root is not None:
+            self.initialize_outdir()
+        self.overwrite=overwrite
         
     def initialize_outdir(self):
         os.makedirs(self.anon_root, exist_ok=True)
@@ -53,10 +86,14 @@ class deriv_anon():
             if hasattr(datobj, 'annotations'):
                 if datobj.annotations is None:
                     delattr(datobj, '_annotations')
-            datobj.anonymize()
-            datobj.save(outfname)
+            
+            if not hasattr(datobj, 'anonymize') & hasattr(datobj, 'info'):
+                datobj.info = anonymize_info(datobj.info)
+            else:
+                datobj.anonymize()
+            datobj.save(outfname, overwrite=self.overwrite)
             i+=1
-        print('Anonymized {i} datasets into {outdir}')
+        print(f'Anonymized {i} datasets into {outdir}')
     
     def _get_basenames(self):
         return [op.basename(i) for i in self.fif_list]
@@ -105,21 +142,31 @@ class deriv_anon():
     
 
 #%%
-da = deriv_anon(deriv_root='/tmp/preprocessed', anon_root='/fast2/ANONTEST')
+da = deriv_anon(deriv_root='/tmp/preprocessed/ICA', anon_root='/fast2/ANONTEST')
 
-#%%
+#%%  Quick test name identifiers
 da.check_types()
 da.anonymize_data()
 
-
-
-
+_testtype, _loader = da._return_fif_type('test-meg.fif')
+assert _testtype=='raw'
 _testtype, _loader = da._return_fif_type('test-epo.fif')
 assert _testtype=='epo'
 _testtype, _loader = da._return_fif_type('test-epo-1.fif')
 assert _testtype=='epo'
+_testtype, _loader = da._return_fif_type('test-ica.fif')
+assert _testtype=='ica'
 
 
+#%% 
+da = deriv_anon(deriv_root='/tmp/preprocessed/ICA', anon_root='/fast2/ANONTEST', 
+                fif_list=['/tmp/preprocessed/ICA/sub-S19_ses-1_task-OrientationImagery_run-03_step1a-ica.fif'],
+                overwrite=True)
+da.check_types()
+da.anonymize_data()
+
+
+#%%
 key = '/tmp/preprocessed/ICA/sub-S14_ses-1_task-OrientationImageryDynamicDynamic_run-03_step1a-raw.fif'
 loader = da.type_dict[key]['loader']
 
@@ -127,7 +174,7 @@ loader = da.type_dict[key]['loader']
 dat = loader(key)
 
 da.initialize_outdir()
-da._save(
+da._save()
 
 
 #%% 
