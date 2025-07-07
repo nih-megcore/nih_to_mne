@@ -73,27 +73,41 @@ class deriv_anon():
         print(f'Found {len(self.type_dict.keys())}: files')
         
     def anonymize_data(self, outdir=None):
+        self.anonymized_dict = {}
+        self.anonymized_failed = {}
         if outdir == None:
             outdir=self.anon_root
         assert outdir != None, "Must declare a method variable outdir or anon_root (during class init)"
         if not hasattr(self, 'type_dict'): raise RuntimeError('Run check_types first to stage the type_dict variable')
         i=0
         for dset in self.type_dict.keys():
-            outfname = dset.replace(self.deriv_root, outdir)
-            loader = self.type_dict[dset]['loader']
-            datobj = loader(dset)
-            #Hack because of MNE issue
-            if hasattr(datobj, 'annotations'):
-                if datobj.annotations is None:
-                    delattr(datobj, '_annotations')
+            try:
+                outfname = dset.replace(self.deriv_root, outdir)
+                loader = self.type_dict[dset]['loader']
+                datobj = loader(dset)
+                
+                #Hack because of MNE issue
+                if hasattr(datobj, 'annotations'):
+                    if datobj.annotations is None:
+                        delattr(datobj, '_annotations')
+                
+                #Manually anonymize info if object doesn't have an anonymize option
+                if not hasattr(datobj, 'anonymize') & hasattr(datobj, 'info'):
+                    datobj.info = anonymize_info(datobj.info)
+                else:
+                    datobj.anonymize()
+                    
+                datobj.save(outfname, overwrite=self.overwrite)
+                i+=1
+                self.anonymized_dict[dset]=outfname
+            except BaseException as e:
+                self.anonymized_failed[dset] = str(e)
+        if len(self.anonymized_failed)==0:                
+            print(f'Successfully anonymized ALL {i} datasets into {outdir}')
+        else:
+            print(f'Could not anonymize {len(self.anonymized_failed)} files')
+            print(f'Successful anonymization of {i} out of {len(self.fif_list)} files')
             
-            if not hasattr(datobj, 'anonymize') & hasattr(datobj, 'info'):
-                datobj.info = anonymize_info(datobj.info)
-            else:
-                datobj.anonymize()
-            datobj.save(outfname, overwrite=self.overwrite)
-            i+=1
-        print(f'Anonymized {i} datasets into {outdir}')
     
     def _get_basenames(self):
         return [op.basename(i) for i in self.fif_list]
@@ -137,53 +151,18 @@ class deriv_anon():
         # fwd
         # bem
         # freesurfer
+        
+    def _postprocessing_checks(self):
+        
+        ## THIS PART IS NOT FINISHED
+        
+        if len(self.anonymized_failed) > 0:
+            for i in self.anonymized_failed.keys():
+                print(f'Failed: {i}')
+        _double_check = set(self.fif_list).difference(set(self.anonymized_dict.keys()))
+        if len(_double_check) > 0:
+            print(f"There looks to be an error - {len(_double_check)} didn't run through process")
+        
+                  
     
 
-    
-
-#%%
-da = deriv_anon(deriv_root='/tmp/preprocessed/ICA', anon_root='/fast2/ANONTEST')
-
-#%%  Quick test name identifiers
-da.check_types()
-da.anonymize_data()
-
-_testtype, _loader = da._return_fif_type('test-meg.fif')
-assert _testtype=='raw'
-_testtype, _loader = da._return_fif_type('test-epo.fif')
-assert _testtype=='epo'
-_testtype, _loader = da._return_fif_type('test-epo-1.fif')
-assert _testtype=='epo'
-_testtype, _loader = da._return_fif_type('test-ica.fif')
-assert _testtype=='ica'
-
-
-#%% 
-da = deriv_anon(deriv_root='/tmp/preprocessed/ICA', anon_root='/fast2/ANONTEST', 
-                fif_list=['/tmp/preprocessed/ICA/sub-S19_ses-1_task-OrientationImagery_run-03_step1a-ica.fif'],
-                overwrite=True)
-da.check_types()
-da.anonymize_data()
-
-
-#%%
-key = '/tmp/preprocessed/ICA/sub-S14_ses-1_task-OrientationImageryDynamicDynamic_run-03_step1a-raw.fif'
-loader = da.type_dict[key]['loader']
-
-
-dat = loader(key)
-
-da.initialize_outdir()
-da._save()
-
-
-#%% 
-test_list = [
- '/tmp/preprocessed/sub-S16_Still_preprocessed-epo.fif',
- '/tmp/preprocessed/sub-S12_miniEpochs_preprocessed-epo.fif',
- '/tmp/preprocessed/sub-S01_Dynamic_preprocessed-epo.fif',
- '/tmp/preprocessed/ICA/sub-S19_ses-1_task-OrientationImagery_run-03_step1a-ica.fif',
- '/tmp/preprocessed/ICA/sub-S13_ses-1_task-OrientationImagery_run-04_step1a-ica.fif',
- '/tmp/preprocessed/ICA/sub-S03_ses-1_task-OrientationImageryDynamicDynamic_run-01_step1a-raw.fif',
- '/tmp/preprocessed/ICA/sub-S07_ses-1_task-OrientationImagery_run-01_step1a-ica.fif'
-]
