@@ -27,7 +27,7 @@ from multiprocessing import Pool
 
 from mne_bids import write_anat, BIDSPath, write_raw_bids
 from nih2mne.calc_mnetrans import write_mne_fiducials 
-from nih2mne.calc_mnetrans import write_mne_trans, coords_from_afni
+from nih2mne.calc_mnetrans import write_mne_trans, coords_from_oblique_afni
 import nih2mne
 from nih2mne.utilities.clear_mrk_path import (calc_extra_mark_filelist,
                                               remove_extra_mrk_files, 
@@ -908,7 +908,7 @@ def make_bids(args):
             logger.info(f'Converted {args.mri_brik} to {nii_mri}')
             
             #Extract FIDS from Afni Head and convert to RAS
-            coords_lps = coords_from_afni(args.mri_brik)
+            coords_lps = coords_from_oblique_afni(args.mri_brik)
             coords_ras = {}
             for key in coords_lps.keys():
                 tmp = np.array(coords_lps[key])
