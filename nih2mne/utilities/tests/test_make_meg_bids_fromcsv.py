@@ -18,28 +18,28 @@ bids_entry_template = op.join(op.dirname(__file__),'..','..', 'templates', 'bids
 
 def test_find_end_hdr():
     hdrline=find_end_hdr(bids_entry_template)
-    assert hdrline==11
+    assert hdrline==12 
 
 def test_extract_csv():
     dframe = read_csv_entries(test_csv_filled)
-    g_truth = ['bids_dir', 'subjid', 'meg_dir', 'afni_brik', 'brainsight_mri',
+    g_truth = ['bids_dir', 'subjid', 'bidsID', 'meg_dir', 'afni_brik', 'brainsight_mri',
                'brainsight_electrodes', 'bids_session']
     for i in dframe.columns:
-        assert i in g_truth
+        assert i in g_truth, f"{i} not in ground truth: {g_truth}"
     assert len(dframe.columns) == len(g_truth)
 
 def test_make_cmd():
     dframe = read_csv_entries(test_csv_filled)
     cmd = make_cmd(dframe.loc[0])
-    assert cmd=='make_meg_bids.py -bids_dir bids_dir -subjid test1 -meg_input_dir /data/test -afni_brik /data/mri/mri.BRIK'
+    assert cmd=='make_meg_bids.py -bids_dir bids_dir -subjid test1 -bidsID BIDSTEST1 -meg_input_dir /data/test -afni_brik /data/mri/mri.BRIK'
     cmd = make_cmd(dframe.loc[1])
-    assert cmd=='make_meg_bids.py -bids_dir /tmp/test -subjid test2 -meg_input_dir /tmp -mri_bsight /test/tmp.nii -mri_bsight_elec /test/tmp.txt -bids_session 2'
+    assert cmd=='make_meg_bids.py -bids_dir /tmp/test -subjid test2 -bidsID BIDSTEST2 -meg_input_dir /tmp -mri_bsight /test/tmp.nii -mri_bsight_elec /test/tmp.txt -bids_session 2'
 
 def test_make_swarm_file():
     swarm=make_swarm_file(test_csv_filled, write=False)
-    assert swarm[0] == 'make_meg_bids.py -bids_dir bids_dir -subjid test1 -meg_input_dir /data/test -afni_brik /data/mri/mri.BRIK\n'
-    assert swarm[1] == 'make_meg_bids.py -bids_dir /tmp/test -subjid test2 -meg_input_dir /tmp -mri_bsight /test/tmp.nii -mri_bsight_elec /test/tmp.txt -bids_session 2\n'
+    assert swarm[0] == 'make_meg_bids.py -bids_dir bids_dir -subjid test1 -bidsID BIDSTEST1 -meg_input_dir /data/test -afni_brik /data/mri/mri.BRIK\n'
+    assert swarm[1] == 'make_meg_bids.py -bids_dir /tmp/test -subjid test2 -bidsID BIDSTEST2 -meg_input_dir /tmp -mri_bsight /test/tmp.nii -mri_bsight_elec /test/tmp.txt -bids_session 2\n'
     
 def test_make_serial_proc():
     proc=make_serial_proc(test_csv_filled, run=False, return_cmd=True)
-    assert proc=='''make_meg_bids.py -bids_dir bids_dir -subjid test1 -meg_input_dir /data/test -afni_brik /data/mri/mri.BRIK;make_meg_bids.py -bids_dir /tmp/test -subjid test2 -meg_input_dir /tmp -mri_bsight /test/tmp.nii -mri_bsight_elec /test/tmp.txt -bids_session 2'''
+    assert proc=='make_meg_bids.py -bids_dir bids_dir -subjid test1 -bidsID BIDSTEST1 -meg_input_dir /data/test -afni_brik /data/mri/mri.BRIK;make_meg_bids.py -bids_dir /tmp/test -subjid test2 -bidsID BIDSTEST2 -meg_input_dir /tmp -mri_bsight /test/tmp.nii -mri_bsight_elec /test/tmp.txt -bids_session 2'
