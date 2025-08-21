@@ -11,6 +11,6 @@ brainsight_electrodes,If coregistration through brainsight: text file from brain
 bids_session,Defaults to 1: if another session change,,,,,,
 <<,,,,,,,
 EndOfHeader - Data Entries below,,,,,,,
-bids_dir,subjid,bidsID,meg_dir,afni_brik,brainsight_mri,brainsight_electrodes,bids_session
+bids_dir,subjid_input,bids_id,meg_dir,afni_brik,brainsight_mri,brainsight_electrodes,bids_session
 bids_dir,test1,BIDSTEST1,"""/data/test""","""/data/mri/mri.BRIK""", ,,
 """/tmp/test""",test2,BIDSTEST2,"""/tmp""",,"""/test/tmp.nii""","""/test/tmp.txt""",2
