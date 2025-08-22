@@ -11,6 +11,7 @@ import nih2mne
 import os.path as op
 import os 
 import numpy as np
+import subprocess
 
 dirpath = op.join(nih2mne.__path__[0], 'templates', 'bids_entry_template.csv')
 csv_cmdline_mapping = dict(bids_dir='bids_dir',
@@ -19,7 +20,8 @@ csv_cmdline_mapping = dict(bids_dir='bids_dir',
                         brainsight_mri='mri_bsight',
                         brainsight_electrodes='mri_bsight_elec',
                         bids_session='bids_session',
-                        subjid='subjid')
+                        subjid_input='subjid_input',
+                        bids_id = 'bids_id')
 
 mapping_dtypes = dict(bids_dir=str,
                         meg_input_dir=str,
@@ -27,7 +29,8 @@ mapping_dtypes = dict(bids_dir=str,
                         mri_bsight=str,
                         mri_bsight_elec=str,
                         bids_session='Int16',
-                        subjid=str)
+                        subjid_input=str, 
+                        bids_id=str)
 
 # =============================================================================
 # 
@@ -124,14 +127,16 @@ def make_serial_proc(csvfile, run=False, return_cmd=False):
     for i,row in dframe.iterrows():
         cmd = make_cmd(row)
         cmd_chain.append(cmd)
-    cmd_chain = ';'.join(cmd_chain)
     if run==False:
+        cmd_chain = ';'.join(cmd_chain)
         print(cmd_chain)
+        return
     if return_cmd==True:
+        cmd_chain = ';'.join(cmd_chain)
         return cmd_chain
     else:
-        import subprocess
-        subprocess.run(cmd_chain)
+        for current_cmd in cmd_chain:
+            subprocess.run(current_cmd.split())
         
 def main():
     import argparse
@@ -141,13 +146,17 @@ def main():
                                      Edit the template and save as a csv file somewhere, then use as an input to this command.''')
     parser.add_argument('-csvfile', required=True)
     parser.add_argument('-print_bids_loop', required=False,
+                        action='store_true',
                         help='''Print out a serial processing of the bids import''')
     parser.add_argument('-run_bids_loop', required=False,
+                        action='store_true',
                         help='''Send the bids loop to a subprocess for computing''')
     parser.add_argument('-write_swarmf', required=False,
                         action='store_true', help='''Write a swarm file from
                         the csv.  Default name is megbids_swarm.sh unless set''')
-    parser.add_argument('-swarmfile_fname', help='''Used inconjunction with 
+    parser.add_argument('-swarmfile_fname',
+                        action='store_true',
+                        help='''Used inconjunction with 
                         -write_swarmf flag''', required=False)
     args = parser.parse_args()
     
