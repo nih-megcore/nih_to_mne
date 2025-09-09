@@ -21,7 +21,7 @@ classifiers=[
     ]
 dependencies = [
 'mne<1.6', 'numpy<2.0', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'wget','nilearn', 'pysimplegui-4-foss', 'pyyaml', 'pyqtgraph',
-'pyctf-lite @ git+https://github.com/nih-megcore/pyctf-lite@v1.0#egg=pyctf-lite' , 'dill', 'PyQt5'
+'pyctf-lite @ git+https://github.com/nih-megcore/pyctf-lite' , 'dill', 'PyQt5'
 ]
 dynamic = ["version"]
 
@@ -42,16 +42,6 @@ testing = ['datalad','pytest','pygit2']
 "bids_qa_gui.py"='nih2mne.GUI.qt_gui:cmdline_main'
 "trigger_code_gui.py"='nih2mne.GUI.trigger_code_gui:cmdline_main'
 "calc_hm.py"='nih2mne.utilities.calc_hm:entrypoint'
-
-#'nih2mne/eyetracking_preprocessing.py',
-#'cmdline/make_bids_fs_swarm.sh',
-
-
-"process_meg.py" = "enigmeg.process_meg:main"
-"enigma_prep_QA.py" = 'enigmeg.QA.enigma_prep_QA:main'
-"Run_enigma_QA_GUI.py" = 'enigmeg.QA.Run_enigma_QA_GUI:main'
-"parse_bids.py" =  'enigmeg.parse_bids:main'
-
 
 [tool.setuptools.packages.find]
 include = ["nih2mne*"]
