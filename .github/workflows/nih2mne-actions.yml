@@ -9,15 +9,17 @@ jobs:
       matrix:
         os: ["ubuntu-latest"]
         python-version: ["3.11"]
+        mne-version: ["1.10"]
     steps:
       - uses: conda-incubator/setup-miniconda@v3
       - uses: actions/checkout@v4
         with:
           auto-update-conda: true
           python-version: ${{ matrix.python-version }}
+          mne-version: ${{ matrix.mne-version }}
       - name: Install MNE
         shell: bash -el {0}
-        run: conda install --override-channels --channel=conda-forge 'python<3.12' pytest 'mne=1.5' 'numba<0.60' 'numpy<2.0' 
+        run: conda install --override-channels --channel=conda-forge 'python=${{ python-version }}' pytest 'mne=${{ mne-version }}'  
       - name: Install Git
         run: sudo apt install git -y
       - name: Pip Install nih2mne

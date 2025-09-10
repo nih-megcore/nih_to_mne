@@ -20,7 +20,7 @@ classifiers=[
         "Operating System :: Linux/Unix",
     ]
 dependencies = [
-'mne<1.6', 'numpy<2.0', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'wget','nilearn', 'pysimplegui-4-foss', 'pyyaml', 'pyqtgraph',
+'mne', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'wget','nilearn', 'pysimplegui-4-foss', 'pyyaml', 'pyqtgraph',
 'pyctf@git+https://github.com/nih-megcore/pyctf-lite' , 'dill', 'PyQt5'
 ]
 dynamic = ["version"]
