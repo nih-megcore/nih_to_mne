@@ -63,7 +63,7 @@ class deriv_anon():
         type_dict = {}
         for dset in self.fif_list:
             if not os.access(dset, os.R_OK):
-                warnings.warning(f'You do not have read access to file: {dset}')
+                warnings.warn(f'You do not have read access to file: {dset}')
             basename = op.basename(dset)
             _deriv_type, _loader = self._return_fif_type(basename)
             _dset_dict = dict(deriv_type=_deriv_type,

@@ -127,7 +127,7 @@ def make_serial_proc(csvfile, run=False, return_cmd=False):
     for i,row in dframe.iterrows():
         cmd = make_cmd(row)
         cmd_chain.append(cmd)
-    if run==False:
+    if (run==False) and (return_cmd==False):
         cmd_chain = ';'.join(cmd_chain)
         print(cmd_chain)
         return
@@ -158,6 +158,14 @@ def main():
                         action='store_true',
                         help='''Used inconjunction with 
                         -write_swarmf flag''', required=False)
+    parser.add_argument('-anonymize',
+                        required=False, 
+                        help='Deface MRI and anonymize MEG', 
+                        default=False, action='store_true')
+    parser.add_argument('-additional_args', required=False,
+                        help='''Add additional arguments to the processing. 
+                        Put all flags in '''
+                        )
     args = parser.parse_args()
     
     csvfile=args.csvfile
