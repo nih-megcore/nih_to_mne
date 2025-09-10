@@ -12,7 +12,7 @@ import numpy as np
 
 def test_get_termtime():
     dat = np.zeros(2000)
-    dat[:1700] = np.random.uniform([1700])
+    dat[:1700] = np.random.uniform([1700])+1
     idx, t_val = get_term_time(dat, sfreq=100.0)
     assert idx==1700, 'Did not find the correct stop index'
     assert t_val==17.0, 'Did not compute the correct stop time'
