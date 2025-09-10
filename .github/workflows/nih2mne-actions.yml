@@ -15,8 +15,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           auto-update-conda: true
+          channels: conda-forge
+          channel-priority: strict
           python-version: ${{ matrix.python-version }}
-          mne-version: ${{ matrix.mne-version }}
       - name: Install MNE
         shell: bash -el {0}
         run: conda install --override-channels --channel=conda-forge 'python=${{ python-version }}' pytest 'mne=${{ mne-version }}'  
