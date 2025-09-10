@@ -7,6 +7,7 @@ name = "nih2mne"
 description = "General integration functions for mne and mne-bids for NIH users"
 readme = "README.md"
 requires-python = "<3.12"
+verision = "0.4.0"
 #keywords = ["one", "two"]
 
 authors = [
