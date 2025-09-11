@@ -25,7 +25,7 @@ jobs:
         run: sudo apt install git -y
       - name: Pip Install nih2mne
         shell: bash -el {0}
-        run: $CONDA/bin/pip install git+https://github.com/nih-megcore/nih_to_mne.git
+        run: $CONDA/envs/test/bin/pip  install git+https://github.com/nih-megcore/nih_to_mne.git
       - name: Download test data
         shell: bash -el {0}
         run: make get_data
