@@ -12,7 +12,7 @@ import mne
 import re
 import warnings
 import argparse
-from mne.io.meas_info import anonymize_info
+from mne.io import anonymize_info
 
 
 class deriv_anon():

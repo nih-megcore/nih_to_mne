@@ -8,7 +8,7 @@ import numpy as np
 import nibabel as nb
 import mne
 from mne.io.constants import FIFF
-from mne.io.meas_info import read_fiducials, write_fiducials
+from mne.io import read_fiducials, write_fiducials
 import json
 from mne.coreg import _fiducial_coords, fit_matched_points
 from mne.transforms import read_trans, write_trans, Transform
@@ -313,6 +313,7 @@ def write_mne_trans(mne_fids_path=None, dsname=None,
     
     fids = read_fiducials(name)
     fidc = _fiducial_coords(fids[0])
+    fids_order = [str(i['ident']).split('_')[-1].replace(')','') for i in fids[0][0:3]]
     
     if dsname.endswith('.ds'):
         raw = read_raw_ctf(dsname, clean_names = True, preload = False, 
@@ -320,7 +321,15 @@ def write_mne_trans(mne_fids_path=None, dsname=None,
     elif dsname.endswith('.con'):
         raw = mne.io.read_raw_kit(dsname, preload=False)
         
-    fidd = _fiducial_coords(raw.info['dig'])
+    _tmp = raw.info['dig']
+    _raw_fids_order = [str(i['ident']).split('_')[-1].replace(')','') for i in _tmp]
+    reordering=[]
+    for i in _raw_fids_order:
+        print(i)
+        _index = fids_order.index(i)
+        reordering.append(_tmp[_index])
+        
+    fidd = _fiducial_coords(reordering)
 
     xform = fit_matched_points(fidd, fidc, weights = [1, 10, 1])
     t = Transform(FIFF.FIFFV_COORD_HEAD, FIFF.FIFFV_COORD_MRI, xform)
@@ -446,7 +455,7 @@ def view_coreg(dsname=None, trans_file=None, subjects_dir=None, subject=None):
     trans = mne.read_trans(trans_file)
        
     mne.viz.plot_alignment(raw.info, trans=trans, subject=subject, src=None,
-                       subjects_dir=subjects_dir, dig=False,
+                       subjects_dir=subjects_dir, dig=True,mri_fiducials=True,
                        surfaces=['head', 'white'], coord_frame='meg')
     _ = input('Press enter to close')
     
