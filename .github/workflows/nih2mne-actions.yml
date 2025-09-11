@@ -20,7 +20,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install MNE
         shell: bash -el {0}
-        run: conda install --override-channels --channel=conda-forge 'python=${{ matrix.python-version }}' pytest 'mne=${{ matrix.mne-version }}'  
+        run: run: $CONDA/bin/conda install --name test --strict-channel-priority --override-channels --channel=conda-forge 'python=${{ matrix.python-version }}' pytest 'mne=${{ matrix.mne-version }}'
       - name: Install Git
         run: sudo apt install git -y
       - name: Pip Install nih2mne
