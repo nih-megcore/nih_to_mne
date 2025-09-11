@@ -31,5 +31,5 @@ jobs:
         run: make get_data
       - name: Pytest
         shell: bash -el {0}
-        run: $CONDA/bin/pytest
+        run: $CONDA/envs/test/bin/pytest
   
