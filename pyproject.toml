@@ -38,10 +38,12 @@ testing = ['datalad','pytest','pygit2']
 "megcore_prep_mri_bids.py"='nih2mne.megcore_prep_mri_bids:main'
 "qa_fids.py"='nih2mne.utilities.qa_fids:main'
 "standardize_eventID_list.py"='nih2mne.utilities.standardize_eventID_list:main_parser'
-"megcore_gui.py"='nih2mne.GUI.megcore_gui:meg_gui'
+#"megcore_gui.py"='nih2mne.GUI.megcore_gui:meg_gui'
 "bids_qa_gui.py"='nih2mne.GUI.qt_gui:cmdline_main'
 "trigger_code_gui.py"='nih2mne.GUI.trigger_code_gui:cmdline_main'
 "calc_hm.py"='nih2mne.utilities.calc_hm:entrypoint'
+"make_meg_bids_gui.py"='nih2mne.GUI.make_meg_bids_gui:cmdline'
+
 
 [tool.setuptools.packages.find]
 include = ["nih2mne*"]

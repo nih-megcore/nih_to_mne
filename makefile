@@ -7,9 +7,7 @@ CONDA_ACTIVATE=source $$(conda info --base)/etc/profile.d/conda.sh ; conda activ
 # <<<<
 
 install_test:
-	#conda install --channel=conda-forge --name=base mamba -y
-	#conda env remove -n nih2mne_test
-	mamba create --override-channels --channel=conda-forge --name=nih2mne_test "mne=1.5" "python<3.12" "numba<0.60" "numpy<2.0" pip -y  
+	mamba create --override-channels --channel=conda-forge --name=nih2mne_test "mne>1.6" "python<3.12"  pip -y  
 	($(CONDA_ACTIVATE) nih2mne_test ; pip install -e .[testing]; pip install pytest pytest-reportlog )
 	git submodule init
 	git pull --recurse-submodules

@@ -372,8 +372,7 @@ def bids_gui(config_fname=False):
     window.close()
 
 config_fname = False
-if __name__=='__main__':
-    ''' Get config file from the commandline - preset to False above'''
+def cmdline():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('-config', help='Config file: typically ending in cfg', 
@@ -382,6 +381,10 @@ if __name__=='__main__':
     if hasattr(args, 'config'):
         config_fname = args.config
     bids_gui(config_fname)
+
+
+if __name__=='__main__':
+    cmdline()
 
 
 
