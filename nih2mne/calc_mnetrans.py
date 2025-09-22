@@ -297,6 +297,38 @@ def write_mne_fiducials(subject=None, subjects_dir=None, tagfile=None,
     print()
     print('Created {} fiducial file'.format(name))
     return name
+
+def is_default_trans(info):
+    '''
+    Determine if the dataset has a valid fiducial acquisition.
+    Tests against the default head transform and fiducial locations
+
+    Parameters
+    ----------
+    raw : MNE raw instance
+        DESCRIPTION.
+
+    Returns
+    -------
+    bool
+
+    '''
+    # Override if raw instance is provided
+    if type(info) is mne.io.ctf.ctf.RawCTF:
+        info = info.info
+    
+    fids = info['dig']
+    NAS = [i for i in fids if i['ident']==FIFF.FIFFV_POINT_NASION][0]
+    LPA = [i for i in fids if i['ident']==FIFF.FIFFV_POINT_LPA][0]
+    RPA = [i for i in fids if i['ident']==FIFF.FIFFV_POINT_RPA][0]
+    _dtype = NAS['r'].dtype #Extract the exact datatype for equality calc
+    NAS_d = np.all(NAS['r']==np.array([0.  , 0.08, 0.  ], dtype=_dtype))
+    LPA_d = np.all(LPA['r']==np.array([-0.08,  0.  ,  0.  ], dtype=_dtype))
+    RPA_d = np.all(RPA['r']==np.array([0.08, 0.  , 0.  ], dtype=_dtype))
+    if (NAS_d & LPA_d & RPA_d)==True: 
+        return True
+    else:
+        return False
         
 def write_mne_trans(mne_fids_path=None, dsname=None,
                     output_name=None, subject=None, subjects_dir=None):
