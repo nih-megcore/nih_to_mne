@@ -7,22 +7,22 @@ name = "nih2mne"
 description = "General integration functions for mne and mne-bids for NIH users"
 readme = "README.md"
 requires-python = "<3.12"
-version = "0.4.0"
-#keywords = ["one", "two"]
+version = "0.4.1"
 
 authors = [
   { name="Jeff Stout", email="stoutjd@nih.gov" },
 ]
 
-license = {text = "UNLICENSE"}
+license = "UNLICENSE"
+license-files = ["UNLICENSE"]
+
 classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: UNLICENSE",
-        "Operating System :: Linux/Unix",
+        "Operating System :: POSIX",
     ]
 dependencies = [
 'mne', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'wget','nilearn', 'pysimplegui-4-foss', 'pyyaml', 'pyqtgraph',
-'pyctf@git+https://github.com/nih-megcore/pyctf-lite' , 'dill', 'PyQt5'
+'pyctf-nihmegcore' , 'dill', 'PyQt5'
 ]
 
 [project.optional-dependencies]
