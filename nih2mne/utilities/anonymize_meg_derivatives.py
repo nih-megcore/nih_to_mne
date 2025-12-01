@@ -46,18 +46,23 @@ class deriv_anon():
         assert deriv_root!=None, 'Must assign deriv_root'
         assert deriv_root!='/', 'Recursive search will do the full computer - do not use / as your deriv root'
 
-        self.deriv_root=deriv_root
+        self.deriv_root=op.abspath(deriv_root)
         if fif_list==None:
             self.fif_list = glob.glob(op.join(self.deriv_root,'**','*.fif'), recursive=True)
         else: 
             self.fif_list = fif_list
-        self.anon_root=anon_root
+        self.anon_root=op.abspath(anon_root)
         if anon_root is not None:
             self.initialize_outdir()
         self.overwrite=overwrite
         
     def initialize_outdir(self):
         os.makedirs(self.anon_root, exist_ok=True)
+        tmp_ = set([op.dirname(i) for i in self.fif_list])
+        outdirs = [i.replace(self.deriv_root, self.anon_root) for i in tmp_]
+        for i in outdirs:
+            os.makedirs(i, exist_ok=True)
+        print(f'Created {len(outdirs)} sub directories in the anonymization folder')
             
     def check_types(self):
         type_dict = {}
