@@ -76,7 +76,6 @@ def test_coords_from_oblique_afni():
     assert np.allclose(coords['Right Ear'], [-73.039, -30.507000000000005, -44.14798999999999])
     
 def test_is_default_trans():
-    info = mne.io.read_info('/home/jstout/src/nih_to_mne/nih2mne/tests/eroom_mne_info.fif')
-    # info = mne.io.read_info(op.join(op.dirname(__file__),'eroom_mne_info.fif'))
+    info = mne.io.read_info(op.join(op.dirname(__file__),'eroom_mne_info.fif'))
     assert is_default_trans(info)==True
                             
