@@ -572,9 +572,10 @@ class event_coding_Window(QMainWindow):
         time_corr_code.append(f"dframe = append_conditions(dframe_list)")
                 
         ##### Correct to Projector ###### 
-        if len(self.corr2proj_list) > 0:
-            tmp_code = f'dframe = correct_to_projector(dframe, event_list={self.corr2proj_list}, window=[-0.2,0.2])'
-            time_corr_code.append(tmp_code)        
+        if hasattr(self, 'corr2proj_list'):
+            if len(self.corr2proj_list) > 0:
+                tmp_code = f'dframe = correct_to_projector(dframe, event_list={self.corr2proj_list}, window=[-0.2,0.2])'
+                time_corr_code.append(tmp_code)        
         
         ##### Add offset to events ######
         if self.b_fixed_delay_edit.text()=='':
