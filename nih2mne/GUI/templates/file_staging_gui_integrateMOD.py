@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'input_meg_dset_tile.ui'
+# Form implementation generated from reading ui file 'file_staging_meg.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.9
 #
@@ -9,7 +9,6 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-
 
 class Ui_InputDatasetTile(object):
     def setupUi(self, InputDatasetTile):
@@ -160,3 +159,137 @@ class Ui_InputDatasetTile(object):
         self.pushButton_2.setText(_translate("InputDatasetTile", "FullQA"))
         self.label_2.setText(_translate("InputDatasetTile", "Top5Trig:"))
         self.label_4.setText(_translate("InputDatasetTile", "Status:"))
+
+
+class Ui_MainWindow(object):
+    def setupUi(self, MainWindow):
+        MainWindow.setObjectName("MainWindow")
+        MainWindow.resize(822, 666)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(MainWindow.sizePolicy().hasHeightForWidth())
+        MainWindow.setSizePolicy(sizePolicy)
+        self.centralwidget = QtWidgets.QWidget(MainWindow)
+        self.centralwidget.setObjectName("centralwidget")
+        self.widget_2 = QtWidgets.QWidget(self.centralwidget)
+        self.widget_2.setGeometry(QtCore.QRect(0, 0, 821, 621))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.widget_2.sizePolicy().hasHeightForWidth())
+        self.widget_2.setSizePolicy(sizePolicy)
+        self.widget_2.setObjectName("widget_2")
+        self.verticalLayout = QtWidgets.QVBoxLayout(self.widget_2)
+        self.verticalLayout.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout.setObjectName("verticalLayout")
+        self.ControlPanelLayoutWidget = QtWidgets.QWidget(self.widget_2)
+        self.ControlPanelLayoutWidget.setEnabled(True)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.ControlPanelLayoutWidget.sizePolicy().hasHeightForWidth())
+        self.ControlPanelLayoutWidget.setSizePolicy(sizePolicy)
+        self.ControlPanelLayoutWidget.setObjectName("ControlPanelLayoutWidget")
+        self.horizontalLayout = QtWidgets.QHBoxLayout(self.ControlPanelLayoutWidget)
+        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.FileDrop = QtWidgets.QGroupBox(self.ControlPanelLayoutWidget)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.FileDrop.sizePolicy().hasHeightForWidth())
+        self.FileDrop.setSizePolicy(sizePolicy)
+        self.FileDrop.setAcceptDrops(True)
+        self.FileDrop.setToolTip("")
+        self.FileDrop.setObjectName("FileDrop")
+        #Manual Entry >>
+        self.FileDrop.dragEnterEvent = self.dragEnterEvent
+        self.FileDrop.dropEvent = self.dropEvent
+        #<<
+        
+        self.horizontalLayout.addWidget(self.FileDrop)
+        self.widget = QtWidgets.QWidget(self.ControlPanelLayoutWidget)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.widget.sizePolicy().hasHeightForWidth())
+        self.widget.setSizePolicy(sizePolicy)
+        self.widget.setObjectName("widget")
+        self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.widget)
+        self.verticalLayout_2.setObjectName("verticalLayout_2")
+        self.CheckData = QtWidgets.QPushButton(self.widget)
+        self.CheckData.setObjectName("CheckData")
+        self.verticalLayout_2.addWidget(self.CheckData)
+        self.LaunchBidsCreator = QtWidgets.QPushButton(self.widget)
+        self.LaunchBidsCreator.setObjectName("LaunchBidsCreator")
+        self.verticalLayout_2.addWidget(self.LaunchBidsCreator)
+        spacerItem = QtWidgets.QSpacerItem(20, 20, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed)
+        self.verticalLayout_2.addItem(spacerItem)
+        self.pushButton = QtWidgets.QPushButton(self.widget)
+        self.pushButton.setObjectName("pushButton")
+        self.verticalLayout_2.addWidget(self.pushButton)
+        self.horizontalLayout.addWidget(self.widget)
+        self.verticalLayout.addWidget(self.ControlPanelLayoutWidget)
+        self.scrollArea = QtWidgets.QScrollArea(self.widget_2)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.scrollArea.sizePolicy().hasHeightForWidth())
+        self.scrollArea.setSizePolicy(sizePolicy)
+        self.scrollArea.setFrameShape(QtWidgets.QFrame.Box)
+        self.scrollArea.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setObjectName("scrollArea")
+        self.scrollAreaWidgetContents = QtWidgets.QWidget()
+        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 785, 444))
+        self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
+        self.scrollArea.setWidget(self.scrollAreaWidgetContents)
+        self.verticalLayout.addWidget(self.scrollArea)
+        MainWindow.setCentralWidget(self.centralwidget)
+        self.menubar = QtWidgets.QMenuBar(MainWindow)
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 822, 22))
+        self.menubar.setObjectName("menubar")
+        MainWindow.setMenuBar(self.menubar)
+        self.statusbar = QtWidgets.QStatusBar(MainWindow)
+        self.statusbar.setObjectName("statusbar")
+        MainWindow.setStatusBar(self.statusbar)
+
+        self.retranslateUi(MainWindow)
+        QtCore.QMetaObject.connectSlotsByName(MainWindow)
+
+    def retranslateUi(self, MainWindow):
+        _translate = QtCore.QCoreApplication.translate
+        MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
+        self.FileDrop.setTitle(_translate("MainWindow", "Drag/Drop Files"))
+        self.CheckData.setToolTip(_translate("MainWindow", "Runs Minimal Checks on the Data"))
+        self.CheckData.setText(_translate("MainWindow", "Check Data"))
+        self.LaunchBidsCreator.setText(_translate("MainWindow", "Open BIDS creator"))
+        self.pushButton.setText(_translate("MainWindow", "Clear All Entries"))
+    
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()        
+        
+    def dropEvent(self, event):
+        self.meg_files = [url.toLocalFile() for url in event.mimeData().urls()]
+        print(f"Dropped: {', '.join(self.meg_files)}")
+    #     self.populate_file_tiles()
+        
+    # def populate_file_tiles(self):
+    #     'test'
+    #     for dset in self.meg_files:
+# for i in range(20):
+#     label = QLabel(f"Item {i+1}")
+#     layout.addWidget(label)
+        
+        
+
+#%%
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    MainWindow = QtWidgets.QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(MainWindow)
+    MainWindow.show()
+    sys.exit(app.exec_())
