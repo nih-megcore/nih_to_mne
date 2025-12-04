@@ -11,6 +11,11 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 class Ui_InputDatasetTile(object):
+    # def __init__(self, fname=None):
+    #     self.setupUi()
+    #     self.
+        
+    
     def setupUi(self, InputDatasetTile):
         InputDatasetTile.setObjectName("InputDatasetTile")
         InputDatasetTile.resize(761, 121)
@@ -240,7 +245,7 @@ class Ui_MainWindow(object):
         self.scrollArea.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setObjectName("scrollArea")
-        self.scrollAreaWidgetContents = QtWidgets.QWidget()
+        self.scrollAreaWidgetContents = QtWidgets.QListWidget()
         self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 785, 444))
         self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
         self.scrollArea.setWidget(self.scrollAreaWidgetContents)
@@ -273,14 +278,17 @@ class Ui_MainWindow(object):
     def dropEvent(self, event):
         self.meg_files = [url.toLocalFile() for url in event.mimeData().urls()]
         print(f"Dropped: {', '.join(self.meg_files)}")
-    #     self.populate_file_tiles()
+        self.populate_file_tiles()
         
-    # def populate_file_tiles(self):
-    #     'test'
-    #     for dset in self.meg_files:
-# for i in range(20):
-#     label = QLabel(f"Item {i+1}")
-#     layout.addWidget(label)
+    def populate_file_tiles(self):
+        for i in self.meg_files: 
+            print(i)
+            self.scrollAreaWidgetContents.addItem(i)
+            # self.scrollAreaWidgetContents.addItem(Ui_InputDatasetTile())
+
+
+# def test_populate_file_tiles():
+#     import
         
         
 
