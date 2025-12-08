@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>907</width>
-    <height>542</height>
+    <width>906</width>
+    <height>502</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -74,7 +74,7 @@
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_2">
              <item>
-              <widget class="QPushButton" name="CheckData">
+              <widget class="QPushButton" name="pb_CheckData">
                <property name="toolTip">
                 <string>Runs Minimal Checks on the Data</string>
                </property>
@@ -84,7 +84,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="LaunchBidsCreator">
+              <widget class="QPushButton" name="pb_LaunchBidsCreator">
                <property name="text">
                 <string>Open BIDS creator</string>
                </property>
@@ -107,7 +107,7 @@
               </spacer>
              </item>
              <item>
-              <widget class="QPushButton" name="pushButton">
+              <widget class="QPushButton" name="pb_DeleteAllEntries">
                <property name="text">
                 <string>Clear All Entries</string>
                </property>
@@ -141,8 +141,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>853</width>
-            <height>303</height>
+            <width>852</width>
+            <height>263</height>
            </rect>
           </property>
          </widget>
@@ -158,7 +158,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>907</width>
+     <width>906</width>
      <height>22</height>
     </rect>
    </property>
