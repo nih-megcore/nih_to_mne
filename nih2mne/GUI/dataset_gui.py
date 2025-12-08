@@ -10,7 +10,7 @@ Ui_InputDatasetTile - From Qt designer (converted without -x)
 
 """
 
-from nih2mne.GUI.templates.file_staging_gui import Ui_MainWindow
+from nih2mne.GUI.templates.file_staging_meg import Ui_MainWindow
 from nih2mne.GUI.templates.input_meg_dset_tile_listWidgetBase import \
     Ui_InputDatasetTile
 from PyQt5 import QtWidgets, QtCore, QtGui
@@ -28,6 +28,8 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         self.ui.FileDrop.dragEnterEvent = self.dragEnterEvent
         self.ui.FileDrop.dropEvent = self.dropEvent
         self.ui.pb_DeleteAllEntries.clicked.connect(self.clear_all_entries)
+
+        #### <<< 
         
         # This should have been part of UI design, but posthoc added
         self.ui.scrollAreaWidgetContents = QtWidgets.QListWidget()
@@ -35,7 +37,6 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         self.ui.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
         self.ui.scrollArea.setWidget(self.ui.scrollAreaWidgetContents)
         
-        #### <<<<
     
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -100,7 +101,29 @@ class InputDatasetTile(QtWidgets.QWidget):
         
         #self.procfile_list = #Get the files from home folder - match against taskname 
         #self.ui.ProcFileComboBox.addItems = maybe set this as a 
-        #self.ui.pushButton_TrigProcess.setText(
+        self.ui.pb_PlotTrig.clicked.connect(self.plot_trig)
+        self.ui.pb_PlotData.clicked.connect(self.plot_data)
+        self.ui.pb_FFT.clicked.connect(self.plot_fft)
+    
+    def plot_trig(self):
+        tmp_ = self.raw.copy()
+        tmp_.pick_types(misc=True, meg=False, eeg=False)
+        tmp_.load_data()
+        tmp_.plot()
+        
+    def plot_data(self):
+        tmp_ = self.raw.copy()
+        tmp_.pick_types(meg=True)
+        tmp_.load_data()
+        tmp_.plot()
+        
+    def plot_fft(self):
+        ## FUTURE -- REMOVE ZEROS from data before FFT 
+        tmp_ = self.raw.copy()
+        tmp_.pick_types(meg=True)
+        tmp_.load_data()
+        psd_ = tmp_.compute_psd(fmin=0, fmax=100)
+        psd_.plot()
   
 
 
@@ -111,16 +134,7 @@ class InputDatasetTile(QtWidgets.QWidget):
 
 if __name__ == "__main__":
     import sys
-    # app = QtWidgets.QApplication(sys.argv)
-    # MainWindow = QtWidgets.QMainWindow()
-    # ui = Ui_MainWindow()
-    # ui.setupUi(MainWindow)
-    # MainWindow.show()
-    # sys.exit(app.exec_())
-    
     app = QtWidgets.QApplication(sys.argv)
-    MainWindow = GUI_MainWindow() #QtWidgets.QMainWindow()
-    # ui = GUI_MainWindow()
-    # ui.setupUi(MainWindow)
+    MainWindow = GUI_MainWindow() 
     MainWindow.show()
     sys.exit(app.exec_())
