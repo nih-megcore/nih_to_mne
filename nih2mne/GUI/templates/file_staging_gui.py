@@ -10,8 +10,8 @@ Ui_InputDatasetTile - From Qt designer (converted without -x)
 
 """
 
-from nih2mne.GUI.templates.file_staging_gui import Ui_MainWindow
-from nih2mne.GUI.templates.input_meg_dset_tile_listWidgetBase import \
+from nih2mne.GUI.templates.test_file_staging_meg import Ui_MainWindow
+from nih2mne.GUI.templates.test_input_meg_dset_tile_listWidgetBase import \
     Ui_InputDatasetTile
 from PyQt5 import QtWidgets, QtCore, QtGui
 import os, os.path as op
@@ -27,7 +27,6 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         ####  Setup addon features >>>
         self.ui.FileDrop.dragEnterEvent = self.dragEnterEvent
         self.ui.FileDrop.dropEvent = self.dropEvent
-        self.ui.pb_DeleteAllEntries.clicked.connect(self.clear_all_entries)
         
         # This should have been part of UI design, but posthoc added
         self.ui.scrollAreaWidgetContents = QtWidgets.QListWidget()
@@ -57,9 +56,12 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
             
     def clear_all_entries(self):
         '''Delete all of the entries in the dataset list'''
-        contents = self.ui.scrollAreaWidgetContents
-        while contents.count():
-            item = contents.takeItem(0)
+        layout = self.ui.scrollAreaWidgetContents.layout()
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
         
     def delete_tile(self):
         '''Takes an input from the child tile in list and removes the tile
