@@ -20,6 +20,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 import os, os.path as op
 import mne
 import glob
+import pandas as pd
 
 TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
 LOG_FILE_LOC = op.expanduser(f'~/meglogs/')
@@ -98,8 +99,7 @@ class InputDatasetTile(QtWidgets.QWidget):
             date = 'NA'
             run = 'NA'
             
-        self.raw = mne.io.read_raw_ctf(fname, preload=False, 
-                                  system_clock='ignore')
+        self.load_meg()
         self.taskname = taskname
         
         self.ui.ReadoutFilename.setText(f'File: {base_fname}')
@@ -117,7 +117,35 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.ui.pb_PlotData.clicked.connect(self.plot_data)
         self.ui.pb_FFT.clicked.connect(self.plot_fft)
         
+        ## Info 
+        self.set_events_label()
+        self.set_status_label() 
         
+    def load_meg(self):
+        self.raw = mne.io.read_raw_ctf(self.fname, preload=False, 
+                                  system_clock='ignore')
+        
+        
+    def set_status_label(self):
+        '''Look for Markerfile
+        Movement
+        Early Termination
+        Default head trans
+        Zeros
+        '''
+        status_text = ''
+        if glob.glob(op.join(self.fname, 'MarkerFile.mrk')).__len__()==0:
+            status_text+='No MrkFile! '
+        self.ui.lbl_Status.setText(f'STATUS: {status_text}')
+        
+    def set_events_label(self):
+        evt_dframe = pd.DataFrame(self.raw.annotations)
+        if len(evt_dframe) != 0:
+            val_counts = evt_dframe.description.value_counts()
+            evt_text = ' '.join([f"{k}:({v})" for k, v in val_counts.items()])
+            self.ui.lbl_EventInfo.setText(f'EVENTS: {evt_text}')
+        else:
+            self.ui.lbl_EventInfo.setText(f'EVENTS: NONE')
     
     def plot_trig(self):
         tmp_ = self.raw.copy()
@@ -155,6 +183,9 @@ class InputDatasetTile(QtWidgets.QWidget):
         current_trigfile = self.ui.ProcFileComboBox.currentText()
         cmd = f'{self.trigfile_dir}/{current_trigfile} {self.fname}'
         subprocess.run(cmd.split())  #Add errror processing
+        self.load_meg() #Reload to get the newly created annotations
+        self.set_events_label()
+        self.set_status_label() 
   
 
 
