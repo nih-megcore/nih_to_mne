@@ -43,6 +43,7 @@ testing = ['datalad','pytest','pygit2']
 "trigger_code_gui.py"='nih2mne.GUI.trigger_code_gui:cmdline_main'
 "calc_hm.py"='nih2mne.utilities.calc_hm:entrypoint'
 "make_meg_bids_gui.py"='nih2mne.GUI.make_meg_bids_gui:cmdline'
+"meg_dataset_gui.py"='nih2mne.GUI.dataset_gui:main'
 
 
 [tool.setuptools.packages.find]

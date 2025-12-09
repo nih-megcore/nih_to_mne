@@ -146,6 +146,17 @@ class InputDatasetTile(QtWidgets.QWidget):
             self.head_movement = 'No hz.ds'
         elif not _has_hz2:
             self.head_movement = 'No hz2.ds'
+    
+    # def _check_trailing_zeros(self):
+    #     tmp_ = self.raw.copy()
+    #     max_time_ = tmp_.times[-1]
+    #     if max_time_ < 10:
+    #         return None
+    #     tmp_.crop(max_time_ - 10, None) #Pull just the last 10 seconds
+    #     if 
+    #     idx_crop = np.where((np.diff(np.convolve(np.ones(20),data==0)))==1)[0][0]
+        
+    #     pass
         
         
     def set_status_label(self):
@@ -168,6 +179,7 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.ui.lbl_Status.setText(f'STATUS: {status_text}')
         
     def set_events_label(self):
+        'Extract the annotations and list the counts in EventInfo'
         evt_dframe = pd.DataFrame(self.raw.annotations)
         if len(evt_dframe) != 0:
             val_counts = evt_dframe.description.value_counts()
@@ -222,14 +234,14 @@ class InputDatasetTile(QtWidgets.QWidget):
   
 
 
-
-
-
-
-
-if __name__ == "__main__":
+def main():
     import sys
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = GUI_MainWindow() 
     MainWindow.show()
     sys.exit(app.exec_())
+
+
+if __name__ == "__main__":
+    main()
+
