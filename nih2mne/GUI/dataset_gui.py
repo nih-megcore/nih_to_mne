@@ -8,6 +8,9 @@ Created on Mon Dec  8 14:39:56 2025
 Ui_MainWindow - From QT designer
 Ui_InputDatasetTile - From Qt designer (converted without -x)
 
+
+#make glob case insensitive -- for the task match on trigproc files
+
 """
 
 from nih2mne.GUI.templates.file_staging_meg import Ui_MainWindow
@@ -16,6 +19,10 @@ from nih2mne.GUI.templates.input_meg_dset_tile_listWidgetBase import \
 from PyQt5 import QtWidgets, QtCore, QtGui
 import os, os.path as op
 import mne
+import glob
+
+TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
+LOG_FILE_LOC = op.expanduser(f'~/meglogs/')
 
 
 class GUI_MainWindow(QtWidgets.QMainWindow):
@@ -77,6 +84,7 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.ui.setupUi(self)
         
         # Determine filename info
+        self.fname = fname
         base_fname = op.basename(fname)
         _splits = base_fname.split('_')
         if len(_splits)==4:
@@ -92,18 +100,24 @@ class InputDatasetTile(QtWidgets.QWidget):
             
         self.raw = mne.io.read_raw_ctf(fname, preload=False, 
                                   system_clock='ignore')
+        self.taskname = taskname
         
         self.ui.ReadoutFilename.setText(f'File: {base_fname}')
-        self.ui.ReadoutSubjid.setText(f'Subjid: {subjid}')
+        self.ui.ReadoutSubjid.setText(f'  Subjid: {subjid}')
         self.ui.ReadoutTaskname.setText(f'Task: {taskname}')
-        self.ui.label_Duration.setText(f'Duration: {round(self.raw.times[-1])}')
+        self.ui.label_Duration.setText(f'Duration: {round(self.raw.times[-1])}s')
         # self.ui.pushButton = [Delete entry] THIS is Delete
         
-        #self.procfile_list = #Get the files from home folder - match against taskname 
-        #self.ui.ProcFileComboBox.addItems = maybe set this as a 
+        ## Process Triggers
+        self.fill_procfile_list()
+        self.ui.pb_TrigProcess.clicked.connect(self.trigprocess)
+        
+        ## Plotting
         self.ui.pb_PlotTrig.clicked.connect(self.plot_trig)
         self.ui.pb_PlotData.clicked.connect(self.plot_data)
         self.ui.pb_FFT.clicked.connect(self.plot_fft)
+        
+        
     
     def plot_trig(self):
         tmp_ = self.raw.copy()
@@ -124,6 +138,23 @@ class InputDatasetTile(QtWidgets.QWidget):
         tmp_.load_data()
         psd_ = tmp_.compute_psd(fmin=0, fmax=100)
         psd_.plot()
+    
+    def fill_procfile_list(self):
+        if op.exists(TRIG_FILE_LOC):
+            self.trigfile_dir = TRIG_FILE_LOC
+        else:
+            self.trigfile_dir = None
+        
+        task_trig_files = glob.glob(op.join(self.trigfile_dir, self.taskname.lower() + '*'))
+        if len(task_trig_files) > 0:
+            _tt_files = [op.basename(i) for i in task_trig_files]
+            self.ui.ProcFileComboBox.addItems(_tt_files)
+    
+    def trigprocess(self):
+        import subprocess
+        current_trigfile = self.ui.ProcFileComboBox.currentText()
+        cmd = f'{self.trigfile_dir}/{current_trigfile} {self.fname}'
+        subprocess.run(cmd.split())  #Add errror processing
   
 
 
