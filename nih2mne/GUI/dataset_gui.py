@@ -21,6 +21,8 @@ import os, os.path as op
 import mne
 import glob
 import pandas as pd
+from nih2mne.utilities.calc_hm import get_localizer_dframe, compute_movement
+import shutil
 
 TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
 LOG_FILE_LOC = op.expanduser(f'~/meglogs/')
@@ -117,25 +119,51 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.ui.pb_PlotData.clicked.connect(self.plot_data)
         self.ui.pb_FFT.clicked.connect(self.plot_fft)
         
+        ## Compute status info
+        self._compute_movement()
+        
         ## Info 
         self.set_events_label()
         self.set_status_label() 
         
     def load_meg(self):
+        ''' Added as a method, so reloading data (updating annotation) can be done easily'''
         self.raw = mne.io.read_raw_ctf(self.fname, preload=False, 
                                   system_clock='ignore')
+    
+    def _compute_movement(self):
+        if shutil.which('calcHeadPos') == None:
+            self.head_movement = 'NoCTFCode'
+            return
+        _has_hz = op.exists(op.join(self.fname, 'hz.ds'))
+        _has_hz2 = op.exists(op.join(self.fname, 'hz2.ds'))
+        if _has_hz and _has_hz2:
+            dframe = get_localizer_dframe(self.fname)
+            move_dict = compute_movement(dframe)
+            self.head_movement = move_dict['Max']
+        elif not _has_hz:
+            self.head_movement = 'No hz.ds'
+        elif not _has_hz2:
+            self.head_movement = 'No hz2.ds'
         
         
     def set_status_label(self):
-        '''Look for Markerfile
-        Movement
+        '''
         Early Termination
         Default head trans
         Zeros
         '''
+        from numbers import Number
         status_text = ''
         if glob.glob(op.join(self.fname, 'MarkerFile.mrk')).__len__()==0:
-            status_text+='No MrkFile! '
+            status_text+='No MrkFile! : '
+        
+        # Add movement info    
+        if isinstance(self.head_movement, Number):
+            _mvt_text = f'MVT={self.head_movement:.2f}cm'
+        else:
+            _mvt_text = self.head_movement
+        status_text+=_mvt_text + ': '
         self.ui.lbl_Status.setText(f'STATUS: {status_text}')
         
     def set_events_label(self):
