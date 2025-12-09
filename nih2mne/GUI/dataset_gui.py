@@ -23,6 +23,7 @@ import glob
 import pandas as pd
 from nih2mne.utilities.calc_hm import get_localizer_dframe, compute_movement
 import shutil
+import copy
 
 TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
 LOG_FILE_LOC = op.expanduser(f'~/meglogs/')
@@ -129,7 +130,7 @@ class InputDatasetTile(QtWidgets.QWidget):
     def load_meg(self):
         ''' Added as a method, so reloading data (updating annotation) can be done easily'''
         self.raw = mne.io.read_raw_ctf(self.fname, preload=False, 
-                                  system_clock='ignore')
+                                  system_clock='ignore', clean_names=True)
     
     def _compute_movement(self):
         if shutil.which('calcHeadPos') == None:
@@ -178,8 +179,12 @@ class InputDatasetTile(QtWidgets.QWidget):
     def plot_trig(self):
         tmp_ = self.raw.copy()
         tmp_.pick_types(misc=True, meg=False, eeg=False)
+        if 'SCLK01' in tmp_.ch_names:
+            _chs = copy.copy(tmp_.ch_names)
+            _chs.remove('SCLK01')
+            tmp_.pick(_chs)
         tmp_.load_data()
-        tmp_.plot()
+        tmp_.plot(scalings=10) #10 was empirically determined
         
     def plot_data(self):
         tmp_ = self.raw.copy()
