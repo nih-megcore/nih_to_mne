@@ -24,6 +24,7 @@ import pandas as pd
 from nih2mne.utilities.calc_hm import get_localizer_dframe, compute_movement
 import shutil
 import copy
+import numpy as np
 
 TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
 LOG_FILE_LOC = op.expanduser(f'~/meglogs/')
@@ -147,23 +148,23 @@ class InputDatasetTile(QtWidgets.QWidget):
         elif not _has_hz2:
             self.head_movement = 'No hz2.ds'
     
-    # def _check_trailing_zeros(self):
-    #     tmp_ = self.raw.copy()
-    #     max_time_ = tmp_.times[-1]
-    #     if max_time_ < 10:
-    #         return None
-    #     tmp_.crop(max_time_ - 10, None) #Pull just the last 10 seconds
-    #     if 
-    #     idx_crop = np.where((np.diff(np.convolve(np.ones(20),data==0)))==1)[0][0]
-        
-    #     pass
+    def _check_trailing_zeros(self):
+        tmp_ = self.raw.copy().pick('meg')
+        max_time_ = tmp_.times[-1]
+        if max_time_ < 10:
+            return None
+        tmp_.crop(max_time_ - 10, None) #Pull just the last 10 seconds
+        tmp_.load_data()
+        test_vals = np.ones(tmp_._data.shape) * tmp_._data
+        if (test_vals).sum() == 0.0:
+            self.early_termination = True
+        else:
+            self.early_termination = False
         
         
     def set_status_label(self):
         '''
-        Early Termination
         Default head trans
-        Zeros
         '''
         from numbers import Number
         status_text = ''
@@ -176,6 +177,14 @@ class InputDatasetTile(QtWidgets.QWidget):
         else:
             _mvt_text = self.head_movement
         status_text+=_mvt_text + ': '
+        
+        # Check early termination
+        self._check_trailing_zeros()
+        if self.early_termination:
+            _term_text = f'Early Termination Detected: '
+        else:
+            _term_text = ''
+        status_text+=_term_text
         self.ui.lbl_Status.setText(f'STATUS: {status_text}')
         
     def set_events_label(self):
