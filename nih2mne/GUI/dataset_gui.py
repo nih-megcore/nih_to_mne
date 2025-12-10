@@ -10,6 +10,7 @@ Ui_InputDatasetTile - From Qt designer (converted without -x)
 
 
 #make glob case insensitive -- for the task match on trigproc files
+Make the trigger file locations environmental overidable
 
 """
 
@@ -22,12 +23,15 @@ import mne
 import glob
 import pandas as pd
 from nih2mne.utilities.calc_hm import get_localizer_dframe, compute_movement
+from nih2mne.utilities.data_crop_wrapper import get_term_time
 import shutil
 import copy
 import numpy as np
 
+# Initialize the locations of the trigger files
 TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
 LOG_FILE_LOC = op.expanduser(f'~/meglogs/')
+if not op.exists(TRIG_FILE_LOC):  op.makedirs(TRIG_FILE_LOC)
 
 
 class GUI_MainWindow(QtWidgets.QMainWindow):
@@ -214,10 +218,17 @@ class InputDatasetTile(QtWidgets.QWidget):
         tmp_.plot()
         
     def plot_fft(self):
-        ## FUTURE -- REMOVE ZEROS from data before FFT 
+        'Generate and plot fft - remove early termination zeros if present'
         tmp_ = self.raw.copy()
         tmp_.pick_types(meg=True)
         tmp_.load_data()
+        # Remove the excess zeros produced by early termination
+        if self.early_termination:
+            data = tmp_._data
+            sfreq = tmp_.info['sfreq']
+            test_channel_idx = 100
+            _, term_time = get_term_time(data[test_channel_idx,:], sfreq)
+            tmp_.crop(0, term_time)
         psd_ = tmp_.compute_psd(fmin=0, fmax=100)
         psd_.plot()
     
