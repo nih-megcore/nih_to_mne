@@ -101,6 +101,14 @@ class InputDatasetTile(QtWidgets.QWidget):
             taskname = _splits[1]
             date = _splits[2]
             run = _splits[3].replace('.ds','')
+        elif _splits[0].startswith('sub-'):
+            subjid = _splits[0].replace('sub-','')
+            taskname = fname.split('task-')[-1].split('_')[0]
+            date = 'NA'
+            if 'run-' in fname:
+                run = fname.split('run-')[-1].split('_')[0]
+            else:
+                run = 'NA'
         else:
             subjid = 'NA'
             taskname = 'NA'
@@ -168,7 +176,8 @@ class InputDatasetTile(QtWidgets.QWidget):
         
     def set_status_label(self):
         '''
-        Default head trans
+        Set information on the status bar
+        # check for default head transform
         '''
         from numbers import Number
         status_text = ''
@@ -255,6 +264,25 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.set_events_label()
         self.set_status_label() 
   
+# def assess_ram():
+#     if 'SLURM_JOB_ID' in os.environ:
+#         _slurm = True
+#     else:
+#         _slurm = False
+#     if _slurm: 
+#         memG = os.environ.get('SLURM_MEM_PER_NODE')  
+#     else:
+#         import psutil
+#         mem = psutil.virtual_memory()
+#         avail_mem = mem.available
+        
+        
+        
+        
+    
+    
+    
+
 
 
 def main():
