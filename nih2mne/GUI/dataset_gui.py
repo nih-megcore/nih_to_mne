@@ -28,6 +28,7 @@ import shutil
 import copy
 import numpy as np
 
+
 # Initialize the locations of the trigger files
 TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
 LOG_FILE_LOC = op.expanduser(f'~/meglogs/')
@@ -192,6 +193,7 @@ class InputDatasetTile(QtWidgets.QWidget):
             self.early_termination = True
         else:
             self.early_termination = False
+        del tmp_
         
         
     def set_status_label(self):
@@ -239,8 +241,11 @@ class InputDatasetTile(QtWidgets.QWidget):
             tmp_.pick(_chs)
         tmp_.load_data()
         tmp_.plot(scalings=10) #10 was empirically determined
-        
+    
     def plot_data(self):
+        if not _can_load(self.fname): 
+            self.pb_PlotData.setText(self.pb_PlotData + ': Not enough RAM')
+            return 
         tmp_ = self.raw.copy()
         tmp_.pick_types(meg=True)
         tmp_.load_data()
@@ -248,6 +253,10 @@ class InputDatasetTile(QtWidgets.QWidget):
         
     def plot_fft(self):
         'Generate and plot fft - remove early termination zeros if present'
+        # Check if data can fit in RAM
+        if not _can_load(self.fname): 
+            self.pb_FFT.setText(self.pb_FFT.text + ': Not enough RAM')
+            return 
         tmp_ = self.raw.copy()
         tmp_.pick_types(meg=True)
         tmp_.load_data()
@@ -285,7 +294,7 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.set_status_label() 
     
         
-        
+# Helper functions        
   
 def _assess_ram():
     if 'SLURM_JOB_ID' in os.environ:
@@ -328,12 +337,6 @@ def _can_load(fname):
         return False
         
         
-        
-        
-    
-    
-    
-
 
 
 def main():
