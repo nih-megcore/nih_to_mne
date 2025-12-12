@@ -244,7 +244,7 @@ class InputDatasetTile(QtWidgets.QWidget):
     
     def plot_data(self):
         if not _can_load(self.fname): 
-            self.pb_PlotData.setText(self.pb_PlotData + ': Not enough RAM')
+            self.ui.pb_PlotData.setText(self.ui.pb_PlotData + ': Not enough RAM')
             return 
         tmp_ = self.raw.copy()
         tmp_.pick_types(meg=True)
@@ -255,7 +255,7 @@ class InputDatasetTile(QtWidgets.QWidget):
         'Generate and plot fft - remove early termination zeros if present'
         # Check if data can fit in RAM
         if not _can_load(self.fname): 
-            self.pb_FFT.setText(self.pb_FFT.text + ': Not enough RAM')
+            self.ui.pb_FFT.setText(self.ui.pb_FFT.text + ': Not enough RAM')
             return 
         tmp_ = self.raw.copy()
         tmp_.pick_types(meg=True)
