@@ -44,6 +44,7 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         self.ui.FileDrop.dragEnterEvent = self.dragEnterEvent
         self.ui.FileDrop.dropEvent = self.dropEvent
         self.ui.pb_DeleteAllEntries.clicked.connect(self.clear_all_entries)
+        self.ui.pb_LaunchBidsCreator.clicked.connect(self.open_bids_creator)
 
         #### <<< 
         
@@ -81,6 +82,23 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
     def delete_tile(self):
         '''Takes an input from the child tile in list and removes the tile
         from the tile_list'''
+    
+    def get_fnames_from_list(self):
+        '''Return a list of all filenames that have been dropped into list'''
+        fname_list = []
+        listwidget = self.ui.scrollAreaWidgetContents
+        for i in range(listwidget.count()):
+            item = listwidget.item(i)
+            itemWidget = listwidget.itemWidget(item)
+            fname_list.append(itemWidget.fname)
+        return fname_list
+    
+    def open_bids_creator(self):
+        fnames = self.get_fnames_from_list()
+        
+        
+            
+                       
 
 
 
@@ -139,6 +157,8 @@ class InputDatasetTile(QtWidgets.QWidget):
         ## Info 
         self.set_events_label()
         self.set_status_label() 
+        
+        
         
     def load_meg(self):
         ''' Added as a method, so reloading data (updating annotation) can be done easily'''
@@ -263,18 +283,49 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.load_meg() #Reload to get the newly created annotations
         self.set_events_label()
         self.set_status_label() 
+    
+        
+        
   
-# def assess_ram():
-#     if 'SLURM_JOB_ID' in os.environ:
-#         _slurm = True
-#     else:
-#         _slurm = False
-#     if _slurm: 
-#         memG = os.environ.get('SLURM_MEM_PER_NODE')  
-#     else:
-#         import psutil
-#         mem = psutil.virtual_memory()
-#         avail_mem = mem.available
+def _assess_ram():
+    if 'SLURM_JOB_ID' in os.environ:
+        _slurm = True
+    else:
+        _slurm = False
+        
+    if _slurm: 
+        _jobid = os.environ.get('SLURM_JOBID')
+        _uid = os.environ.get('SLURM_JOB_UID')
+        usage_f = f'/sys/fs/cgroup/memory/slurm/uid_{_uid}/job_{_jobid}/memory.memsw.usage_in_bytes'
+        lim_f = f'/sys/fs/cgroup/memory/slurm/uid_{_uid}/job_{_jobid}/memory.limit_in_bytes'
+        
+        with open(usage_f) as f: _usage=f.readline().replace("\n","")
+        with open(lim_f) as f: _lim=f.readline().replace("\n","")
+        
+        avail_mem = int(_lim) - int(_usage)
+    else:
+        import psutil
+        mem = psutil.virtual_memory()
+        avail_mem = mem.available
+    return avail_mem
+
+def _get_folder_size(folder_path):
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(folder_path):
+        for filename in filenames:
+            filepath = os.path.join(dirpath, filename)
+            # Skip if it's a symbolic link
+            if not os.path.islink(filepath):
+                total_size += os.path.getsize(filepath)
+    return total_size
+
+def _can_load(fname):
+    f_size = _get_folder_size(fname) #.ds meg files are directories
+    if _assess_ram() > f_size:
+        return True
+    else:
+        print('Cannot load due to RAM size limitations')
+        return False
         
         
         
