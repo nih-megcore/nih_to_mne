@@ -18,6 +18,7 @@ from nih2mne.GUI.templates.file_staging_meg import Ui_MainWindow
 from nih2mne.GUI.templates.input_meg_dset_tile_listWidgetBase import \
     Ui_InputDatasetTile
 from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt5.QtCore import pyqtSignal
 import os, os.path as op
 import mne
 import glob
@@ -68,6 +69,7 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
     def populate_file_tiles(self):
         for i in self.meg_files: 
             _tmp_tile = InputDatasetTile(fname=i)
+            _tmp_tile.close_clicked.connect(self.handle_close_request)
             item = QtWidgets.QListWidgetItem()
             item.setSizeHint(_tmp_tile.sizeHint())
             self.ui.scrollAreaWidgetContents.addItem(item)
@@ -79,10 +81,6 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         contents = self.ui.scrollAreaWidgetContents
         while contents.count():
             item = contents.takeItem(0)
-        
-    def delete_tile(self):
-        '''Takes an input from the child tile in list and removes the tile
-        from the tile_list'''
     
     def get_fnames_from_list(self):
         '''Return a list of all filenames that have been dropped into list'''
@@ -96,14 +94,24 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
     
     def open_bids_creator(self):
         fnames = self.get_fnames_from_list()
+    
+    def handle_close_request(self, widget):
+        # Find and remove the item
+        item_count = self.ui.scrollAreaWidgetContents.count()
+        for i in range(item_count):
+            item = self.ui.scrollAreaWidgetContents.item(i)
+            print(type(item))
+            if self.ui.scrollAreaWidgetContents.itemWidget(item) == widget:
+                self.ui.scrollAreaWidgetContents.takeItem(i)
+                print(f"Parent removed item at row {i}")
+                break
         
         
-            
-                       
-
 
 
 class InputDatasetTile(QtWidgets.QWidget):
+    close_clicked = pyqtSignal(object)
+    
     def __init__(self, parent=None, fname=None):
         super().__init__(parent)
         
@@ -159,6 +167,8 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.set_events_label()
         self.set_status_label() 
         
+        ## Remove tile
+        self.ui.pb_DeleteTile.clicked.connect(lambda: self.close_clicked.emit(self))
         
         
     def load_meg(self):
