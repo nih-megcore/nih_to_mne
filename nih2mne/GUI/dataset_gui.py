@@ -241,6 +241,7 @@ class InputDatasetTile(QtWidgets.QWidget):
             tmp_.pick(_chs)
         tmp_.load_data()
         tmp_.plot(scalings=10) #10 was empirically determined
+        del tmp_
     
     def plot_data(self):
         if not _can_load(self.fname): 
@@ -250,6 +251,7 @@ class InputDatasetTile(QtWidgets.QWidget):
         tmp_.pick_types(meg=True)
         tmp_.load_data()
         tmp_.plot()
+        del tmp_
         
     def plot_fft(self):
         'Generate and plot fft - remove early termination zeros if present'
@@ -269,6 +271,7 @@ class InputDatasetTile(QtWidgets.QWidget):
             tmp_.crop(0, term_time)
         psd_ = tmp_.compute_psd(fmin=0, fmax=100)
         psd_.plot()
+        del tmp_, psd_
     
     def fill_procfile_list(self):
         if op.exists(TRIG_FILE_LOC):
