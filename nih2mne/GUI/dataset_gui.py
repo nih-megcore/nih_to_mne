@@ -68,13 +68,16 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         
     def populate_file_tiles(self):
         for i in self.meg_files: 
+            # Instantiate a filename tile
             _tmp_tile = InputDatasetTile(fname=i)
+            # Add signal propagation from tile to MainWindow class
             _tmp_tile.close_clicked.connect(self.handle_close_request)
+            
+            # Do the weird Qt List Item/ItemWidget add
             item = QtWidgets.QListWidgetItem()
             item.setSizeHint(_tmp_tile.sizeHint())
             self.ui.scrollAreaWidgetContents.addItem(item)
             self.ui.scrollAreaWidgetContents.setItemWidget(item, _tmp_tile)
-            # self.scrollAreaWidgetContents.addItem(Ui_InputDatasetTile())
             
     def clear_all_entries(self):
         '''Delete all of the entries in the dataset list'''
@@ -96,7 +99,8 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         fnames = self.get_fnames_from_list()
     
     def handle_close_request(self, widget):
-        # Find and remove the item
+        '''If file tile "emits" a close signal, this will trigger a loop over
+        filenames to identify the widget that produced the close signal'''
         item_count = self.ui.scrollAreaWidgetContents.count()
         for i in range(item_count):
             item = self.ui.scrollAreaWidgetContents.item(i)
@@ -149,7 +153,6 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.ui.ReadoutSubjid.setText(f'  Subjid: {subjid}')
         self.ui.ReadoutTaskname.setText(f'Task: {taskname}')
         self.ui.label_Duration.setText(f'Duration: {round(self.raw.times[-1])}s')
-        # self.ui.pushButton = [Delete entry] THIS is Delete
         
         ## Process Triggers
         self.fill_procfile_list()
