@@ -28,6 +28,7 @@ from nih2mne.utilities.data_crop_wrapper import get_term_time
 import shutil
 import copy
 import numpy as np
+from nih2mne.GUI.templates.BIDS_creator_gui import Ui_MainWindow as BIDS_Ui_MainWindow
 
 
 # Initialize the locations of the trigger files
@@ -97,6 +98,17 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
     
     def open_bids_creator(self):
         fnames = self.get_fnames_from_list()
+        print('Opening bids app')
+        self._bids_window_open()
+    
+    def _bids_window_open(self):
+        '''Implement the logic to create and maintain a second main window'''
+        self.BidsMainWindow = QtWidgets.QMainWindow()
+        self.bids_gui = BIDS_Ui_MainWindow()
+        self.bids_gui.setupUi(self.BidsMainWindow)
+        self.BidsMainWindow.show()
+        
+        
     
     def handle_close_request(self, widget):
         '''If file tile "emits" a close signal, this will trigger a loop over
