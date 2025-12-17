@@ -61,14 +61,30 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.te_bids_dir.textChanged.connect(self._update_bids_dir)
         self.ui.te_bids_session.textChanged.connect(self._update_bids_ses)
         
-        ### Connect buttons 
+        ### Connect buttons    ----- FIX commented items -----
         self.ui.pb_Anonymize.clicked.connect(self._action_pb_anonymize)   #flipflop toggle
-        
+        # self.ui.pb_BIDS_dir.clicked.connect(self._action_pb_BIDS_dir)
         self.ui.pb_print_cmd.clicked.connect(self._action_print_cmd)
+        # self.ui.pb_BRIKfname.clicked.connect(self._action_pb_BRIKfname)
+        # self.ui.pb_BrainsightElec.clicked.connect(self._action_pb_BrainsightElec)
+        # self.ui.pb_BrainsightMRI.clicked.connect(self._action_pb_BrainsightMRI)
+        # self.ui.pb_run.clicked.connect(self._action_pb_run)
         
         ### Connect checkboxes
+        self.ui.cb_crop_zeros.stateChanged.connect(self._action_cb_crop_zeros)
+        self.ui.cb_emptyroom.stateChanged.connect(self._action_cb_emptyroom)
         
-        
+    def _action_cb_emptyroom(self):
+        if self.ui.cb_emptyroom.checkState() == 2:
+            self.opts['include_empty_room'] = True
+        else:
+            self.opts['include_empty_room'] = False
+
+    def _action_cb_crop_zeros(self):
+        if self.ui.cb_crop_zeros.checkState() == 2:
+            self.opts['crop_zeros'] = True
+        else:
+            self.opts['crop_zeros'] = False
     
     def _action_print_cmd(self):
         print(self.opts)
@@ -131,7 +147,10 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
 #         self.update_opts(opts=write_opts)
 # ##############3 << 
         
-        
+app = QtWidgets.QApplication(sys.argv)
+MainWindow = QtWidgets.QMainWindow()
+ui = BIDS_MainWindow()
+ui.show()       
         
         
         
