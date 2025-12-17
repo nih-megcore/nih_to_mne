@@ -33,8 +33,8 @@ from nih2mne.utilities.data_crop_wrapper import get_term_time
 import shutil
 import copy
 import numpy as np
-from nih2mne.GUI.templates.BIDS_creator_gui import Ui_MainWindow as BIDS_Ui_MainWindow
-
+from nih2mne.GUI.templates.bids_creator_gui_control_functions \
+    import BIDS_MainWindow as BIDS_Ui_MainWindow
 
 # Initialize the locations of the trigger files
 TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
@@ -106,14 +106,12 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         fnames = self.get_fnames_from_list()
         print('Opening bids app')
         self._bids_window_open()
-        self.bids_gui.list_fname_conversion.addItems(fnames)
+        self.bids_gui.ui.list_fname_conversion.addItems(fnames)
     
     def _bids_window_open(self):
         '''Implement the logic to create and maintain a second main window'''
-        self.BidsMainWindow = QtWidgets.QMainWindow()
         self.bids_gui = BIDS_Ui_MainWindow()
-        self.bids_gui.setupUi(self.BidsMainWindow)
-        self.BidsMainWindow.show()
+        self.bids_gui.show()
         
     def handle_close_request(self, widget):
         '''If file tile "emits" a close signal, this will trigger a loop over
@@ -127,15 +125,6 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
                 print(f"Parent removed item at row {i}")
                 break
         
-# class BidsInputInfo():
-#     '''Collect all of the information needed to run the bids conversion'''
-#     def __init__(self, meg_datasets=[], meg_hash='', bids_dir='', 
-#                  bids_session=1, anonymize=False, ):
-#         pass
-    
-        
-
-
 class InputDatasetTile(QtWidgets.QWidget):
     close_clicked = pyqtSignal(object)
     

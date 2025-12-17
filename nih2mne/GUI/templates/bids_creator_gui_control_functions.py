@@ -58,7 +58,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                          crop_zeros=False,
                          include_empty_room=False
                          )
-
+        
         #### Fill out default text in text edit lines 
         self.ui.te_meghash.setPlainText(str(self.opts['meghash']))
         self.ui.te_BIDS_id.setPlainText(str(self.opts['bids_id']))
@@ -188,55 +188,17 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         return directory
     
         
-        
+ 
+# app = QtWidgets.QApplication(sys.argv)
+# MainWindow = QtWidgets.QMainWindow()
+# ui = BIDS_MainWindow()
+# ui.show()       
 
-# def _test():        
-#     #### <<<<<<<<< start of copy/paste
-#     self.anonymize = False
-#     self.ignore_mri_checks = False
-
-#     # Standard Entries
-#     self.bids_dir = op.join(os.getcwd(), 'bids_dir')
-#     self.meg_input_dir = None
-#     self.bids_session = 1
-#     self.subjid_input = None
-#     self.bids_id = None
-#     self.coreg = 'Brainsight'
-
-#     ## Afni Coreg:
-#     self.mri_brik = None
-
-#     ## Brainsight Coreg:
-#     self.mri_bsight = None
-#     self.mri_bsight_elec = None
-
-#     ## Optional Overrides:
-#     self.ignore_eroom = False
-#     self.autocrop_zeros = False
-#     self.freesurfer = None
-#     self.eventID_csv = None
-#     # Run standardize_eventID_list.py
-    
-#     self.config = config
-#     if config != False:
-#         write_opts = read_cfg(config)
-#         self.update_opts(opts=write_opts)
-# ##############3 << 
-        
-app = QtWidgets.QApplication(sys.argv)
-MainWindow = QtWidgets.QMainWindow()
-ui = BIDS_MainWindow()
-ui.show()       
-        
-        
-        
-        
-
-class test_BIDS_MainWindow():
-    def __init__(self):
-        app = QtWidgets.QApplication(sys.argv)
-        MainWindow = QtWidgets.QMainWindow()
-        ui = BIDS_MainWindow()
-        ui.show()
+# class test_BIDS_MainWindow():
+#     def __init__(self):
+#         app = QtWidgets.QApplication(sys.argv)
+#         MainWindow = QtWidgets.QMainWindow()
+#         ui = BIDS_MainWindow()
+#         ui.show()
     
     
