@@ -30,28 +30,118 @@ pb_run  #Run operation
 """
 from PyQt5 import QtCore, QtGui, QtWidgets
 from nih2mne.GUI.templates.BIDS_creator_gui import Ui_MainWindow
-
-
-app = QtWidgets.QApplication(sys.argv)
-MainWindow = QtWidgets.QMainWindow()
-ui = Ui_MainWindow()
-ui.setupUi(MainWindow)
-MainWindow.show()
-
+import sys
+import os, os.path as op
 
 class BIDS_MainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, meghash='None', bids_id='None', ):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         
-        ####  Setup addon features >>>
-        self.ui.FileDrop.dragEnterEvent = self.dragEnterEvent
-        self.ui.FileDrop.dropEvent = self.dropEvent
-        self.ui.pb_DeleteAllEntries.clicked.connect(self.clear_all_entries)
-        self.ui.pb_LaunchBidsCreator.clicked.connect(self.open_bids_creator)
+        # Collect all bids options in self.opts
+        self.opts = dict(anonymize=False, 
+                         meghash=meghash, 
+                         bids_id=bids_id,
+                         bids_dir=op.join(os.getcwd(), 'BIDS'),
+                         bids_session='1',
+                         crop_zeros=False,
+                         include_empty_room=False
+                         )
 
-
-class control_funcs():
-    def __init__(self):
+        #### Fill out default text in text edit lines 
+        self.ui.te_meghash.setPlainText(str(self.opts['meghash']))
+        self.ui.te_BIDS_id.setPlainText(str(self.opts['bids_id']))
+        self.ui.te_bids_dir.setPlainText(str(self.opts['bids_dir']))
+        self.ui.te_bids_session.setPlainText(str(self.opts['bids_session']))
         
+        ### Connect TextEdit lines
+        self.ui.te_meghash.textChanged.connect(self._update_meghash)
+        self.ui.te_BIDS_id.textChanged.connect(self._update_bids_id)
+        self.ui.te_bids_dir.textChanged.connect(self._update_bids_dir)
+        self.ui.te_bids_session.textChanged.connect(self._update_bids_ses)
+        
+        ### Connect buttons 
+        self.ui.pb_Anonymize.clicked.connect(self._action_pb_anonymize)   #flipflop toggle
+        
+        self.ui.pb_print_cmd.clicked.connect(self._action_print_cmd)
+        
+        ### Connect checkboxes
+        
+        
+    
+    def _action_print_cmd(self):
+        print(self.opts)
+        
+    def _update_bids_dir(self):
+        self.opts['bids_dir']=self.ui.te_bids_dir.toPlainText()
+    
+    def _update_bids_id(self):
+        self.opts['bids_id'] = self.ui.te_BIDS_id.toPlainText()
+    
+    def _update_bids_ses(self):
+        self.opts['bids_session']=self.ui.te_bids_session.toPlainText()
+            
+    def _update_meghash(self):
+        self.opts['meghash']=self.ui.te_meghash.toPlainText()
+        
+
+    def _action_pb_anonymize(self):
+        if self.opts['anonymize']==False:
+            self.ui.pb_Anonymize.setText('Anonymize: Y')
+            self.opts['anonymize']=True
+        elif self.opts['anonymize']==True: 
+            self.ui.pb_Anonymize.setText('Anonymize: N')
+            self.opts['anonymize']=False
+        else:
+            print(f'current text: {self.ui.pb_Anonymize.text()}')
+        
+        
+
+# def _test():        
+#     #### <<<<<<<<< start of copy/paste
+#     self.anonymize = False
+#     self.ignore_mri_checks = False
+
+#     # Standard Entries
+#     self.bids_dir = op.join(os.getcwd(), 'bids_dir')
+#     self.meg_input_dir = None
+#     self.bids_session = 1
+#     self.subjid_input = None
+#     self.bids_id = None
+#     self.coreg = 'Brainsight'
+
+#     ## Afni Coreg:
+#     self.mri_brik = None
+
+#     ## Brainsight Coreg:
+#     self.mri_bsight = None
+#     self.mri_bsight_elec = None
+
+#     ## Optional Overrides:
+#     self.ignore_eroom = False
+#     self.autocrop_zeros = False
+#     self.freesurfer = None
+#     self.eventID_csv = None
+#     # Run standardize_eventID_list.py
+    
+#     self.config = config
+#     if config != False:
+#         write_opts = read_cfg(config)
+#         self.update_opts(opts=write_opts)
+# ##############3 << 
+        
+        
+        
+        
+        
+        
+
+class test_BIDS_MainWindow():
+    def __init__(self):
+        app = QtWidgets.QApplication(sys.argv)
+        MainWindow = QtWidgets.QMainWindow()
+        ui = BIDS_MainWindow()
+        ui.show()
+    
+    
