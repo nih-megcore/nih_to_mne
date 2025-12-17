@@ -1,1 +1,2 @@
 include nih2mne/templates/MarkerFile.mrk
+include nih2mne/GUI/templates/opposum_squid_icon.png

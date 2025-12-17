@@ -8,6 +8,11 @@ Created on Mon Dec  8 14:39:56 2025
 Ui_MainWindow - From QT designer
 Ui_InputDatasetTile - From Qt designer (converted without -x)
 
+This code implements a drag/drop GUI for quick data QA and event marking
+Each file gets its own tile that has independent information and processing buttons
+The tile also presents some status information on the file - movement / missing markerfile
+Once the files have been event tagged and their MarkerFile.mrk produced, 
+the bids gui can be opened to generate the correct output + Anat association
 
 #make glob case insensitive -- for the task match on trigproc files
 Make the trigger file locations environmental overidable
@@ -97,9 +102,11 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         return fname_list
     
     def open_bids_creator(self):
+        '''Open second window and populate the dataset list'''
         fnames = self.get_fnames_from_list()
         print('Opening bids app')
         self._bids_window_open()
+        self.bids_gui.list_fname_conversion.addItems(fnames)
     
     def _bids_window_open(self):
         '''Implement the logic to create and maintain a second main window'''
@@ -108,8 +115,6 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         self.bids_gui.setupUi(self.BidsMainWindow)
         self.BidsMainWindow.show()
         
-        
-    
     def handle_close_request(self, widget):
         '''If file tile "emits" a close signal, this will trigger a loop over
         filenames to identify the widget that produced the close signal'''
@@ -122,6 +127,12 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
                 print(f"Parent removed item at row {i}")
                 break
         
+class BidsInputInfo():
+    '''Collect all of the information needed to run the bids conversion'''
+    def __init__(self, meg_datasets=[], meg_hash='', bids_dir='', 
+                 bids_session=1, anonymize=False, ):
+        pass
+    
         
 
 
@@ -313,7 +324,7 @@ class InputDatasetTile(QtWidgets.QWidget):
         import subprocess
         current_trigfile = self.ui.ProcFileComboBox.currentText()
         print(f'No associated trigger processing file for task: {self.taskname.lower()}')
-        if (current_trigfile is None) or (current_trigfile is ""):
+        if (current_trigfile == None) or (current_trigfile == ""):
             return
         cmd = f'{self.trigfile_dir}/{current_trigfile} {self.fname}'
         subprocess.run(cmd.split())  #Add errror processing
@@ -370,6 +381,10 @@ def _can_load(fname):
 def main():
     import sys
     app = QtWidgets.QApplication(sys.argv)
+    # Add App Icon
+    icon_img = op.join(op.dirname(__file__), 'templates', 'opposum_squid_icon.png')
+    if op.exists(icon_img): app.setWindowIcon(QtGui.QIcon(icon_img))
+    
     MainWindow = GUI_MainWindow() 
     MainWindow.show()
     sys.exit(app.exec_())
