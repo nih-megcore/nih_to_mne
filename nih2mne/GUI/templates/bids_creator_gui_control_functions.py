@@ -45,6 +45,16 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                          bids_id=bids_id,
                          bids_dir=op.join(os.getcwd(), 'BIDS'),
                          bids_session='1',
+                         
+                         #MRI_none
+                         mri_none = True,
+                         #MRI_bsight
+                         mri_bsight = False,
+                         mri_elec = False,
+                         #MRI_afni
+                         mri_brik = False,
+                         
+                         #Options
                          crop_zeros=False,
                          include_empty_room=False
                          )
@@ -63,16 +73,37 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         
         ### Connect buttons    ----- FIX commented items -----
         self.ui.pb_Anonymize.clicked.connect(self._action_pb_anonymize)   #flipflop toggle
-        # self.ui.pb_BIDS_dir.clicked.connect(self._action_pb_BIDS_dir)
+        self.ui.pb_BIDS_dir.clicked.connect(self._action_pb_BIDS_dir)
         self.ui.pb_print_cmd.clicked.connect(self._action_print_cmd)
-        # self.ui.pb_BRIKfname.clicked.connect(self._action_pb_BRIKfname)
-        # self.ui.pb_BrainsightElec.clicked.connect(self._action_pb_BrainsightElec)
-        # self.ui.pb_BrainsightMRI.clicked.connect(self._action_pb_BrainsightMRI)
+        self.ui.pb_BRIKfname.clicked.connect(self._action_pb_BRIKfname)
+        self.ui.pb_BrainsightElec.clicked.connect(self._action_pb_BrainsightElec)
+        self.ui.pb_BrainsightMRI.clicked.connect(self._action_pb_BrainsightMRI)
         # self.ui.pb_run.clicked.connect(self._action_pb_run)
         
         ### Connect checkboxes
         self.ui.cb_crop_zeros.stateChanged.connect(self._action_cb_crop_zeros)
         self.ui.cb_emptyroom.stateChanged.connect(self._action_cb_emptyroom)
+        
+    ############ >> Action Section  ##########
+    def _action_pb_BrainsightElec(self):
+        fname = self.open_file_dialog()
+        self.ui.te_brainsight_elec.setPlainText(fname)
+        self.opts['mri_elec'] = fname
+        
+    def _action_pb_BrainsightMRI(self):
+        fname = self.open_file_dialog()
+        self.ui.te_brainsight_mri.setPlainText(fname)
+        self.opts['mri_bsight'] = fname        
+
+    def _action_pb_BRIKfname(self):
+        fname = self.open_file_dialog()
+        self.ui.te_BRIKfname.setPlainText(fname)
+        self.opts['brik_mri'] = fname
+
+    def _action_pb_BIDS_dir(self):
+        directory = self.open_folder_dialog()
+        self.ui.te_bids_dir.setPlainText(directory)
+        self.opts['bids_dir'] = directory
         
     def _action_cb_emptyroom(self):
         if self.ui.cb_emptyroom.checkState() == 2:
@@ -101,7 +132,6 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     def _update_meghash(self):
         self.opts['meghash']=self.ui.te_meghash.toPlainText()
         
-
     def _action_pb_anonymize(self):
         if self.opts['anonymize']==False:
             self.ui.pb_Anonymize.setText('Anonymize: Y')
@@ -111,6 +141,32 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
             self.opts['anonymize']=False
         else:
             print(f'current text: {self.ui.pb_Anonymize.text()}')
+    
+    ##### <<< 
+    
+    ## Helper functions
+    def open_file_dialog(self, file_filters='*', default_dir=os.getcwd()):
+        # Open file dialog
+        options = QtWidgets.QFileDialog.Options()
+        fileName, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select File",  # Dialog title
+            default_dir,
+            file_filters,
+            options=options
+        )
+        return fileName
+    
+    def open_folder_dialog(self, default_dir=os.getcwd()):
+        options = QtWidgets.QFileDialog.Options()
+        directory = QtWidgets.QFileDialog.getExistingDirectory(
+            self,
+            "Select Directory",  # Dialog title
+            default_dir, 
+            options=options
+        )
+        return directory
+    
         
         
 
