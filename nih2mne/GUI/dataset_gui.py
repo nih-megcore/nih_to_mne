@@ -127,11 +127,11 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
                 print(f"Parent removed item at row {i}")
                 break
         
-class BidsInputInfo():
-    '''Collect all of the information needed to run the bids conversion'''
-    def __init__(self, meg_datasets=[], meg_hash='', bids_dir='', 
-                 bids_session=1, anonymize=False, ):
-        pass
+# class BidsInputInfo():
+#     '''Collect all of the information needed to run the bids conversion'''
+#     def __init__(self, meg_datasets=[], meg_hash='', bids_dir='', 
+#                  bids_session=1, anonymize=False, ):
+#         pass
     
         
 

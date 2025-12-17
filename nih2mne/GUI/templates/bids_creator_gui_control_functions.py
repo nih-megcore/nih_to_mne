@@ -85,20 +85,40 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.cb_emptyroom.stateChanged.connect(self._action_cb_emptyroom)
         
     ############ >> Action Section  ##########
+    def set_mri_type(self, mr_type):
+        ''' Clear out other MRI information from opts'''
+        if mr_type == 'afni':
+            self.opts['mri_elec'] = False
+            self.opts['mri_bsight'] = False
+            self.opts['mri_none'] = False
+        elif mr_type == 'bsight':
+            self.opts['mri_brik'] = False
+            self.opts['mri_none'] = False
+        elif mr_type == 'none':
+            self.opts['mri_elec'] = False
+            self.opts['mri_bsight'] = False
+            self.opts['mri_brik'] = False
+        
     def _action_pb_BrainsightElec(self):
-        fname = self.open_file_dialog()
-        self.ui.te_brainsight_elec.setPlainText(fname)
-        self.opts['mri_elec'] = fname
+        fname = self.open_file_dialog(file_filters='*.txt')
+        if fname:
+            self.ui.te_brainsight_elec.setPlainText(fname)
+            self.opts['mri_elec'] = fname
+            self.set_mri_type('bsight')
         
     def _action_pb_BrainsightMRI(self):
-        fname = self.open_file_dialog()
-        self.ui.te_brainsight_mri.setPlainText(fname)
-        self.opts['mri_bsight'] = fname        
+        fname = self.open_file_dialog(file_filters='*.nii')
+        if fname:
+            self.ui.te_brainsight_mri.setPlainText(fname)
+            self.opts['mri_bsight'] = fname        
+            self.set_mri_type('bsight')
 
     def _action_pb_BRIKfname(self):
-        fname = self.open_file_dialog()
-        self.ui.te_BRIKfname.setPlainText(fname)
-        self.opts['brik_mri'] = fname
+        fname = self.open_file_dialog(file_filters='.BRIK')
+        if fname:
+            self.ui.te_BRIKfname.setPlainText(fname)
+            self.opts['mri_brik'] = fname
+            self.set_mri_type('afni')
 
     def _action_pb_BIDS_dir(self):
         directory = self.open_folder_dialog()
