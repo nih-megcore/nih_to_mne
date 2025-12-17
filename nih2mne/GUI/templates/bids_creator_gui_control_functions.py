@@ -187,12 +187,140 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         )
         return directory
     
+    # def format_cmd(self):
+    #     cmd = ['make_meg_bids.py']
+    #     if self.opts['anonymize']:
+    #         cmd += ' -anonymize'
+    #     if self.opts['bids_id'] != 'None':
+    #         cmd += 
         
+
+#  Need to pipe in the rest of the arguments into the class
+# Then initialize in the above
+# Then add function to ignore folder and just use the meg_list (in make-meg_bids)
+class Args:
+    def __init__(self, opts):
+        self.anonymize = opts['anonymize']
+        if opts['bids_dir'] != '':
+            self.bids_dir = opts['bids_dir']
+            # !!!!!!!!!!!   Do a check that bids_dir is accessible and real path
+        if opts['mri_bsight'] != False:
+            self.mri_bsight = opts['mri_bsight']
+        
+        
+            self.bids_dir = 
+        self.
+    bids
+    
+    
+    group1 = parser.add_argument_group('Afni Coreg')
+    group1.add_argument('-mri_brik', 
+                        help='''Afni coregistered MRI''')
+    group2 = parser.add_argument_group('Brainsight Coreg')
+    group2.add_argument('-mri_bsight',
+                        help='''Brainsight mri.  This should be a .nii file.
+                        The exported electrodes text file must be in the same 
+                        folder and end in .txt.  Otherwise, provide the 
+                        mri_sight_elec flag''')
+    group2.add_argument('-mri_bsight_elec',
+                       help='''Exported electrodes file from brainsight.
+                       This has the locations of the fiducials''', 
+                       required=False)
+    group2.add_argument('-ignore_mri_checks', action='store_true', default=False)
+    parser.add_argument('-bids_session',
+                        help='''Data acquisition session.  This is set to 1
+                        by default.  If the same subject had multiple sessions
+                        this must be set manually''',
+                        default=1,
+                        required=False)
+    parser.add_argument('-subjid_input',
+                        help='''The default subject ID is given by the MEG hash.
+                        If more than one subject is present in a folder, this
+                        option can be set to select a single subjects dataset.
+                        ''',
+                        required=False
+                        )
+    parser.add_argument('-bids_id',
+                        help='''The default subject ID is given by the MEG hash.
+                        To override the default subject ID, use this flag.\n\n                        
+                        If -anonymize is used, you must set the subjid'''
+                        )
+    parser.add_argument('-autocrop_zeros',
+                        help='''If files are terminated early, leaving zeros
+                        at the end of the file - this will detect and remove
+                        the trailing zeros.  !!!Files larger than 2G will Fail!!!''',
+                        action='store_true'
+                        )
+    group3 = parser.add_argument_group('Optional Overrides')
+    group3.add_argument('-ignore_eroom', 
+                        help='''If you are Not on Biowulf, use this option
+                        to prevent an error. Or if you collected your own empty
+                        room data with your dataset''',
+                        action='store_true', 
+                        default=False)
+
+
+
+        
+        
+        
+    
+########### FORMAT OPTIONS >>>>>>
+cmd = format_cmd(opts)
+print(f'Running the command: {cmd}')
+out_txt = subprocess.run(cmd.split(), check=True, capture_output=True)
+summary = []
+_start = False
+for i in str(out_txt.stdout).split('\\n'):
+    if '########### SUMMARY #################' in i:
+        _start = True
+    if _start:
+        summary.append(i)
+
+single_flag_list = ['anonymize', 'autocrop_zeros', 'freesurfer', 'ignore_eroom',
+                    'ignore_mri_checks']
+drop_flag_list = ['coreg', 'read_from_config', 'config', 'update_opts', 'error_log', 'full_log', 'fids_qa']
+def format_cmd(opts):
+    '''
+    Write out the commandline options from the opts object.  Special cases 
+    for the single flag vs flag w/option entry.
+
+    Parameters
+    ----------
+    opts : opt object
+        DESCRIPTION.
+
+    Returns
+    -------
+    cmd : str
+
+    '''
+    arglist = ['make_meg_bids.py']
+    for i in value_writedict.values():
+        if i in drop_flag_list:
+            if (i == 'coreg') and (opts.coreg == 'None'):
+                arglist.append('-ignore_mri_checks')
+                continue
+            else:
+                continue
+        flag_val =  getattr(opts, i)
+        if i in single_flag_list:
+            if flag_val == True:
+                arglist += [f'-{i}']
+            else:
+                continue
+        else:
+            if flag_val != None:
+                arglist += [f'-{i} {getattr(opts, i)}']
+    cmd = ' '.join(arglist)
+    return cmd 
+
+##############  <<<<<<<<<<<        
  
-# app = QtWidgets.QApplication(sys.argv)
-# MainWindow = QtWidgets.QMainWindow()
-# ui = BIDS_MainWindow()
-# ui.show()       
+app = QtWidgets.QApplication(sys.argv)
+MainWindow = QtWidgets.QMainWindow()
+ui = BIDS_MainWindow()
+ui.show()       
 
 # class test_BIDS_MainWindow():
 #     def __init__(self):
