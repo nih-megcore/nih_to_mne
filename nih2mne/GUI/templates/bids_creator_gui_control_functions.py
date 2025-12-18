@@ -75,7 +75,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.te_bids_dir.textChanged.connect(self._update_bids_dir)
         self.ui.te_bids_session.textChanged.connect(self._update_bids_ses)
         
-        ### Connect buttons    ----- FIX commented items -----
+        ### Connect buttons    
         self.ui.pb_Anonymize.clicked.connect(self._action_pb_anonymize)   #flipflop toggle
         self.ui.pb_BIDS_dir.clicked.connect(self._action_pb_BIDS_dir)
         self.ui.pb_print_cmd.clicked.connect(self._action_print_cmd)
@@ -89,20 +89,6 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.cb_emptyroom.stateChanged.connect(self._action_cb_emptyroom)
         
     ############ >> Action Section  ##########
-    def set_mri_type(self, mr_type):
-        ''' Clear out other MRI information from opts'''
-        if mr_type == 'afni':
-            self.opts['mri_elec'] = False
-            self.opts['mri_bsight'] = False
-            self.opts['mri_none'] = False
-        elif mr_type == 'bsight':
-            self.opts['mri_brik'] = False
-            self.opts['mri_none'] = False
-        elif mr_type == 'none':
-            self.opts['mri_elec'] = False
-            self.opts['mri_bsight'] = False
-            self.opts['mri_brik'] = False
-    
     def _action_pb_run(self):
         args = Args(self.opts)
         make_bids(args)
@@ -174,6 +160,20 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     ##### <<< 
     
     ## Helper functions
+    def set_mri_type(self, mr_type):
+        ''' Clear out other MRI information from opts'''
+        if mr_type == 'afni':
+            self.opts['mri_elec'] = False
+            self.opts['mri_bsight'] = False
+            self.opts['mri_none'] = False
+        elif mr_type == 'bsight':
+            self.opts['mri_brik'] = False
+            self.opts['mri_none'] = False
+        elif mr_type == 'none':
+            self.opts['mri_elec'] = False
+            self.opts['mri_bsight'] = False
+            self.opts['mri_brik'] = False
+    
     def open_file_dialog(self, file_filters='*', default_dir=os.getcwd()):
         # Open file dialog
         options = QtWidgets.QFileDialog.Options()
@@ -196,14 +196,6 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         )
         return directory
     
-    # def format_cmd(self):
-    #     cmd = ['make_meg_bids.py']
-    #     if self.opts['anonymize']:
-    #         cmd += ' -anonymize'
-    #     if self.opts['bids_id'] != 'None':
-    #         cmd += 
-        
-
 #  Need to pipe in the rest of the arguments into the class
 # Then initialize in the above
 # Then add function to ignore folder and just use the meg_list (in make-meg_bids)
@@ -242,57 +234,6 @@ class Args:
         else:
             self.ignore_eroom = False
         
-# ########### FORMAT OPTIONS >>>>>>
-# cmd = format_cmd(opts)
-# print(f'Running the command: {cmd}')
-# out_txt = subprocess.run(cmd.split(), check=True, capture_output=True)
-# summary = []
-# _start = False
-# for i in str(out_txt.stdout).split('\\n'):
-#     if '########### SUMMARY #################' in i:
-#         _start = True
-#     if _start:
-#         summary.append(i)
-
-# single_flag_list = ['anonymize', 'autocrop_zeros', 'freesurfer', 'ignore_eroom',
-#                     'ignore_mri_checks']
-# drop_flag_list = ['coreg', 'read_from_config', 'config', 'update_opts', 'error_log', 'full_log', 'fids_qa']
-# def format_cmd(opts):
-#     '''
-#     Write out the commandline options from the opts object.  Special cases 
-#     for the single flag vs flag w/option entry.
-
-#     Parameters
-#     ----------
-#     opts : opt object
-#         DESCRIPTION.
-
-#     Returns
-#     -------
-#     cmd : str
-
-#     '''
-#     arglist = ['make_meg_bids.py']
-#     for i in value_writedict.values():
-#         if i in drop_flag_list:
-#             if (i == 'coreg') and (opts.coreg == 'None'):
-#                 arglist.append('-ignore_mri_checks')
-#                 continue
-#             else:
-#                 continue
-#         flag_val =  getattr(opts, i)
-#         if i in single_flag_list:
-#             if flag_val == True:
-#                 arglist += [f'-{i}']
-#             else:
-#                 continue
-#         else:
-#             if flag_val != None:
-#                 arglist += [f'-{i} {getattr(opts, i)}']
-#     cmd = ' '.join(arglist)
-#     return cmd 
-
-##############  <<<<<<<<<<<        
  
 # app = QtWidgets.QApplication(sys.argv)
 # MainWindow = QtWidgets.QMainWindow()
