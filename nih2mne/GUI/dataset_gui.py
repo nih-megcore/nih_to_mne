@@ -107,6 +107,7 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         print('Opening bids app')
         self._bids_window_open()
         self.bids_gui.ui.list_fname_conversion.addItems(fnames)
+        # self.bids_gui.ui.te_meghash.setPlainText()
     
     def _bids_window_open(self):
         '''Implement the logic to create and maintain a second main window'''
