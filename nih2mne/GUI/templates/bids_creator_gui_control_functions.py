@@ -41,11 +41,14 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         
         # Collect all bids options in self.opts
+        meg_dsets = [self.ui.list_fname_conversion.item(i) for i in range(self.ui.list_fname_conversion.count())]
+        # meg_dsets = [self.ui.list_fname_conversion.item(i).text() for i in range(self.ui.list_fname_conversion.count())]
         self.opts = dict(anonymize=False, 
                          meghash=meghash, 
                          bids_id=bids_id,
                          bids_dir=op.join(os.getcwd(), 'BIDS'),
                          bids_session='1',
+                         meg_dataset_list = meg_dsets,
                          
                          #MRI_none
                          mri_none = True,
@@ -207,6 +210,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
 class Args:
     def __init__(self, opts):
         self.anonymize = opts['anonymize']
+        self.meg_dataset_list = opts['meg_dataset_list']
         if opts['bids_dir'] != '':
             self.bids_dir = opts['bids_dir']
             # !!!!!!!!!!!   Do a check that bids_dir is accessible and real path
