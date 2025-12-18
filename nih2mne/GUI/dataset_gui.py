@@ -39,7 +39,7 @@ from nih2mne.GUI.templates.bids_creator_gui_control_functions \
 # Initialize the locations of the trigger files
 TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
 LOG_FILE_LOC = op.expanduser(f'~/meglogs/')
-if not op.exists(TRIG_FILE_LOC):  op.makedirs(TRIG_FILE_LOC)
+if not op.exists(TRIG_FILE_LOC):  os.makedirs(TRIG_FILE_LOC)
 
 
 class GUI_MainWindow(QtWidgets.QMainWindow):

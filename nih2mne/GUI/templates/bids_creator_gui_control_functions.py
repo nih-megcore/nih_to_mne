@@ -107,14 +107,14 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
             self.set_mri_type('bsight')
         
     def _action_pb_BrainsightMRI(self):
-        fname = self.open_file_dialog(file_filters='*.nii')
+        fname = self.open_file_dialog(file_filters='NIFTI files (*.nii *.nii.gz)')
         if fname:
             self.ui.te_brainsight_mri.setPlainText(fname)
             self.opts['mri_bsight'] = fname        
             self.set_mri_type('bsight')
 
     def _action_pb_BRIKfname(self):
-        fname = self.open_file_dialog(file_filters='.BRIK')
+        fname = self.open_file_dialog(file_filters='AFNI files (*.BRIK *.BRIK.gz)')
         if fname:
             self.ui.te_BRIKfname.setPlainText(fname)
             self.opts['mri_brik'] = fname
@@ -168,6 +168,8 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     def open_file_dialog(self, file_filters='*', default_dir=os.getcwd()):
         # Open file dialog
         options = QtWidgets.QFileDialog.Options()
+        # if type(file_filters) is list:
+            # file_filters=";;".join(file_filters)
         fileName, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
             "Select File",  # Dialog title
