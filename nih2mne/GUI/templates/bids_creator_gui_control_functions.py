@@ -60,7 +60,10 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                          
                          #Options
                          crop_zeros=False,
-                         include_empty_room=False
+                         include_empty_room=False,
+                         
+                         #Force default options to make downstream processing happy
+                         subjid_input=False
                          )
         
         #### Fill out default text in text edit lines 
@@ -205,16 +208,18 @@ class Args:
         self.meg_dataset_list = opts['meg_dataset_list']
         if opts['bids_dir'] != '':
             self.bids_dir = opts['bids_dir']
-            # !!!!!!!!!!!   Do a check that bids_dir is accessible and real path
         
         if opts['mri_bsight'] != False:
             self.mri_bsight = opts['mri_bsight']
+            self.ignore_mri_checks = False
         
         if opts['mri_elec'] != False:
             self.mri_bsight_elec = opts['mri_elec']
+            self.ignore_mri_checks = False
         
         if opts['mri_brik'] != False:
             self.mri_brik = opts['mri_brik']
+            self.ignore_mri_checks = False
         
         if opts['mri_none'] == True:
             self.ignore_mri_checks = True
@@ -234,7 +239,23 @@ class Args:
         else:
             self.ignore_eroom = False
         
- 
+        # Add required tags to force make_meg_bids to run
+        self.subjid_input = False
+            
+            
+        
+
+def test_Args():
+    opts = {'anonymize': True, 'meghash': 'None', 'bids_id': 'S01', 
+            'bids_dir': '/tmp/BIDS', 'bids_session': '1', 
+            'meg_dataset_list': [], 'mri_none': False, 
+            'mri_bsight': '/tmp/Uploaded_cohort3/DUJGWRKZ/DUJGWRKZ.nii', 
+            'mri_elec': '/tmp/Uploaded_cohort3/DUJGWRKZ/Exported Electrodes.txt', 
+            'mri_brik': False, 'crop_zeros': True, 'include_empty_room': False}
+     
+            #'subjid_input' : False}
+    args = Args(opts)
+
 # app = QtWidgets.QApplication(sys.argv)
 # MainWindow = QtWidgets.QMainWindow()
 # ui = BIDS_MainWindow()

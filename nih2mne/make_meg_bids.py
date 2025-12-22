@@ -832,10 +832,20 @@ def make_bids(args):
     logger_dir = Path(args.bids_dir).parent / 'bids_prep_logs'
     logger_dir.mkdir(exist_ok=True)
     
-    if args.subjid_input:
-        subjid=args.subjid_input
+    if hasattr(args, 'meg_dataset_list'):
+        if (type(args.meg_dataset_list) is list) and (len(args.meg_dataset_list)>0):
+            setattr(args, 'ignore_dset_find', True)
+        else:
+            setattr(args, 'ignore_dset_find', False)
     else:
-        subjid = _check_multiple_subjects(args.meg_input_dir)
+        setattr(args, 'ignore_dset_find', False)
+    
+    #Ignore the dataset search by subjid if datasets provided
+    if not args.ignore_dset_find:
+        if args.subjid_input:
+            subjid=args.subjid_input
+        else:
+            subjid = _check_multiple_subjects(args.meg_input_dir)
     
     global logger
     global err_logger
