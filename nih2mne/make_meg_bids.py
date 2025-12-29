@@ -783,7 +783,7 @@ def _output_checks(meg_conv_dict):
 #!!! TODO - integrate this into the meg bids conversion so there isn't redundant code
 def _get_conversion_dict(input_path=None, subject_in=None, bids_id=None,
                      bids_dir=None, session=1, 
-                     ignore_eroom=None, 
+                     ignore_eroom=None, meg_dataset_list=[]
                      ):
     '''
     Provides the conversion information for later checks.  
@@ -803,6 +803,8 @@ def _get_conversion_dict(input_path=None, subject_in=None, bids_id=None,
         BIDS session
     ignore_eroom : TYPE, optional
         DESCRIPTION. The default is None.
+    meg_dataset_list : list, optional
+        alternative to input_path entry
 
     Returns
     -------
@@ -810,13 +812,24 @@ def _get_conversion_dict(input_path=None, subject_in=None, bids_id=None,
         Dictionary of inputs to outputs
 
     '''
-    dset_dict = sessdir2taskrundict(session_dir=input_path, subject_in=subject_in)
+    if (input_path==None) and (meg_dataset_list==[]):
+        raise ValueError('Either input_path or meg_dataset_list need to be filled')
+    
+    if input_path != None:
+        dset_dict = sessdir2taskrundict(session_dir=input_path, subject_in=subject_in)
+    if meg_dataset_list != []:
+        dset_dict = _gen_taskrundict(meg_dataset_list)
+        
+    
     session = str(int(session)) #Confirm no leading zeros
     conversion_dict={} 
     for task, task_sublist in dset_dict.items():
         for run, base_meg_fname in enumerate(task_sublist, start=1):
             print(run, base_meg_fname)
-            meg_fname = op.join(input_path, base_meg_fname)
+            if op.isabs(base_meg_fname):
+                meg_fname = base_meg_fname
+            else:
+                meg_fname = op.join(input_path, base_meg_fname)
             ses = session
             run = str(run) 
             if len(run)==1: run='0'+run
@@ -848,8 +861,14 @@ def make_bids(args):
         if (args.subjid_input != None) and (args.bids_id == None):
             args.bids_id = args.subjid_input
         notanon_fname = op.join(args.bids_dir, 'NOT_ANONYMIZED!!!.txt')
-        with open(notanon_fname, 'a') as w:
-            w.write(args.meg_input_dir + '\n')
+        try:
+            with open(notanon_fname, 'a') as w:
+                w.write(args.meg_input_dir + '\n')
+        except:
+            _tmplist = args.meg_dataset_list
+            for curr_fname in _tmplist:
+                with open(notanon_fname, 'a') as w:
+                    w.write(curr_fname + '\n')            
 
     #Establish Logging
     # global logger
@@ -999,13 +1018,24 @@ def make_bids(args):
 
     
     #
-    # Check results
+    # Check results            
     #
-    meg_conv_dict = _get_conversion_dict(input_path=args.meg_input_dir, 
+    # >>> 
+    if not hasattr(args, 'meg_input_dir'):
+        meg_input_dir = None
+    else:
+        meg_input_dir = args.meg_input_dir
+    if not hasattr(args, 'meg_dataset_list'):
+        meg_dataset_list = None
+    else:
+        meg_dataset_list = args.meg_dataset_list
+    meg_conv_dict = _get_conversion_dict(input_path=meg_input_dir, 
                                          subject_in=args.subjid_input,
                                          bids_id=args.bids_id,
-                                         bids_dir=args.bids_dir)
+                                         bids_dir=args.bids_dir, 
+                                         meg_dataset_list=meg_dataset_list)
     _tmp = _output_checks(meg_conv_dict)
+    
     errors = _tmp['errors']
     good = _tmp['good']
     logger.info('########### SUMMARY #################')

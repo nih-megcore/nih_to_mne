@@ -41,8 +41,6 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         
         # Collect all bids options in self.opts
-        # meg_dsets = [self.ui.list_fname_conversion.item(i) for i in range(self.ui.list_fname_conversion.count())]
-        # meg_dsets = [self.ui.list_fname_conversion.item(i).text() for i in range(self.ui.list_fname_conversion.count())]
         self.opts = dict(anonymize=False, 
                          subjid_input=meghash, 
                          bids_id=bids_id,
@@ -62,8 +60,6 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                          crop_zeros=False,
                          include_empty_room=False,
                          
-                         #Force default options to make downstream processing happy
-                         # subjid_input=False
                          )
         
         #### Fill out default text in text edit lines 
