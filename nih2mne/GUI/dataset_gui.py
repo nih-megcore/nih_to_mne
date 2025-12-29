@@ -105,13 +105,28 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         '''Open second window and populate the dataset list'''
         fnames = self.get_fnames_from_list()
         print('Opening bids app')
-        self._bids_window_open()
+        self._bids_window_open(meg_dsets = fnames)
         self.bids_gui.ui.list_fname_conversion.addItems(fnames)
-        # self.bids_gui.ui.te_meghash.setPlainText()
+        
+        _meghash = self._assess_meghash(fnames)
+        self.bids_gui.ui.te_meghash.setPlainText(_meghash)
     
-    def _bids_window_open(self):
+    def _assess_meghash(self, fnames):
+        try:
+            _tmp = [op.basename(i).split('_')[0] for i in fnames]
+            _tmp = set(_tmp)
+            if (len(_tmp) > 1) or (len(_tmp)==0):
+                return 'None'
+            else:
+                return list(_tmp)[0]
+        except:
+            print('Could not assess meghash')
+            return 'None'
+        
+    
+    def _bids_window_open(self, meg_dsets=None):
         '''Implement the logic to create and maintain a second main window'''
-        self.bids_gui = BIDS_Ui_MainWindow()
+        self.bids_gui = BIDS_Ui_MainWindow(meg_dsets=meg_dsets)
         self.bids_gui.show()
         
     def handle_close_request(self, widget):

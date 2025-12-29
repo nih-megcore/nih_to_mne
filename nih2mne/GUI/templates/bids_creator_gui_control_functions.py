@@ -35,16 +35,16 @@ import os, os.path as op
 from nih2mne.make_meg_bids import make_bids
 
 class BIDS_MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, meghash='None', bids_id='None', ):
+    def __init__(self, meghash='None', bids_id='None', meg_dsets=None):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         
         # Collect all bids options in self.opts
-        meg_dsets = [self.ui.list_fname_conversion.item(i) for i in range(self.ui.list_fname_conversion.count())]
+        # meg_dsets = [self.ui.list_fname_conversion.item(i) for i in range(self.ui.list_fname_conversion.count())]
         # meg_dsets = [self.ui.list_fname_conversion.item(i).text() for i in range(self.ui.list_fname_conversion.count())]
         self.opts = dict(anonymize=False, 
-                         meghash=meghash, 
+                         subjid_input=meghash, 
                          bids_id=bids_id,
                          bids_dir=op.join(os.getcwd(), 'BIDS'),
                          bids_session='1',
@@ -63,11 +63,11 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                          include_empty_room=False,
                          
                          #Force default options to make downstream processing happy
-                         subjid_input=False
+                         # subjid_input=False
                          )
         
         #### Fill out default text in text edit lines 
-        self.ui.te_meghash.setPlainText(str(self.opts['meghash']))
+        self.ui.te_meghash.setPlainText(str(self.opts['subjid_input']))
         self.ui.te_BIDS_id.setPlainText(str(self.opts['bids_id']))
         self.ui.te_bids_dir.setPlainText(str(self.opts['bids_dir']))
         self.ui.te_bids_session.setPlainText(str(self.opts['bids_session']))
@@ -139,16 +139,16 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         print(self.opts)
         
     def _update_bids_dir(self):
-        self.opts['bids_dir']=self.ui.te_bids_dir.toPlainText()
+        self.opts['bids_dir']=self.ui.te_bids_dir.toPlainText().strip()
     
     def _update_bids_id(self):
-        self.opts['bids_id'] = self.ui.te_BIDS_id.toPlainText()
+        self.opts['bids_id'] = self.ui.te_BIDS_id.toPlainText().strip()
     
     def _update_bids_ses(self):
-        self.opts['bids_session']=self.ui.te_bids_session.toPlainText()
+        self.opts['bids_session']=self.ui.te_bids_session.toPlainText().strip()
             
     def _update_meghash(self):
-        self.opts['meghash']=self.ui.te_meghash.toPlainText()
+        self.opts['subjid_input']=self.ui.te_meghash.toPlainText().strip()
         
     def _action_pb_anonymize(self):
         if self.opts['anonymize']==False:
@@ -212,14 +212,18 @@ class Args:
         if opts['mri_bsight'] != False:
             self.mri_bsight = opts['mri_bsight']
             self.ignore_mri_checks = False
+            # self.mri_brik = False
         
         if opts['mri_elec'] != False:
             self.mri_bsight_elec = opts['mri_elec']
             self.ignore_mri_checks = False
+            # self.mri_brik = False
         
         if opts['mri_brik'] != False:
             self.mri_brik = opts['mri_brik']
             self.ignore_mri_checks = False
+        else:
+            self.mri_brik = False
         
         if opts['mri_none'] == True:
             self.ignore_mri_checks = True
@@ -240,14 +244,19 @@ class Args:
             self.ignore_eroom = False
         
         # Add required tags to force make_meg_bids to run
-        if opts['subjid_input'] != False:
-            self.subjid_input = opts['subjid_input']
-        elif opts['subjid'] != False:
-            self.subjid_input = opts['subjid']
+        if 'subjid_input' in opts:
+            if opts['subjid_input'] not in [False, None, 'None', 'False', '']:
+                self.subjid_input = opts['subjid_input'].strip()
+        elif 'subjid' in opts:
+            if opts['subjid'] not in [False, None, 'None', 'False', '']:
+                self.subjid_input = opts['subjid'].strip()
         else:
             self.subjid_input = False
         
         self.eventID_csv = False
+        self.freesurfer = False
+        self.mri_prep_s = False
+        self.mri_prep_v = False
         
             
             

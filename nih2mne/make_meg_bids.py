@@ -330,8 +330,8 @@ def process_meg_bids(dset_dict=None, subject_in=None, bids_id=None,
     
     error_count=0
     for task, task_sublist in dset_dict.items():
-        for run, base_meg_fname in enumerate(task_sublist, start=1):
-            meg_fname = op.join(input_path, base_meg_fname)
+        for run, meg_fname in enumerate(task_sublist, start=1):
+            base_meg_fname = op.basename(meg_fname) #gen basename for legacy reasons
             try:
                 _clear_ClassFile(meg_fname) #Remove Trials that fail CTFtools
             except:

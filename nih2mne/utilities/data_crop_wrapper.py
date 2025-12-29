@@ -57,7 +57,8 @@ def return_cropped_ds(fname):
     data = raw._data[channel_idx]
     _, crop_time = get_term_time(data, raw.info['sfreq'])
     if crop_time == False:
-        raise RuntimeError('Could not find a terminated timepoint')
+        return fname
+        # raise RuntimeError('Could not find a terminated timepoint')
     
     base = op.abspath(op.dirname(fname))
     f_ = op.basename(fname)
