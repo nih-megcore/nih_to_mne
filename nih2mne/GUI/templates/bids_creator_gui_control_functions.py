@@ -253,7 +253,7 @@ class Args:
         else:
             self.subjid_input = False
         
-        self.eventID_csv = False
+        self.eventID_csv = None
         self.freesurfer = False
         self.mri_prep_s = False
         self.mri_prep_v = False
