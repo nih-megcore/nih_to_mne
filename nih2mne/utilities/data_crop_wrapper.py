@@ -25,7 +25,7 @@ def get_term_time(data, sfreq):
         idx_crop = np.where((np.diff(np.convolve(np.ones(20),data==0)))==1)[0][0]
         return idx_crop, idx_crop/sfreq
     except:
-        return False
+        return False, False
     
 def return_cropped_ds(fname):
     '''

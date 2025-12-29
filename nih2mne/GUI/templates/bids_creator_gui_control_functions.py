@@ -240,21 +240,32 @@ class Args:
             self.ignore_eroom = False
         
         # Add required tags to force make_meg_bids to run
-        self.subjid_input = False
+        if opts['subjid_input'] != False:
+            self.subjid_input = opts['subjid_input']
+        elif opts['subjid'] != False:
+            self.subjid_input = opts['subjid']
+        else:
+            self.subjid_input = False
+        
+        self.eventID_csv = False
+        
             
             
         
 
-def test_Args():
-    opts = {'anonymize': True, 'meghash': 'None', 'bids_id': 'S01', 
-            'bids_dir': '/tmp/BIDS', 'bids_session': '1', 
-            'meg_dataset_list': [], 'mri_none': False, 
-            'mri_bsight': '/tmp/Uploaded_cohort3/DUJGWRKZ/DUJGWRKZ.nii', 
-            'mri_elec': '/tmp/Uploaded_cohort3/DUJGWRKZ/Exported Electrodes.txt', 
-            'mri_brik': False, 'crop_zeros': True, 'include_empty_room': False}
+# def test_Args():
+#     opts = {'anonymize': True, 'meghash': 'None', 'bids_id': 'S01', 
+#             'bids_dir': '/tmp/BIDS', 'bids_session': '1', 
+#             'meg_dataset_list': [], 'mri_none': False, 
+#             'mri_bsight': '/tmp/Uploaded_cohort3/DUJGWRKZ/DUJGWRKZ.nii', 
+#             'mri_elec': '/tmp/Uploaded_cohort3/DUJGWRKZ/Exported Electrodes.txt', 
+#             'mri_brik': False, 'crop_zeros': True, 'include_empty_room': False}
      
-            #'subjid_input' : False}
-    args = Args(opts)
+#             #'subjid_input' : False}
+#     args = Args(opts)
+#     # make_bids(args)
+    
+# test_Args()
 
 # app = QtWidgets.QApplication(sys.argv)
 # MainWindow = QtWidgets.QMainWindow()

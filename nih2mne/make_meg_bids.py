@@ -60,6 +60,37 @@ include_list_general = ['BadChannels', 'ClassFile.cls', 'MarkerFile.mrk', 'param
                 '*.infods']  #'*.acq' -- this contains redundant info
 
 
+def _gen_taskrundict(meg_list=None):
+    '''
+    Helper function.  Separate out the functionality of run sorting and labelling
+
+    Parameters
+    ----------
+    meg_list : TYPE, optional
+        DESCRIPTION. The default is None.
+
+    Returns
+    -------
+    out_dict : TYPE
+        DESCRIPTION.
+
+    '''
+    dsets = sorted(meg_list)
+    
+    #Return bids dictionary
+    task_list = [op.basename(i).split('_')[1] for i in dsets]
+    task_set = set(task_list)
+    
+    logger.info(f'Using {len(task_set)} tasks: {task_set}')
+    
+    out_dict=dict()
+    for key in task_set:
+        idxs = [i for i,x in enumerate(task_list) if x==key]
+        sublist = [dsets[i] for i in idxs]
+        out_dict[key]=sublist
+    return out_dict
+    
+
 def sessdir2taskrundict(session_dir=None, subject_in=None):
     '''
     Convert a subject session to a dictionary with each run input name
@@ -97,21 +128,10 @@ def sessdir2taskrundict(session_dir=None, subject_in=None):
             continue  #Ignore datasets that are not this subjects
         else:
             tmp_.append(dset)
-    dsets = sorted(tmp_)
-    
-    #Return bids dictionary
-    task_list = [i.split('_')[1] for i in dsets]
-    task_set = set(task_list)
-    
-    logger.info(f'Using {len(task_set)} tasks: {task_set}')
-    
-    out_dict=dict()
-    for key in task_set:
-        idxs = [i for i,x in enumerate(task_list) if x==key]
-        sublist = [dsets[i] for i in idxs]
-        out_dict[key]=sublist
-    
+        
+    out_dict = _gen_taskrundict(meg_list=tmp_)
     return out_dict
+
 
 def get_eroom(meg_fname, tmpdir=None):
     '''
@@ -265,10 +285,11 @@ def anonymize_finalize(meg_fname):
     logger.info('Completed Scrubbing MEG files')
     
 
-def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
+def process_meg_bids(dset_dict=None, subject_in=None, bids_id=None,
                      bids_dir=None, session=1, 
                      anonymize=False, tmpdir=None, ignore_eroom=None, 
-                     crop_trailing_zeros=False, eventID_csv=None):
+                     crop_trailing_zeros=False, eventID_csv=None, 
+                     ):
     '''
     Process the MEG component of the data into bids.
     Calls sessdir2taskrundict to get the task IDs and sort according to run #
@@ -299,10 +320,10 @@ def process_meg_bids(input_path=None, subject_in=None, bids_id=None,
         This can be generated using standardize_eventID_list.py
 
     '''
-    if bids_dir==None:
-        raise ValueError('No bids_dir output directory given')
-    if not os.path.exists(bids_dir): os.mkdir(bids_dir)
-    dset_dict = sessdir2taskrundict(session_dir=input_path, subject_in=subject_in)
+    # if bids_dir==None:
+    #     raise ValueError('No bids_dir output directory given')
+    # if not os.path.exists(bids_dir): os.mkdir(bids_dir)
+    # dset_dict = sessdir2taskrundict(session_dir=input_path, subject_in=subject_in)
     
     session = str(int(session)) #Confirm no leading zeros
     #if len(session)==1: session = '0'+session
@@ -721,8 +742,11 @@ def get_subj_logger(subjid, log_dir=None, loglevel=logging.INFO):
 def _input_checks(args):
     '''Perform minimal checks of existing data to fail early before starting 
     the processing'''
-    if not op.exists(args.meg_input_dir):
-        raise ValueError(f'{args.meg_input_dir} does not exist')
+    if hasattr(args, 'meg_input_dir'):
+        # Failover to check the 
+        if not op.exists(args.meg_input_dir):
+            raise ValueError(f'{args.meg_input_dir} does not exist')
+
     if args.mri_bsight !=None:
         if len(args.mri_bsight_elec.split()) > 1:
             raise ValueError(f'Make sure there is not a space in filename {args.mri_bsight_elec}')
@@ -832,6 +856,8 @@ def make_bids(args):
     logger_dir = Path(args.bids_dir).parent / 'bids_prep_logs'
     logger_dir.mkdir(exist_ok=True)
     
+    
+    
     if hasattr(args, 'meg_dataset_list'):
         if (type(args.meg_dataset_list) is list) and (len(args.meg_dataset_list)>0):
             setattr(args, 'ignore_dset_find', True)
@@ -841,14 +867,16 @@ def make_bids(args):
         setattr(args, 'ignore_dset_find', False)
     
     #Ignore the dataset search by subjid if datasets provided
-    if not args.ignore_dset_find:
-        if args.subjid_input:
-            subjid=args.subjid_input
-        else:
-            subjid = _check_multiple_subjects(args.meg_input_dir)
+    # if not args.ignore_dset_find:
+    if (args.subjid_input != None) or (args.subjid_input != ''):
+        subjid=args.subjid_input
+    else:
+        subjid = _check_multiple_subjects(args.meg_input_dir)
     
     global logger
     global err_logger
+    
+    print(subjid)
     
     logger = get_subj_logger(subjid, log_dir=logger_dir, loglevel=logging.INFO)
     err_logger = get_subj_logger(subjid+'_err', log_dir=logger_dir, loglevel=logging.WARN)
@@ -883,8 +911,12 @@ def make_bids(args):
         else:
             bids_id = subjid
     
+    # Generate the list of MEG datasets
+    # !!! generate this for meg_input_dir datatsets to maintain backwards compatability
+    sorted_renamed_megdict = _gen_taskrundict(meg_list=args.meg_dataset_list)
     
-    process_meg_bids(input_path=args.meg_input_dir,
+    
+    process_meg_bids(dset_dict=sorted_renamed_megdict,
                                 subject_in=subjid,
                                  bids_dir=args.bids_dir,
                                  bids_id = args.bids_id, 
