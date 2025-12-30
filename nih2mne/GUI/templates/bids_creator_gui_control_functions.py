@@ -34,6 +34,8 @@ import sys
 import os, os.path as op
 from nih2mne.make_meg_bids import make_bids
 from nih2mne.make_meg_bids import _read_electrodes_file
+from nih2mne.calc_mnetrans import coords_from_oblique_afni
+
 
 class BIDS_MainWindow(QtWidgets.QMainWindow):
     def __init__(self, meghash='None', bids_id='None', meg_dsets=None):
@@ -129,6 +131,15 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
             self.ui.te_BRIKfname.setPlainText(fname)
             self.opts['mri_brik'] = fname
             self.set_mri_type('afni')
+            
+            try:
+                _ = coords_from_oblique_afni(fname)
+                self.ui.pb_BRIKfname.setText('Browse')
+                self.ui.label_BRIKFILE.setText('BRIK File:')
+            except:
+                self.ui.pb_BRIKfname.setText('Retry')
+                self.ui.label_BRIKFILE.setText('BRIK File: !FORMAT_ERROR!')
+            
 
     def _action_pb_BIDS_dir(self):
         directory = self.open_folder_dialog()

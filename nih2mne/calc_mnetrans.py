@@ -166,7 +166,7 @@ def coords_from_oblique_afni(afni_fname):
         fid_mat = np.array(im.header.info['TAGSET_FLOATS']).reshape(3,5)
     if len(im.header.info['TAGSET_FLOATS'])==25:
         fid_mat = np.array(im.header.info['TAGSET_FLOATS']).reshape(5,5)
-        fid_mat = fid_mat[0:3,:]  #!!! HACK to perform 3 point coreg -- Assumes first 3 are LPA/RPA/NAS
+        fid_mat = fid_mat[0:3,:]  #Assume first 3 are fids -- check below from labels
     # =============================================================================
     # Correct oblique transform
     # =============================================================================
@@ -178,8 +178,11 @@ def coords_from_oblique_afni(afni_fname):
     fid_mat_lps = copy.copy(fid_mat_ras)
     fid_mat_lps[:,0:2]*=-1  #Convert to AFNI orientation LPS - assumed downstream
     tag_labels = im.header.info['TAGSET_LABELS'].split('~')
+    assert tag_labels[0] == 'Nasion'
+    assert tag_labels[1] == 'Left Ear'
+    assert tag_labels[2] == 'Right Ear'
     if len(tag_labels) > 3:
-        tag_labels=tag_labels[0:3]  #!!! HACK to perform 3 point coreg
+        tag_labels=tag_labels[0:3]  
     coord={}
     for idx, label in enumerate(tag_labels):
         if label[0].upper() in ['N','L','R']:
