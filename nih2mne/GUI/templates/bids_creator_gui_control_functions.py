@@ -33,6 +33,7 @@ from nih2mne.GUI.templates.BIDS_creator_gui import Ui_MainWindow
 import sys
 import os, os.path as op
 from nih2mne.make_meg_bids import make_bids
+from nih2mne.make_meg_bids import _read_electrodes_file
 
 class BIDS_MainWindow(QtWidgets.QMainWindow):
     def __init__(self, meghash='None', bids_id='None', meg_dsets=None):
@@ -99,6 +100,21 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
             self.ui.te_brainsight_elec.setPlainText(fname)
             self.opts['mri_elec'] = fname
             self.set_mri_type('bsight')
+            
+            #Check the validity of the electrodes file
+            try:
+                _fids = _read_electrodes_file(fname)
+            except:
+                _fids = False
+            print(f'{_fids}')
+            if _fids == False:
+                print('Changing text')
+                self.ui.label_10.setText('Brainsight Elec: !FORMAT_ERROR!')
+                self.ui.pb_BrainsightElec.setText('Retry')
+            else:
+                self.ui.label_10.setText("Brainsight Elec (txt): ")
+                self.ui.pb_BrainsightElec.setText('Browse')
+            
         
     def _action_pb_BrainsightMRI(self):
         fname = self.open_file_dialog(file_filters='NIFTI files (*.nii *.nii.gz)')

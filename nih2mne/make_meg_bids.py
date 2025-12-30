@@ -654,6 +654,7 @@ def _read_electrodes_file(elec_fname=None):
             locs_ras[val] = np.array(output, dtype=float)
     except BaseException as e:
         print('Cannot process the electrodes file - appears not to use the correct format in template')
+        return False
     return locs_ras
 
 def process_mri_json(elec_fname=None,
@@ -817,7 +818,7 @@ def _get_conversion_dict(input_path=None, subject_in=None, bids_id=None,
     
     if input_path != None:
         dset_dict = sessdir2taskrundict(session_dir=input_path, subject_in=subject_in)
-    if meg_dataset_list != []:
+    if meg_dataset_list not in [[], False, None, 'None']:
         dset_dict = _gen_taskrundict(meg_dataset_list)
         
     
@@ -932,7 +933,14 @@ def make_bids(args):
     
     # Generate the list of MEG datasets
     # !!! generate this for meg_input_dir datatsets to maintain backwards compatability
-    sorted_renamed_megdict = _gen_taskrundict(meg_list=args.meg_dataset_list)
+    if hasattr(args, 'meg_dataset_list'):
+        if args.meg_dataset_list not in [[], False, None]:
+            sorted_renamed_megdict = _gen_taskrundict(meg_list=args.meg_dataset_list)
+    if hasattr(args, 'meg_input_dir'):
+        if not (args.meg_input_dir in ['None',None, False,'']):
+            sorted_renamed_megdict = sessdir2taskrundict(session_dir=args.bids_session, 
+                                           subject_in=args.subjid_input)
+            # sorted_renamed_megdict = _gen_taskrundict(meg_list=meg_list)
     
     
     process_meg_bids(dset_dict=sorted_renamed_megdict,
@@ -995,11 +1003,6 @@ def make_bids(args):
         #
         # Finish MRI prep
         #
-        # Get a template MEG dataset by filtering out noise and emptyroom datasets
-        _dsets = glob.glob(op.join(args.meg_input_dir, f'{subjid}*.ds'))
-        _dsets = [i for i in _dsets if (('noise' not in op.basename(i).lower()) and ('empty' not in op.basename(i).lower())) ]
-        template_meg = _dsets[0]
-        
         t1_bids_path = process_mri_bids(bids_dir=args.bids_dir,
                                      bids_id=bids_id, 
                                      nii_mri = nii_mri,
