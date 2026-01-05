@@ -368,13 +368,19 @@ class ErrorDatasetTile(QtWidgets.QWidget):
         base_fname = op.basename(self.fname)
         self.ui.ReadoutFilename.setText(f'(!ERROR!) File: {base_fname}')
         
-        # ## Info 
+        ## Info 
         self.error_code = error_code
         self.error_type = error_type
         self.set_status_label() 
         
+        ## Launch Error Code
+        self.ui.pb_ReviewError.clicked.connect(self.show_error)
+        
         ## Remove tile
         self.ui.pb_DeleteTile.clicked.connect(lambda: self.close_clicked.emit(self))
+    
+    def show_error(self):
+        QtWidgets.QMessageBox.critical(self, 'Error', self.error_code)
     
     def set_status_label(self):
         '''
