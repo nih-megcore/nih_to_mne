@@ -22,6 +22,9 @@ Make the trigger file locations environmental overidable
 from nih2mne.GUI.templates.file_staging_meg import Ui_MainWindow
 from nih2mne.GUI.templates.input_meg_dset_tile_listWidgetBase import \
     Ui_InputDatasetTile
+from nih2mne.GUI.templates.input_error_dset_tile_listWidgetBase import \
+    Ui_ErrorDatasetTile
+
 from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtCore import pyqtSignal
 import os, os.path as op
@@ -38,8 +41,10 @@ from nih2mne.GUI.templates.bids_creator_gui_control_functions \
 
 # Initialize the locations of the trigger files
 TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
-LOG_FILE_LOC = op.expanduser(f'~/meglogs/')
+LOG_FILE_LOC = op.expanduser(f'~/megcore/logs/')
+# DEFAULTS_FILE_LOC = op.expanduser(f'~/megcore/defaults.yml')
 if not op.exists(TRIG_FILE_LOC):  os.makedirs(TRIG_FILE_LOC)
+
 
 
 class GUI_MainWindow(QtWidgets.QMainWindow):
@@ -74,8 +79,15 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         
     def populate_file_tiles(self):
         for i in self.meg_files: 
-            # Instantiate a filename tile
-            _tmp_tile = InputDatasetTile(fname=i)
+            try:
+                # Instantiate a filename tile
+                _tmp_tile = InputDatasetTile(fname=i)
+            except BaseException as e:
+                # Instantiate a NULL/ERROR tile
+                _tmp_tile = ErrorDatasetTile(fname=i, 
+                                             error_type=type(e), 
+                                             error_code=str(e))
+            
             # Add signal propagation from tile to MainWindow class
             _tmp_tile.close_clicked.connect(self.handle_close_request)
             
@@ -336,6 +348,42 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.load_meg() #Reload to get the newly created annotations
         self.set_events_label()
         self.set_status_label() 
+
+        
+class ErrorDatasetTile(QtWidgets.QWidget):
+    '''If an error occurs in making a dataset tile, this is an override to list 
+    the error'''
+    close_clicked = pyqtSignal(object)
+    
+    def __init__(self, parent=None, fname=None, error_type=None, 
+                 error_code=None):
+        super().__init__(parent)
+        
+        # Create instance of the UI class and set it up
+        self.ui = Ui_ErrorDatasetTile()
+        self.ui.setupUi(self)
+        
+        # Determine filename info
+        self.fname = fname
+        base_fname = op.basename(self.fname)
+        self.ui.ReadoutFilename.setText(f'(!ERROR!) File: {base_fname}')
+        
+        # ## Info 
+        self.error_code = error_code
+        self.error_type = error_type
+        self.set_status_label() 
+        
+        ## Remove tile
+        self.ui.pb_DeleteTile.clicked.connect(lambda: self.close_clicked.emit(self))
+    
+    def set_status_label(self):
+        '''
+        Set information on the status bar
+        '''
+        status_text = self.error_type
+        self.ui.lbl_Status.setText(f'STATUS: {status_text}')
+        
+        
     
         
 # Helper functions        
