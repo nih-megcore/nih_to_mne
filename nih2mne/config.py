@@ -7,9 +7,6 @@ Created on Tue Jan  6 09:43:39 2026
 """
 import os, os.path as op
 
-
-
-# Eventually move this to the nih2mne import function and reference from there
 def initialize_defaults():
     # Initialize the locations of the trigger files
     TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
@@ -43,7 +40,8 @@ def _gen_defaults(megcore_dir=op.expanduser(f'~/megcore')):
 def _load_defaults(defaults_file=op.expanduser(f'~/megcore/defaults.yml')):
     'Load the defaults.yml file from the users megcore folder'
     import yaml 
-    defaults = yaml.safe_load(defaults_file)
+    with open(defaults_file, 'r') as f:
+        defaults = yaml.safe_load(f)
     return defaults
     
 defaults = initialize_defaults() 
