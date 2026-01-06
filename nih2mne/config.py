@@ -44,5 +44,5 @@ def _load_defaults(defaults_file=op.expanduser(f'~/megcore/defaults.yml')):
         defaults = yaml.safe_load(f)
     return defaults
     
-defaults = initialize_defaults() 
+DEFAULTS = initialize_defaults() 
 TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')

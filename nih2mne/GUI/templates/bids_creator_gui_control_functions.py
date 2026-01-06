@@ -35,7 +35,29 @@ import os, os.path as op
 from nih2mne.make_meg_bids import make_bids
 from nih2mne.make_meg_bids import _read_electrodes_file
 from nih2mne.calc_mnetrans import coords_from_oblique_afni
+from nih2mne.config import DEFAULTS
 
+
+#%% Setup Defaults for GUI browse functions
+BIDS_DEFAULTS = DEFAULTS['BIDS_gen']
+NULL_VALS = ['', None, 'None', []]
+if BIDS_DEFAULTS['bids_root'] not in NULL_VALS:
+    DEFAULT_BIDS_ROOT = BIDS_DEFAULTS['bids_root']
+else:
+    DEFAULT_BIDS_ROOT = op.join(os.getcwd(), 'BIDS')
+
+if BIDS_DEFAULTS['mri_dir'] not in NULL_VALS:
+    DEFAULT_MRI_ROOT = BIDS_DEFAULTS['mri_dir']
+else:
+    DEFAULT_MRI_ROOT = os.getcwd()
+
+if BIDS_DEFAULTS['coreg_type'] not in NULL_VALS:
+    DEFAULT_MRI_TAB = BIDS_DEFAULTS['coreg_type']
+else:
+    DEFAULT_MRI_TAB = 'Brainsight'
+    
+
+#%% 
 
 class BIDS_MainWindow(QtWidgets.QMainWindow):
     def __init__(self, meghash='None', bids_id='None', meg_dsets=None):
@@ -47,7 +69,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.opts = dict(anonymize=False, 
                          subjid_input=meghash, 
                          bids_id=bids_id,
-                         bids_dir=op.join(os.getcwd(), 'BIDS'),
+                         bids_dir=DEFAULT_BIDS_ROOT, #op.join(os.getcwd(), 'BIDS'),
                          bids_session='1',
                          meg_dataset_list = meg_dsets,
                          
@@ -92,12 +114,14 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         
     ############ >> Action Section  ##########
     def _action_pb_run(self):
+        'Run the BIDS conversion'
         args = Args(self.opts)
         make_bids(args)
         
-        
     def _action_pb_BrainsightElec(self):
-        fname = self.open_file_dialog(file_filters='*.txt')
+        'Browse for electrodes file'
+        fname = self.open_file_dialog(file_filters='*.txt', 
+                                      default_dir=DEFAULT_MRI_ROOT)
         if fname:
             self.ui.te_brainsight_elec.setPlainText(fname)
             self.opts['mri_elec'] = fname
@@ -117,16 +141,19 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                 self.ui.label_10.setText("Brainsight Elec (txt): ")
                 self.ui.pb_BrainsightElec.setText('Browse')
             
-        
     def _action_pb_BrainsightMRI(self):
-        fname = self.open_file_dialog(file_filters='NIFTI files (*.nii *.nii.gz)')
+        'Browse for brainsight MRI'
+        fname = self.open_file_dialog(file_filters='NIFTI files (*.nii *.nii.gz)', 
+                                      default_dir=DEFAULT_MRI_ROOT)
         if fname:
             self.ui.te_brainsight_mri.setPlainText(fname)
             self.opts['mri_bsight'] = fname        
             self.set_mri_type('bsight')
 
     def _action_pb_BRIKfname(self):
-        fname = self.open_file_dialog(file_filters='AFNI files (*.BRIK *.BRIK.gz)')
+        'Browse for Afni file'
+        fname = self.open_file_dialog(file_filters='AFNI files (*.BRIK *.BRIK.gz)', 
+                                      default_dir=DEFAULT_MRI_ROOT)
         if fname:
             self.ui.te_BRIKfname.setPlainText(fname)
             self.opts['mri_brik'] = fname
@@ -140,7 +167,6 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                 self.ui.pb_BRIKfname.setText('Retry')
                 self.ui.label_BRIKFILE.setText('BRIK File: !FORMAT_ERROR!')
             
-
     def _action_pb_BIDS_dir(self):
         directory = self.open_folder_dialog()
         self.ui.te_bids_dir.setPlainText(directory)
