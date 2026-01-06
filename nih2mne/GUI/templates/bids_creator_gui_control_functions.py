@@ -55,6 +55,30 @@ if BIDS_DEFAULTS['coreg_type'] not in NULL_VALS:
     DEFAULT_MRI_TAB = BIDS_DEFAULTS['coreg_type']
 else:
     DEFAULT_MRI_TAB = 'Brainsight'
+
+if BIDS_DEFAULTS['anonymize'].upper() in ['Y','N']:
+    if BIDS_DEFAULTS['anonymize'].upper() == 'Y':
+        DEFAULT_ANONYMIZE = True
+    else:
+        DEFAULT_ANONYMIZE = False
+else:
+    DEFAULT_ANONYMIZE = False
+
+if BIDS_DEFAULTS['crop_zeros'].upper() in ['Y','N']:
+    if BIDS_DEFAULTS['crop_zeros'] == 'Y':
+        DEFAULT_CROPZ = True
+    else:
+        DEFAULT_CROPZ = False
+else:
+    DEFAULT_CROPZ = False
+    
+if BIDS_DEFAULTS['emptyroom'].upper() in ['Y','N']:
+    if BIDS_DEFAULTS['emptyroom'] == 'Y':
+        DEFAULT_EROOM = True
+    else:
+        DEFAULT_EROOM = False
+else:
+    DEFAULT_EROOM = False
     
 
 #%% 
@@ -66,10 +90,10 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         
         # Collect all bids options in self.opts
-        self.opts = dict(anonymize=False, 
+        self.opts = dict(anonymize=DEFAULT_ANONYMIZE, 
                          subjid_input=meghash, 
                          bids_id=bids_id,
-                         bids_dir=DEFAULT_BIDS_ROOT, #op.join(os.getcwd(), 'BIDS'),
+                         bids_dir=DEFAULT_BIDS_ROOT, 
                          bids_session='1',
                          meg_dataset_list = meg_dsets,
                          
@@ -82,8 +106,8 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                          mri_brik = False,
                          
                          #Options
-                         crop_zeros=False,
-                         include_empty_room=False,
+                         crop_zeros=DEFAULT_CROPZ,
+                         include_empty_room=DEFAULT_EROOM,
                          
                          )
         
@@ -111,6 +135,14 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         ### Connect checkboxes
         self.ui.cb_crop_zeros.stateChanged.connect(self._action_cb_crop_zeros)
         self.ui.cb_emptyroom.stateChanged.connect(self._action_cb_emptyroom)
+        
+        ### Initialize w/ DEFAULTS
+        if self.opts['include_empty_room']: self.ui.cb_emptyroom.setCheckState(2)
+        if self.opts['crop_zeros']: self.ui.cb_crop_zeros.setCheckState(2)
+        if self.opts['anonymize']: 
+            self.ui.pb_Anonymize.setText('Anonymize: Y')
+        else:
+            self.ui.pb_Anonymize.setText('Anonymize: N')
         
     ############ >> Action Section  ##########
     def _action_pb_run(self):
