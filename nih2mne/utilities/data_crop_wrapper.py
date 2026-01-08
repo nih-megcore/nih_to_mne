@@ -63,7 +63,7 @@ def return_cropped_ds(fname):
     base = op.abspath(op.dirname(fname))
     f_ = op.basename(fname)
     outdir = op.join(base, 'bids_prep_temp','tmp_cropped')
-    if not op.exists(outdir): os.mkdir(outdir)
+    if not op.exists(outdir): os.makedirs(outdir)
     fname_out = op.join(outdir, f_)
 
     if op.exists(op.join(fname,'ClassFile.cls')): 
