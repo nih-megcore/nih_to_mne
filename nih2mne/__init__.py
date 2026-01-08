@@ -2,6 +2,8 @@ import pathlib
 from . import GUI
 from . import utilities
 from . import dataQA
+from importlib_metadata import version
+__version__ = version('nih2mne')
 
 _test_data_dir=pathlib.Path(__file__).parent.resolve() / 'test_data'
 _test_meg_data_dir = _test_data_dir / '20010101'
