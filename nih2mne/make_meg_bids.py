@@ -748,7 +748,7 @@ def _input_checks(args):
         if not op.exists(args.meg_input_dir):
             raise ValueError(f'{args.meg_input_dir} does not exist')
 
-    if args.mri_bsight !=None:
+    if args.mri_bsight not in [None, False]:
         if len(args.mri_bsight_elec.split()) > 1:
             raise ValueError(f'Make sure there is not a space in filename {args.mri_bsight_elec}')
         if not op.exists(args.mri_bsight_elec):
