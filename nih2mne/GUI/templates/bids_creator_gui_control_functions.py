@@ -304,6 +304,7 @@ class Args:
             self.mri_brik = opts['mri_brik']
             self.ignore_mri_checks = False
             self.mri_bsight = False
+            self.mri_bsight_elec = None  #This should be false, but it checks against None
         else:
             self.mri_brik = False
         
