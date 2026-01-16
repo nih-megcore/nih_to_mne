@@ -36,6 +36,7 @@ from nih2mne.make_meg_bids import make_bids
 from nih2mne.make_meg_bids import _read_electrodes_file
 from nih2mne.calc_mnetrans import coords_from_oblique_afni
 from nih2mne.config import DEFAULTS
+import shutil
 
 
 #%% Setup Defaults for GUI browse functions
@@ -127,6 +128,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.te_BIDS_id.setPlainText(str(self.opts['bids_id']))
         self.ui.te_bids_dir.setPlainText(str(self.opts['bids_dir']))
         
+        #### Fill combobox
         self.ui.cb_Bids_Session.addItems(DEFAULT_BIDS_SESSION_LIST)
         
         ### Connect TextEdit lines
@@ -152,7 +154,11 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         if self.opts['include_empty_room']: self.ui.cb_emptyroom.setCheckState(2)
         if self.opts['crop_zeros']: self.ui.cb_crop_zeros.setCheckState(2)
         if self.opts['anonymize']: 
-            self.ui.pb_Anonymize.setText('Anonymize: Y')
+            if shutil.which('newDs'):
+                self.ui.pb_Anonymize.setText('Anonymize: Y')
+            else:
+                self.ui.pb_Anonymize.setText('Anonymize: N  (no CTF code)')
+                self.opts['anonymize']=False
         else:
             self.ui.pb_Anonymize.setText('Anonymize: N')
         
@@ -246,8 +252,12 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         
     def _action_pb_anonymize(self):
         if self.opts['anonymize']==False:
-            self.ui.pb_Anonymize.setText('Anonymize: Y')
-            self.opts['anonymize']=True
+            if shutil.which('newDs'):
+                self.ui.pb_Anonymize.setText('Anonymize: Y')
+                self.opts['anonymize']=True
+            else:
+                self.ui.pb_Anonymize.setText('Anonymize: N  (no CTF code)')
+                self.opts['anonymize']=False
         elif self.opts['anonymize']==True: 
             self.ui.pb_Anonymize.setText('Anonymize: N')
             self.opts['anonymize']=False
