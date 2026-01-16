@@ -452,7 +452,7 @@ class Ui_MainWindow(object):
         self.horizontalLayout_9.addWidget(self.pb_print_cmd)
         self.pb_CheckOutputs = QtWidgets.QPushButton(self.widget_6)
         font = QtGui.QFont()
-        font.setStrikeOut(True)
+        font.setStrikeOut(False)
         self.pb_CheckOutputs.setFont(font)
         self.pb_CheckOutputs.setObjectName("pb_CheckOutputs")
         self.horizontalLayout_9.addWidget(self.pb_CheckOutputs)

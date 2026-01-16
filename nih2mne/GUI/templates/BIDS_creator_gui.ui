@@ -909,7 +909,7 @@ p, li { white-space: pre-wrap; }
               <widget class="QPushButton" name="pb_CheckOutputs">
                <property name="font">
                 <font>
-                 <strikeout>true</strikeout>
+                 <strikeout>false</strikeout>
                 </font>
                </property>
                <property name="text">
