@@ -37,7 +37,8 @@ from nih2mne.make_meg_bids import _read_electrodes_file
 from nih2mne.calc_mnetrans import coords_from_oblique_afni
 from nih2mne.config import DEFAULTS
 import shutil
-
+from mne_bids import BIDSPath
+from nih2mne.make_meg_bids import _gen_taskrundict
 
 #%% Setup Defaults for GUI browse functions
 BIDS_DEFAULTS = DEFAULTS['BIDS_gen']
@@ -145,6 +146,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.pb_BrainsightElec.clicked.connect(self._action_pb_BrainsightElec)
         self.ui.pb_BrainsightMRI.clicked.connect(self._action_pb_BrainsightMRI)
         self.ui.pb_run.clicked.connect(self._action_pb_run)
+        self.ui.pb_CheckOutputs.clicked.connect(self._action_pb_CheckOutputs)
         
         ### Connect checkboxes
         self.ui.cb_crop_zeros.stateChanged.connect(self._action_cb_crop_zeros)
@@ -167,6 +169,13 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         'Run the BIDS conversion'
         args = Args(self.opts)
         make_bids(args)
+    
+    def _action_pb_CheckOutputs(self):
+        'Map the input files to output and display in filelist'
+        self._make_task_dict()  #Generates the in_out_mapping
+        self.io_mapping
+        self._set_filelist_text()
+        
         
     def _action_pb_BrainsightElec(self):
         'Browse for electrodes file'
@@ -302,6 +311,70 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
             options=options
         )
         return directory
+    
+    def _get_bids_path(self, task=None, run=None):
+        try:
+            bids_path = BIDSPath(subject=self.opts['bids_id'],
+                                 session=self.opts['bids_session'], 
+                                 task=task,
+                                 run=run, 
+                                 root=self.opts['bids_dir'], 
+                                 suffix='meg', 
+                                 extension='.ds')
+        except BaseException as e:
+            bids_path = False
+            print(f'{e}')
+        return bids_path
+    
+    def _make_task_dict(self):
+        task_dict = _gen_taskrundict(self.opts['meg_dataset_list'])
+        f_out_attributes = {}
+        
+        #Extract out the ordered runs
+        for task in task_dict.keys():
+            for idx, filename in enumerate(task_dict[task]):
+                run = str(idx+1)
+                if len(run)==1: run = '0'+run
+                bpath = self._get_bids_path(task=task, run=run)
+                f_out_attributes[filename] = {'run':run,
+                                                   'task':task,
+                                                   'bidspath':bpath
+                                                   }
+        
+        for key in f_out_attributes.keys():
+            f_out_attributes[key]['out_fname'] = str(f_out_attributes[key]['bidspath'].fpath)
+            
+        self.io_mapping = f_out_attributes
+        
+    def _set_filelist_text(self):
+        self.ui.list_fname_conversion.clear()
+        for input_key in self.io_mapping:
+            _txt = f'{op.basename(str(input_key))} --> '
+            try:
+                _out_fname = self.io_mapping[input_key]['out_fname']
+                _strip_outfname = _out_fname.replace(self.opts['bids_dir'],'')
+                _txt += f'(bidsDir){_strip_outfname}'
+            except:
+                _txt += 'Failed to assess conversion'
+            self.ui.list_fname_conversion.addItem(_txt)
+        
+        
+    
+    # def _extract_task(self, fname):
+    #     base_fname = op.basename(fname)
+    #     _splits = base_fname.split('_')
+    #     if len(_splits)==4:
+    #         taskname = _splits[1]
+    #     elif _splits[0].startswith('sub-'):
+    #         taskname = fname.split('task-')[-1].split('_')[0]
+    #     else:
+    #         taskname = 'NA'
+    #     return taskname
+        
+        
+        
+        
+        
     
 #  Need to pipe in the rest of the arguments into the class
 # Then initialize in the above

@@ -320,13 +320,6 @@ def process_meg_bids(dset_dict=None, subject_in=None, bids_id=None,
         This can be generated using standardize_eventID_list.py
 
     '''
-    # if bids_dir==None:
-    #     raise ValueError('No bids_dir output directory given')
-    # if not os.path.exists(bids_dir): os.mkdir(bids_dir)
-    # dset_dict = sessdir2taskrundict(session_dir=input_path, subject_in=subject_in)
-    
-    session = str(int(session)) #Confirm no leading zeros
-    #if len(session)==1: session = '0'+session
     
     error_count=0
     for task, task_sublist in dset_dict.items():
@@ -350,15 +343,6 @@ def process_meg_bids(dset_dict=None, subject_in=None, bids_id=None,
                 #Anonymize file and ref new dset off of the output fname
                 meg_fname = anonymize_meg(meg_fname, tmpdir=tmpdir) 
                 anonymize_finalize(meg_fname) #Scrub or remove extra text files
-            
-            #Special case for pre/post intervention in same session
-            testval_case = base_meg_fname.replace('.ds','').split('_')[-1]
-            if testval_case.lower() == 'pre':
-                run=1
-                logging.info(f'Special case pre assigned to run 1: {meg_fname}')
-            elif testval_case.lower() == 'post':
-                run=2
-                logging.info(f'Special case post assigned to run2: {meg_fname}')
             
             try:
                 raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore', 
