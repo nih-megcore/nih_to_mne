@@ -13,7 +13,7 @@ te_meghash  #MEGHASH manual entry -- fill from inputs
 te_BIDS_id  #BIDS id - manual entry only
 te_bids_dir #Text edit -- filled by pb_BIDSdir selection
 pb_BIDS_dir  #Push button to get file/directory browser selector
-te_bids_session #Manual entry default to 1
+cb_Bids_Session #Combobox with bids session options
 te_BRIKfname #Manual entry set by pb if used
 pb_BRIKfname #File selector
 te_brainsight_elec #Filled by pb_brainsight --- Do a datacheck upon selection for formatting
@@ -79,6 +79,17 @@ if BIDS_DEFAULTS['emptyroom'].upper() in ['Y','N']:
         DEFAULT_EROOM = False
 else:
     DEFAULT_EROOM = False
+
+if BIDS_DEFAULTS['bids_session_list'][0] not in [None, False]:
+    DEFAULT_BIDS_SESSION_LIST = [str(i).strip() for i in BIDS_DEFAULTS['bids_session_list']]
+    if BIDS_DEFAULTS['bids_session'] not in [None, False]:
+        DEFAULT_BIDS_SESSION = str(BIDS_DEFAULTS['bids_session'])
+    else:
+        DEFAULT_BIDS_SESSION = str(BIDS_DEFAULTS['bids_session_list'][0])
+else:
+    DEFAULT_BIDS_SESSION_LIST = ['1']
+    DEFAULT_BIDS_SESSION = '1'
+    
     
 
 #%% 
@@ -94,7 +105,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                          subjid_input=meghash, 
                          bids_id=bids_id,
                          bids_dir=DEFAULT_BIDS_ROOT, 
-                         bids_session='1',
+                         bids_session=DEFAULT_BIDS_SESSION,
                          meg_dataset_list = meg_dsets,
                          
                          #MRI_none
@@ -115,13 +126,14 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.te_meghash.setPlainText(str(self.opts['subjid_input']))
         self.ui.te_BIDS_id.setPlainText(str(self.opts['bids_id']))
         self.ui.te_bids_dir.setPlainText(str(self.opts['bids_dir']))
-        self.ui.te_bids_session.setPlainText(str(self.opts['bids_session']))
+        
+        self.ui.cb_Bids_Session.addItems(DEFAULT_BIDS_SESSION_LIST)
         
         ### Connect TextEdit lines
         self.ui.te_meghash.textChanged.connect(self._update_meghash)
         self.ui.te_BIDS_id.textChanged.connect(self._update_bids_id)
         self.ui.te_bids_dir.textChanged.connect(self._update_bids_dir)
-        self.ui.te_bids_session.textChanged.connect(self._update_bids_ses)
+        self.ui.cb_Bids_Session.currentIndexChanged.connect(self._update_bids_ses)
         
         ### Connect buttons    
         self.ui.pb_Anonymize.clicked.connect(self._action_pb_anonymize)   #flipflop toggle
@@ -226,7 +238,8 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.opts['bids_id'] = self.ui.te_BIDS_id.toPlainText().strip()
     
     def _update_bids_ses(self):
-        self.opts['bids_session']=self.ui.te_bids_session.toPlainText().strip()
+        _bids_session = self.ui.cb_Bids_Session.currentText()
+        self.opts['bids_session']=_bids_session
             
     def _update_meghash(self):
         self.opts['subjid_input']=self.ui.te_meghash.toPlainText().strip()
