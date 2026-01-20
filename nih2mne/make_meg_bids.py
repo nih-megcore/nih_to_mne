@@ -411,8 +411,53 @@ def process_meg_bids(dset_dict=None, subject_in=None, bids_id=None,
                     check the error log for more information')  #!!! print the error log location
     else:
         logger.info('SUCCESS: There were no errors!')
+
+#%%%    
+def _proc_meg_bids(meg_fname=None, bids_path=None,
+                    anonymize=False, tmpdir=None, ignore_eroom=None, 
+                    crop_trailing_zeros=False, eventID_csv=None, 
+                   ):
+    error_count=0
+    base_meg_fname = op.basename(meg_fname) #gen basename for legacy reasons
+    try:
+        _clear_ClassFile(meg_fname) #Remove Trials that fail CTFtools
+    except:
+        logger.warn(f'''Could not clear the Classfile, this may cause
+                     issues with processing.  If so, change the following
+                     file to write permissions and retry: 
+                         {str(op.join(meg_fname, 'ClassFile.cls'))}''')
+    
+    if crop_trailing_zeros==True:
+        # This is necessary for trial based acq that is terminated early
+        from nih2mne.utilities.data_crop_wrapper import return_cropped_ds
+        meg_fname = return_cropped_ds(meg_fname)
+    
+    if anonymize==True:
+        _check_markerfile(meg_fname)
+        #Anonymize file and ref new dset off of the output fname
+        meg_fname = anonymize_meg(meg_fname, tmpdir=tmpdir) 
+        anonymize_finalize(meg_fname) #Scrub or remove extra text files
+    
+    raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore', 
+                              clean_names=True)  
+    raw.info['line_freq'] = 60 
+    
+    if eventID_csv != None:
+        evts_dframe = pd.read_csv(eventID_csv)
+        out_dict = {row.ID_names:row.ID_vals for idx,row in evts_dframe.iterrows()}
+        evts_vals, evts_ids = mne.events_from_annotations(raw, event_id=out_dict)
+        raw.annotations.delete(range(len(raw.annotations)))
+    else:
+        evts_vals=None
+        evts_ids=None
+    
+    write_raw_bids(raw, bids_path, overwrite=True, 
+                   events=evts_vals, event_id=evts_ids)
+    logger.info(f'Successful MNE BIDS: {meg_fname} to {bids_path}')
+
     
     
+#%%%    
 
 def freesurfer_import(mri=None, subjid=None, tmp_subjects_dir=None,
                       afni_fname=None,

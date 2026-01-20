@@ -29,6 +29,7 @@ pb_run  #Run operation
 
 """
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QApplication
 from nih2mne.GUI.templates.BIDS_creator_gui import Ui_MainWindow
 import sys
 import os, os.path as op
@@ -38,7 +39,8 @@ from nih2mne.calc_mnetrans import coords_from_oblique_afni
 from nih2mne.config import DEFAULTS
 import shutil
 from mne_bids import BIDSPath
-from nih2mne.make_meg_bids import _gen_taskrundict
+from nih2mne.make_meg_bids import _gen_taskrundict, _proc_meg_bids
+from collections import OrderedDict
 
 #%% Setup Defaults for GUI browse functions
 BIDS_DEFAULTS = DEFAULTS['BIDS_gen']
@@ -166,9 +168,22 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         
     ############ >> Action Section  ##########
     def _action_pb_run(self):
-        'Run the BIDS conversion'
-        args = Args(self.opts)
-        make_bids(args)
+        'Run the BIDS conversion - Loop over all items in list'
+        self._action_pb_CheckOutputs()  #Initialize io_mapping
+        for idx, key in enumerate(self.io_mapping.keys()):
+            self._set_single_filelist_text(idx=idx, prefix='Processing')
+            QApplication.processEvents() #Force text update live
+            _meg_fname = key
+            _bids_path = self.io_mapping[key]['bidspath']
+            try:
+                _proc_meg_bids(meg_fname=_meg_fname, bids_path=_bids_path,
+                                    anonymize=False, tmpdir=None, ignore_eroom=True, 
+                                    crop_trailing_zeros=False, 
+                                   )
+                self._set_single_filelist_text(idx=idx, prefix='Done')
+            except BaseException as e:
+                self._set_single_filelist_text(idx=idx, prefix='Error')
+            QApplication.processEvents()  #Force text update live
     
     def _action_pb_CheckOutputs(self):
         'Map the input files to output and display in filelist'
@@ -328,7 +343,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     
     def _make_task_dict(self):
         task_dict = _gen_taskrundict(self.opts['meg_dataset_list'])
-        f_out_attributes = {}
+        f_out_attributes = OrderedDict() #{}
         
         #Extract out the ordered runs
         for task in task_dict.keys():
@@ -346,17 +361,24 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
             
         self.io_mapping = f_out_attributes
         
-    def _set_filelist_text(self):
-        self.ui.list_fname_conversion.clear()
-        for input_key in self.io_mapping:
-            _txt = f'{op.basename(str(input_key))} --> '
-            try:
-                _out_fname = self.io_mapping[input_key]['out_fname']
-                _strip_outfname = _out_fname.replace(self.opts['bids_dir'],'')
-                _txt += f'(bidsDir){_strip_outfname}'
-            except:
-                _txt += 'Failed to assess conversion'
-            self.ui.list_fname_conversion.addItem(_txt)
+    def _set_filelist_text(self, prefix=None):
+        for idx,input_key in enumerate(self.io_mapping):
+            self._set_single_filelist_text(idx=idx, prefix=prefix)
+    
+    def _set_single_filelist_text(self, idx=None, prefix=None):
+        input_key = list(self.io_mapping.keys())[idx]
+        _txt = f'{idx+1}) '
+        if prefix != None: _txt+=f'[{prefix}] '
+        _txt += f'{op.basename(str(input_key))} --> '
+        try:
+            _out_fname = self.io_mapping[input_key]['out_fname']
+            _strip_outfname = _out_fname.replace(self.opts['bids_dir'],'')
+            _txt += f'(bidsDir){_strip_outfname}'
+        except:
+            _txt += 'Failed to assess conversion'
+        self.ui.list_fname_conversion.item(idx).setText(_txt)
+        
+        
         
         
     
