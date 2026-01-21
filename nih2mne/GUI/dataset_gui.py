@@ -276,6 +276,8 @@ class InputDatasetTile(QtWidgets.QWidget):
         if len(evt_dframe) != 0:
             val_counts = evt_dframe.description.value_counts()
             evt_text = ' '.join([f"{k}:({v})" for k, v in val_counts.items()])
+            if len(evt_text) > 120:
+                evt_text = evt_text[:120] + '...(trucated to fit)'
             self.ui.lbl_EventInfo.setText(f'EVENTS: {evt_text}')
         else:
             self.ui.lbl_EventInfo.setText(f'EVENTS: NONE')
