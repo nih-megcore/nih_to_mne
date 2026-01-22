@@ -7,7 +7,7 @@ Created on Tue Jan 20 11:27:45 2026
 """
 
 import pytest
-from nih2mne.make_meg_bids import _proc_meg_bids
+from nih2mne.make_meg_bids import _proc_meg_bids, _proc_mri_bids
 import nih2mne
 
 
@@ -38,6 +38,23 @@ def test_proc_meg_bids(tmpdir):
                         crop_trailing_zeros=False, 
                        )
 
+tmpdir = '/tmp/BIDStest'  # REMOVE ~~~~~~~~~~~~~~~~~~~~~~~~    
 
-
+def test_proc_mri_bids(tmpdir):
+    out_bids_path = op.join(tmpdir, 'BIDS')
+    _bids_path = BIDSPath(subject='TEST', session='1',  
+                          datatype='anat', extension='.nii.gz',
+                          root = out_bids_path, suffix='T1w') #, extension='.ds'
+    _bids_path.fpath
+    
+    _proc_mri_bids(t1_bids_path= _bids_path, temp_dir=tmpdir, 
+                   anonymize=False, 
+                   mri_bsight=str(test_data.mri_nii), 
+                   mri_bsight_elec=str(test_data.bsight_elec), 
+                   mri_brik=False, input_id='test')
+    
+    assert op.exists(_bids_path.fpath)
+    json_fname = str(_bids_path.fpath).replace('.nii.gz','.json')
+    assert op.exists(json_fname)
+    
 

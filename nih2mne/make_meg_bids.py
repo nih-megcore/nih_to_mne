@@ -599,31 +599,105 @@ def process_mri_bids_fs(bids_dir=None,
         logger.error('MRI BIDS PROCESSING')
         err_logger.error(f'MRI BIDS PROCESSING: {str(e)}')
 
-def process_mri_bids(bids_dir=None,
-                     bids_id=None, 
-                     nii_mri = None,
-                     session=None):
-    'This function directly writes the brainsight mri without freesurfer processing'
-    if not os.path.exists(bids_dir): os.mkdir(bids_dir)
+# def process_mri_bids(bids_dir=None,
+#                      bids_id=None, 
+#                      nii_mri = None,
+#                      session=None):
+#     # 'This function directly writes the brainsight mri without freesurfer processing'
+#     # if not os.path.exists(bids_dir): os.mkdir(bids_dir)
     
-    try:
-        ses=str(int(session)) #Confirm no leading zeros
-        t1w_bids_path = \
-            BIDSPath(subject=bids_id, session=ses, root=bids_dir, suffix='T1w')
+#     # # ses=str(int(session)) #Confirm no leading zeros
+#     # t1w_bids_path = \
+#     #     BIDSPath(subject=bids_id, session=ses, root=bids_dir, suffix='T1w')
+
+#     # Write regular
+#     t1w_bids_path = write_anat(
+#         image=nii_mri,
+#         bids_path=t1w_bids_path,
+#         deface=False, 
+#         overwrite=True
+#         )
     
-        # Write regular
-        t1w_bids_path = write_anat(
-            image=nii_mri,
-            bids_path=t1w_bids_path,
-            deface=False, 
-            overwrite=True
-            )
+#     return t1w_bids_path
         
-        return t1w_bids_path
+
+
+
+def _proc_mri_bids(t1_bids_path=None, 
+               anonymize=False, mri_bsight=False, mri_bsight_elec=False, 
+               mri_brik=False, temp_dir=None, input_id=None):
         
-    except BaseException as e:
-        logger.error('MRI BIDS PROCESSING')
-        err_logger.error(f'MRI BIDS PROCESSING: {str(e)}')
+        
+        
+        # ignore_mri_checks=False, temp_dir=None, subjid=None,
+        #            mri_brik=False, mri_bsight=False, anonymize=False, 
+        #            bids_dir=False, bids_id = None, bids_session=None,
+        #            mri_bsight_elec = False
+        #            ):
+    #Create temp dir for MRI
+    # global temp_subjects_dir
+    from pathlib import Path
+    temp_dir = Path(temp_dir)
+    temp_subjects_dir = temp_dir / 'subjects_tmp' 
+    temp_subjects_dir.mkdir(parents=True, exist_ok=True)
+    temp_mri_prep = temp_dir / 'mri_tmp' / input_id
+    if op.exists(temp_mri_prep): shutil.rmtree(temp_mri_prep)
+    temp_mri_prep.mkdir(parents=True)
+    
+    #    
+    #Check for Afni and convert the mri to nifti
+    #
+    if mri_brik:
+        # host = os.uname().nodename
+        
+        #Convert the mri to nifti
+        nii_mri = convert_brik(mri_brik, outdir=temp_mri_prep)
+        logger.info(f'Converted {mri_brik} to {nii_mri}')
+        
+        #Extract FIDS from Afni Head and convert to RAS
+        coords_lps = coords_from_oblique_afni(mri_brik)
+        coords_ras = {}
+        for key in coords_lps.keys():
+            tmp = np.array(coords_lps[key])
+            tmp[0:2]*=-1
+            coords_ras[key]=tmp
+              
+    #
+    # Proc Brainsight Data
+    #
+    if mri_bsight:
+        if (mri_bsight.endswith('.nii')) or (mri_bsight.endswith('.nii.gz')):
+            nii_mri = mri_bsight
+        else:
+            raise ValueError(f'mri_bsight entry does not end with (nii or nii.gz): {mri_bsight}')
+    
+    
+    #
+    #   Anonymize/Deface MRI if set
+    #
+    if anonymize==True:
+        nii_mri = mri_deface(nii_mri, topdir=temp_mri_prep)
+  
+    #
+    # Finish MRI prep
+    #
+    t1_bids_path = write_anat(
+        image=nii_mri,
+        bids_path=t1_bids_path,
+        deface=False, 
+        overwrite=True
+        )
+                              
+    if mri_bsight_elec != None:
+        process_mri_json(elec_fname=mri_bsight_elec,
+                             mri_fname = str(t1_bids_path))
+    elif mri_brik != None:
+        process_mri_json(elec_fname=mri_bsight_elec,
+                             mri_fname = str(t1_bids_path), 
+                             ras_coords=coords_ras)
+
+            
+        
         
 def _extract_fidname(fidname=None, elec_names=None):
     '''

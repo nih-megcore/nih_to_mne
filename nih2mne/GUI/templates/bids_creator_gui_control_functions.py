@@ -170,6 +170,8 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     def _action_pb_run(self):
         'Run the BIDS conversion - Loop over all items in list'
         self._action_pb_CheckOutputs()  #Initialize io_mapping
+        
+        #MEG Conversion to BIDS
         for idx, key in enumerate(self.io_mapping.keys()):
             self._set_single_filelist_text(idx=idx, prefix='Processing')
             QApplication.processEvents() #Force text update live
@@ -184,10 +186,21 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
             except BaseException as e:
                 self._set_single_filelist_text(idx=idx, prefix='Error')
             QApplication.processEvents()  #Force text update live
+        
+        #MRI Conversion to BIDS
+        if self.mri_bsight or self.mri_brik:
+            # _t1_bids_path = BIDSPath(subject='TEST', session='1',  
+            #                       datatype='anat', extension='.nii.gz',
+            #                       root = out_bids_path, suffix='T1w') #, extension='.ds'
+            pass
+            
+        
+        
     
     def _action_pb_CheckOutputs(self):
         'Map the input files to output and display in filelist'
         self._make_task_dict()  #Generates the in_out_mapping
+        self._make_anat_dict()  #Generates anatomy anat_io_mapping
         self.io_mapping
         self._set_filelist_text()
         
@@ -328,6 +341,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         return directory
     
     def _get_bids_path(self, task=None, run=None):
+        'Create the MEG bids path'
         try:
             bids_path = BIDSPath(subject=self.opts['bids_id'],
                                  session=self.opts['bids_session'], 
@@ -341,7 +355,32 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
             print(f'{e}')
         return bids_path
     
+    def _make_anat_dict(self):
+        'Generate the fname to anat bidspath dictionary'
+        self.anat_io_mapping = {}
+        if self.opts['mri_bsight']:
+            key = self.opts['mri_bsight']
+        elif self.opts['mri_brik']:
+            key = self.opts['mri_brik']
+        else: 
+            return
+        
+        self.anat_io_mapping[key] = {}
+        t1_bids_path = BIDSPath(subject=self.opts['bids_id'],
+                             session=self.opts['bids_session'], 
+                             datatype='anat',
+                             run='01',   #Hard-code the MRI run
+                             root=self.opts['bids_dir'], 
+                             suffix='T1w', 
+                             extension='.nii.gz')
+
+        self.anat_io_mapping[key]['bidspath'] = t1_bids_path
+        self.anat_io_mapping[key]['out_fname'] = str(t1_bids_path.fpath)
+        self.anat_io_mapping[key]['type'] = 'anat'
+        
+
     def _make_task_dict(self):
+        'Add bids_path and naming for meg datasets, mapped to self.io_mapping'
         task_dict = _gen_taskrundict(self.opts['meg_dataset_list'])
         f_out_attributes = OrderedDict() #{}
         
@@ -355,6 +394,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                                                    'task':task,
                                                    'bidspath':bpath
                                                    }
+                f_out_attributes[filename]['type']='meg'
         
         for key in f_out_attributes.keys():
             f_out_attributes[key]['out_fname'] = str(f_out_attributes[key]['bidspath'].fpath)
@@ -362,16 +402,41 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.io_mapping = f_out_attributes
         
     def _set_filelist_text(self, prefix=None):
+        '''Iterate through the MEG datasets and rename.  
+        For the anat, got to the next index and set label.
+        Calls _set_single_filelist_text for each entry'''
+        idx = 0 #Initialize in case there is no MEG data
+        
+        # Label the MEG datasets
         for idx,input_key in enumerate(self.io_mapping):
-            self._set_single_filelist_text(idx=idx, prefix=prefix)
+            self._set_single_filelist_text(idx=idx, prefix=prefix, 
+                                           io_dict=self.io_mapping)
+        
+        # Label the Anat dataset (always at the end of the list)
+        idx += 1
+        self._anat_idx = idx
+        self._set_single_filelist_text(idx=idx, prefix=prefix,
+                                io_dict=self.anat_io_mapping)
     
-    def _set_single_filelist_text(self, idx=None, prefix=None):
-        input_key = list(self.io_mapping.keys())[idx]
+    def _set_single_filelist_text(self, idx=None, prefix=None, io_dict={}):
+        key_list = io_dict.keys()
+        #Perform this line in case the 'anat' key has not been set, prevent raise error
+        if len(key_list) == 0:
+            return
+        
+        _tmp = list(io_dict.keys())[0]
+        if io_dict[_tmp]['type']=='anat':
+            input_key = list(io_dict.keys())[0]
+            if self.ui.list_fname_conversion.count() < (idx+1):
+                self.ui.list_fname_conversion.addItem('MRI')
+        else:
+            #MEG processing
+            input_key = list(io_dict.keys())[idx]
         _txt = f'{idx+1}) '
         if prefix != None: _txt+=f'[{prefix}] '
         _txt += f'{op.basename(str(input_key))} --> '
         try:
-            _out_fname = self.io_mapping[input_key]['out_fname']
+            _out_fname = io_dict[input_key]['out_fname']
             _strip_outfname = _out_fname.replace(self.opts['bids_dir'],'')
             _txt += f'(bidsDir){_strip_outfname}'
         except:
