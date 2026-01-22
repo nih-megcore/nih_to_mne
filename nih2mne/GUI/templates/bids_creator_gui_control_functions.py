@@ -39,7 +39,7 @@ from nih2mne.calc_mnetrans import coords_from_oblique_afni
 from nih2mne.config import DEFAULTS
 import shutil
 from mne_bids import BIDSPath
-from nih2mne.make_meg_bids import _gen_taskrundict, _proc_meg_bids
+from nih2mne.make_meg_bids import _gen_taskrundict, _proc_meg_bids, _proc_mri_bids
 from collections import OrderedDict
 
 #%% Setup Defaults for GUI browse functions
@@ -173,7 +173,8 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         
         #MEG Conversion to BIDS
         for idx, key in enumerate(self.io_mapping.keys()):
-            self._set_single_filelist_text(idx=idx, prefix='Processing')
+            self._set_single_filelist_text(idx=idx, prefix='Processing',
+                                           io_dict=self.io_mapping)
             QApplication.processEvents() #Force text update live
             _meg_fname = key
             _bids_path = self.io_mapping[key]['bidspath']
@@ -182,20 +183,37 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                                     anonymize=False, tmpdir=None, ignore_eroom=True, 
                                     crop_trailing_zeros=False, 
                                    )
-                self._set_single_filelist_text(idx=idx, prefix='Done')
+                self._set_single_filelist_text(idx=idx, prefix='Done', 
+                                               io_dict=self.io_mapping)
             except BaseException as e:
-                self._set_single_filelist_text(idx=idx, prefix='Error')
+                self._set_single_filelist_text(idx=idx, prefix='Error', 
+                                               io_dict=self.io_mapping)
             QApplication.processEvents()  #Force text update live
         
         #MRI Conversion to BIDS
-        if self.mri_bsight or self.mri_brik:
-            # _t1_bids_path = BIDSPath(subject='TEST', session='1',  
-            #                       datatype='anat', extension='.nii.gz',
-            #                       root = out_bids_path, suffix='T1w') #, extension='.ds'
-            pass
+        if self.opts['mri_bsight'] or self.opts['mri_brik']:
+            try:
+                self._set_single_filelist_text(idx=self._anat_idx, prefix='Processing',
+                                               io_dict=self.anat_io_mapping)
+                QApplication.processEvents() #Force text update live
+                
+                _mri_fname = list(self.anat_io_mapping.keys())[0]
+                _t1_bids_path = self.anat_io_mapping[_mri_fname]['bidspath']
+                _proc_mri_bids(t1_bids_path = _t1_bids_path, 
+                               anonymize=self.opts['anonymize'], 
+                               mri_bsight=self.opts['mri_bsight'], 
+                               mri_bsight_elec=self.opts['mri_elec'], 
+                               mri_brik=self.opts['mri_brik'], 
+                               temp_dir='/tmp/test/', 
+                               input_id=self.opts['subjid_input'])
+                self._set_single_filelist_text(idx=self._anat_idx, prefix='Done',
+                                               io_dict=self.anat_io_mapping)
+            except BaseException as e:
+                self._set_single_filelist_text(idx=self._anat_idx, prefix='Error',
+                                               io_dict=self.anat_io_mapping)
+            QApplication.processEvents() #Force text update live
+                
             
-        
-        
     
     def _action_pb_CheckOutputs(self):
         'Map the input files to output and display in filelist'

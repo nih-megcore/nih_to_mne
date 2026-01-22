@@ -688,11 +688,11 @@ def _proc_mri_bids(t1_bids_path=None,
         overwrite=True
         )
                               
-    if mri_bsight_elec != None:
+    if mri_bsight_elec not in [None, False, 'None']:
         process_mri_json(elec_fname=mri_bsight_elec,
                              mri_fname = str(t1_bids_path))
-    elif mri_brik != None:
-        process_mri_json(elec_fname=mri_bsight_elec,
+    elif mri_brik not in [None, False, 'None']:
+        process_mri_json(elec_fname=None,
                              mri_fname = str(t1_bids_path), 
                              ras_coords=coords_ras)
 
