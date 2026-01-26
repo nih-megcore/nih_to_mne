@@ -295,6 +295,9 @@ def process_meg_bids(dset_dict=None, subject_in=None, bids_id=None,
     Calls sessdir2taskrundict to get the task IDs and sort according to run #
     Output is the data in bids format in the assigned bids_dir
     
+    <<This is a LEGACY function that preps data and iterates over _process_meg_bids
+    which does the heavy lifting.>>
+    
     !Warning - this does not parse the events from your dataset
     !Use parse marks or other tools -  preferably before doing the bids proc.
 
@@ -320,97 +323,24 @@ def process_meg_bids(dset_dict=None, subject_in=None, bids_id=None,
         This can be generated using standardize_eventID_list.py
 
     '''
-    
-    error_count=0
+    # error_count=0
     for task, task_sublist in dset_dict.items():
         for run, meg_fname in enumerate(task_sublist, start=1):
-            base_meg_fname = op.basename(meg_fname) #gen basename for legacy reasons
-            try:
-                _clear_ClassFile(meg_fname) #Remove Trials that fail CTFtools
-            except:
-                logger.warn(f'''Could not clear the Classfile, this may cause
-                             issues with processing.  If so, change the following
-                             file to write permissions and retry: 
-                                 {str(op.join(meg_fname, 'ClassFile.cls'))}''')
+            session = str(int(session)) # Remove preceeding zeros
+            run = str(run).zfill(2)
             
-            if crop_trailing_zeros==True:
-                # This is necessary for trial based acq that is terminated early
-                from nih2mne.utilities.data_crop_wrapper import return_cropped_ds
-                meg_fname = return_cropped_ds(meg_fname)
+            _bids_path = BIDSPath(subject=bids_id, root=bids_dir, 
+                                  session=session, run=run, task=task,
+                                  suffix = 'meg', extension='.ds')
             
-            if anonymize==True:
-                _check_markerfile(meg_fname)
-                #Anonymize file and ref new dset off of the output fname
-                meg_fname = anonymize_meg(meg_fname, tmpdir=tmpdir) 
-                anonymize_finalize(meg_fname) #Scrub or remove extra text files
-            
-            try:
-                raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore', 
-                                          clean_names=True)  
-                raw.info['line_freq'] = 60 
-                
-                if eventID_csv != None:
-                    evts_dframe = pd.read_csv(eventID_csv)
-                    out_dict = {row.ID_names:row.ID_vals for idx,row in evts_dframe.iterrows()}
-                    evts_vals, evts_ids = mne.events_from_annotations(raw, event_id=out_dict)
-                    raw.annotations.delete(range(len(raw.annotations)))
-                else:
-                    evts_vals=None
-                    evts_ids=None
-                
-                ses = session
-                run = str(run) 
-                if len(run)==1: run='0'+run
-                bids_path = BIDSPath(subject=bids_id, session=ses, task=task,
-                                      run=run, root=bids_dir, suffix='meg')
-                write_raw_bids(raw, bids_path, overwrite=True, 
-                               events=evts_vals, event_id=evts_ids)
-                logger.info(f'Successful MNE BIDS: {meg_fname} to {bids_path}')
-            except BaseException as e:
-                logger.error(f'MEG BIDS PROCESSING: {meg_fname}')
-                err_logger.error('MEG BIDS PROCESSING:', e)
-                error_count+=1
-    #
-    #Include the emptyroom dataset   
-    #
-    if ignore_eroom != True:
-        try:
-            tmp_ = str(int(np.random.uniform(0, 1e10)))  #Make a random name
-            tmpdir=op.join(temp_dir, f'er_{tmp_}')
-            if not op.exists(tmpdir): os.mkdir(tmpdir)
-            er_fname = get_eroom(meg_fname, tmpdir=tmpdir) 
-            
-            #Required to make a new dir for eroom anonymization
-            newtmp_ = str(int(np.random.uniform(0, 1e10)))  #Make a random name
-            newtmpdir=op.join(temp_dir, f'er_{newtmp_}') 
-            if anonymize==True:
-                #Anonymize file and ref new dset off of the output fname
-                er_fname = anonymize_meg(er_fname, tmpdir=newtmpdir) 
-                anonymize_finalize(er_fname) #Scrub or remove extra text files
-
-            raw = mne.io.read_raw_ctf(er_fname, system_clock='ignore', 
-                                      clean_names=True)  
-            raw.info['line_freq'] = 60 
-            
-            ses = session
-            task = 'noise'
-            run = '01'
-            bids_path = BIDSPath(subject=bids_id, session=ses, task=task,
-                                  run=run, root=bids_dir, suffix='meg')
-            write_raw_bids(raw, bids_path, overwrite=True)
-            logger.info(f'Successful MNE BIDS: {er_fname} to {bids_path}')
-        except BaseException as e:
-            logger.error('MEG BIDS PROCESSING EMPTY ROOM') 
-            err_logger.error('MEG BIDS PROCESSING EMPTY ROOM:', e)
-            error_count+=1
-    else:
-        logger.info('Ignore ERoom set -- not finding emptyroom')
-
-    if error_count > 0:
-        logger.info(f'There were {error_count} errors in your processing, \
-                    check the error log for more information')  #!!! print the error log location
-    else:
-        logger.info('SUCCESS: There were no errors!')
+            _proc_meg_bids(meg_fname = meg_fname, 
+                           bids_path = _bids_path,
+                           anonymize = anonymize, 
+                           tmpdir = tmpdir, 
+                           ignore_eroom = ignore_eroom, 
+                           crop_trailing_zeros = crop_trailing_zeros, 
+                           eventID_csv = eventID_csv, 
+                               )
 
 #%%%    
 def _proc_meg_bids(meg_fname=None, bids_path=None,
@@ -599,26 +529,26 @@ def process_mri_bids_fs(bids_dir=None,
         logger.error('MRI BIDS PROCESSING')
         err_logger.error(f'MRI BIDS PROCESSING: {str(e)}')
 
-# def process_mri_bids(bids_dir=None,
-#                      bids_id=None, 
-#                      nii_mri = None,
-#                      session=None):
-#     # 'This function directly writes the brainsight mri without freesurfer processing'
-#     # if not os.path.exists(bids_dir): os.mkdir(bids_dir)
+def process_mri_bids(bids_dir=None,
+                     bids_id=None, 
+                     nii_mri = None,
+                     session=None):
+    # 'This function directly writes the brainsight mri without freesurfer processing'
+    if not os.path.exists(bids_dir): os.mkdir(bids_dir)
     
-#     # # ses=str(int(session)) #Confirm no leading zeros
-#     # t1w_bids_path = \
-#     #     BIDSPath(subject=bids_id, session=ses, root=bids_dir, suffix='T1w')
+    ses=str(int(session)) #Confirm no leading zeros
+    t1w_bids_path = \
+        BIDSPath(subject=bids_id, session=ses, root=bids_dir, suffix='T1w')
 
-#     # Write regular
-#     t1w_bids_path = write_anat(
-#         image=nii_mri,
-#         bids_path=t1w_bids_path,
-#         deface=False, 
-#         overwrite=True
-#         )
+    # Write regular
+    t1w_bids_path = write_anat(
+        image=nii_mri,
+        bids_path=t1w_bids_path,
+        deface=False, 
+        overwrite=True
+        )
     
-#     return t1w_bids_path
+    return t1w_bids_path
         
 
 
@@ -919,7 +849,7 @@ def _get_conversion_dict(input_path=None, subject_in=None, bids_id=None,
     if (input_path==None) and (meg_dataset_list==[]):
         raise ValueError('Either input_path or meg_dataset_list need to be filled')
     
-    if input_path != None:
+    if input_path not in [[], None]:
         dset_dict = sessdir2taskrundict(session_dir=input_path, subject_in=subject_in)
     if meg_dataset_list not in [[], False, None, 'None']:
         dset_dict = _gen_taskrundict(meg_dataset_list)
@@ -938,7 +868,8 @@ def _get_conversion_dict(input_path=None, subject_in=None, bids_id=None,
             run = str(run) 
             if len(run)==1: run='0'+run
             bids_path = BIDSPath(subject=bids_id, session=ses, task=task,
-                                  run=run, root=bids_dir, suffix='meg')
+                                  run=run, root=bids_dir, suffix='meg', 
+                                  extension='.ds')
             conversion_dict[meg_fname] = bids_path.fpath
     return conversion_dict
 

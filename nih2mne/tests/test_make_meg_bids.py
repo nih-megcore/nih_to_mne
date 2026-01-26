@@ -3,7 +3,7 @@
 from ..make_meg_bids import sessdir2taskrundict
 from ..make_meg_bids import _check_multiple_subjects
 from ..make_meg_bids import get_subj_logger, _input_checks, process_mri_bids, process_mri_json
-from ..make_meg_bids import convert_brik, make_bids  
+from ..make_meg_bids import convert_brik, make_bids, _gen_taskrundict  
 import logging 
 from ..calc_mnetrans import coords_from_afni
 import glob
@@ -146,7 +146,11 @@ def test_process_meg_bids(tmp_path):
     bids_id = 'S01'
     session = '1'
     
-    process_meg_bids(input_path = meg_dir, 
+    dset_dict = sessdir2taskrundict(session_dir=meg_dir, subject_in=subject_in)
+    dset_dict = {i:[op.join(meg_dir, j[0])] for i,j in dset_dict.items()}
+    
+    
+    process_meg_bids(dset_dict = dset_dict,
                      subject_in = subject_in,
                      bids_dir = bids_dir,
                      bids_id = bids_id, 
@@ -173,6 +177,7 @@ def test_process_meg_bids(tmp_path):
                      'sub-S01_ses-1_task-haririhammer_run-01_events.tsv',
                      'sub-S01_ses-1_task-haririhammer_run-01_events.json']
     for i in dset_checklist:
+        print(i)
         assert op.exists(bids_dir / f'sub-{bids_id}' / 'ses-1' /'meg' / i)
         
 def test_process_mri_bids(tmp_path):
@@ -348,7 +353,7 @@ class make_args():
 def test_make_meg_bids_fullpipeline(bids_dir,meg_input_dir, subjid_input, bids_id, mri_bsight, bsight_elec, mri_brik, tmpdir):
     out_dir = op.join(tmpdir, bids_dir)
     cmd = f'make_meg_bids.py -bids_dir {out_dir} -subjid_input ABABABAB -meg_input_dir {meg_input_dir} -bids_id {bids_id} -mri_bsight {mri_bsight} -mri_bsight_elec {bsight_elec} -mri_brik {mri_brik} -ignore_eroom'
-    args = make_args(out_dir, meg_input_dir, subjid_input, bids_id, mri_bsight, bsight_elec, mri_brik)
+    args = make_args(out_dir, str(meg_input_dir), subjid_input, bids_id, mri_bsight, bsight_elec, mri_brik)
     make_bids(args)
     
     anats = glob.glob(op.join(out_dir, f'sub-{bids_id}','ses-1','anat', '*'))
@@ -361,8 +366,54 @@ def test_make_meg_bids_fullpipeline(bids_dir,meg_input_dir, subjid_input, bids_i
         assert op.basename(dset).split('_task-')[-1].split('_')[0] in ['airpuff','haririhammer']
                       
 
-                
-# args = make_args('bsight_test', test_data.meg_data_dir, None, 'BSIGHT1', test_data.mri_nii, test_data.bsight_elec, None)
+
+def test_gen_taskrundict():
+    tmp_meglist =glob.glob(op.join(nih2mne.__path__[0], 'test_data', '20010101', '*.ds'))
+    dset_dict = _gen_taskrundict(meg_list = tmp_meglist)
+    assert 'haririhammer' in dset_dict
+    assert 'airpuff' in dset_dict
+    
+    _tmp_topdir = '/home/User/test/datasets'
+    test_files =     ['TEST_ASSR_20001010_002.ds',
+         'TEST_MMFAU_20001010_009.ds',
+         'TEST_M100_20001010_007.ds',
+         'TEST_rest_20001010_005.ds',
+         'TEST_MMFAU_20001010_003.ds',
+         'TEST_rest_20001010_012.ds',
+         'TEST_MMFUA_20001010_004.ds',
+         'TEST_rest_20001010_011.ds',
+         'TEST_M100_20001010_006.ds',
+         'TEST_MMFUA_20001010_010.ds',
+         'TEST_ASSR_20001010_008.ds',
+         'TEST_M100_20001010_001.ds']
+    test_files = [op.join(_tmp_topdir, i) for i in test_files]
+    dset_dict = _gen_taskrundict(meg_list = test_files)
+    assert len(dset_dict['MMFAU'])==2
+    assert len(dset_dict['M100'])==3
+    
+
+
+
+## << -- testing
+# from nih2mne.make_meg_bids import (make_bids, process_meg_bids, _gen_taskrundict, 
+#                                    sessdir2taskrundict)
+# from nih2mne.GUI.templates.bids_creator_gui_control_functions import Args #, test_Args
+# def test_Args():
+#     opts = {'anonymize': True, 'meghash': 'None', 'bids_id': 'S01', 
+#             'bids_dir': '/tmp/BIDS', 'bids_session': '1', 
+#             'meg_dataset_list': ['/tmp/20251203/DUJGWRKZ_EmptyRoom6m_20251203_001.ds',
+#                                  '/tmp/20251203/DUJGWRKZ_flanker_20251203_007.ds'], 
+#             'mri_none': False, 
+#             'mri_bsight': '/tmp/Uploaded_cohort3/DUJGWRKZ/DUJGWRKZ.nii', 
+#             'mri_elec': '/tmp/Uploaded_cohort3/DUJGWRKZ/Exported_Electrodes.txt', 
+#             'mri_brik': False, 'crop_zeros': True, 'include_empty_room': False, 
+#             'subjid_input':'TEST'}
+     
+#             #'subjid_input' : False}
+#     return Args(opts)
+    
+# args = test_Args()
+# make_bids(args)
     
     
     
