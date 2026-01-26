@@ -38,7 +38,6 @@ def test_proc_meg_bids(tmpdir):
                         crop_trailing_zeros=False, 
                        )
 
-tmpdir = '/tmp/BIDStest'  # REMOVE ~~~~~~~~~~~~~~~~~~~~~~~~    
 
 def test_proc_mri_bids(tmpdir):
     out_bids_path = op.join(tmpdir, 'BIDS')
@@ -57,25 +56,25 @@ def test_proc_mri_bids(tmpdir):
     json_fname = str(_bids_path.fpath).replace('.nii.gz','.json')
     assert op.exists(json_fname)
     
-def test_textfill(tmpdir):
-    'Confirm that anat textline gets filled out'
-    from nih2mne.GUI.templates.bids_creator_gui_control_functions import BIDS_MainWindow
-    dsets = ['/fast2/20250205_hv2set/JACTZJMA_rest_20250205_004.ds', '/fast2/20250205_hv2set/JACTZJMA_rest_20250205_007.ds','/fast2/20250205_hv2set/JACTZJMA_MID_20250205_008.ds','/fast2/20250205_hv2set/JACTZJMA_movie_20250205_005.ds']
+# def test_textfill(tmpdir):
+#     'Confirm that anat textline gets filled out'
+#     from nih2mne.GUI.templates.bids_creator_gui_control_functions import BIDS_MainWindow
+#     dsets = ['/fast2/20250205_hv2set/JACTZJMA_rest_20250205_004.ds', '/fast2/20250205_hv2set/JACTZJMA_rest_20250205_007.ds','/fast2/20250205_hv2set/JACTZJMA_MID_20250205_008.ds','/fast2/20250205_hv2set/JACTZJMA_movie_20250205_005.ds']
     
-    bmw = BIDS_MainWindow(meg_dsets=dsets)
-    bmw.ui.list_fname_conversion.addItems(dsets)
-    bmw._make_task_dict()
-    bmw.ui.list_fname_conversion.count()
+#     bmw = BIDS_MainWindow(meg_dsets=dsets)
+#     bmw.ui.list_fname_conversion.addItems(dsets)
+#     bmw._make_task_dict()
+#     bmw.ui.list_fname_conversion.count()
     
-    if bmw.opts['meg_data'
-    
-    
+#     if bmw.opts['meg_data'
     
     
-app = QtWidgets.QApplication(sys.argv)
-MainWindow = QtWidgets.QMainWindow()
-ui = BIDS_MainWindow()
-ui.show()
+    
+    
+# app = QtWidgets.QApplication(sys.argv)
+# MainWindow = QtWidgets.QMainWindow()
+# ui = BIDS_MainWindow()
+# ui.show()
 
     
     

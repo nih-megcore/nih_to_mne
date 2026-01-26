@@ -219,7 +219,6 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         'Map the input files to output and display in filelist'
         self._make_task_dict()  #Generates the in_out_mapping
         self._make_anat_dict()  #Generates anatomy anat_io_mapping
-        self.io_mapping
         self._set_filelist_text()
         
         
