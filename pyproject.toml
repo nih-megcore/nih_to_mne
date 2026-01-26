@@ -7,7 +7,7 @@ name = "nih2mne"
 description = "General integration functions for mne and mne-bids for NIH users"
 readme = "README.md"
 requires-python = "<3.12"
-version = "0.4.1"
+version = "0.5.0"
 
 authors = [
   { name="Jeff Stout", email="stoutjd@nih.gov" },
