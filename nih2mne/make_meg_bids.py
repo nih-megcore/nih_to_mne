@@ -77,6 +77,9 @@ def _gen_taskrundict(meg_list=None):
     '''
     dsets = sorted(meg_list)
     
+    #Clean trailing slashes that can be present in Mac drag/drop
+    dsets = [i[:-1] if i.endswith('/') else i for i in dsets]
+    
     #Return bids dictionary
     task_list = [op.basename(i).split('_')[1] for i in dsets]
     task_set = set(task_list)
