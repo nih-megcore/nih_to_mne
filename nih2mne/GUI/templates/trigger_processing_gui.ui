@@ -47,7 +47,7 @@
        </font>
       </property>
       <property name="currentIndex">
-       <number>4</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tab_instructions">
        <property name="sizePolicy">
@@ -330,7 +330,7 @@ p, li { white-space: pre-wrap; }
          </widget>
         </item>
         <item>
-         <widget class="QLabel" name="lbl_parseMarks">
+         <widget class="QLabel" name="lbl_ParseMarks">
           <property name="text">
            <string>Parse Events Steps</string>
           </property>
