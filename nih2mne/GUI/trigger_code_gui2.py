@@ -81,16 +81,27 @@ class trig_tile(QWidget, trig_singleline_UiForm):
         self.cb_Up.clicked.connect(self.set_up_trigger_polarity)
         self.cb_Down.setCheckState(0)
         self.cb_Down.clicked.connect(self.set_down_trigger_polarity)
-        
+
+        # Event counter display
+        if self.trig_type == 'ADC':
+            self.event_dframe = threshold_detect(self.meg_fname,  channel=self.ch_name)
+            self.event_count = len(self.event_dframe)
+        elif self.trig_type == 'PPT':
+            self.event_count = event_count
+        else:
+            self.event_count = 'ERR'
+        self.lbl_EvtCount.setText(f'N={self.event_count}')
         
     def set_up_trigger_polarity(self):
         self.trigger_polarity = 'up'
-        self.b_downgoing_trigger.setCheckState(0)
-        print(self.b_upgoing_trigger.checkState())
+        self.cb_Down.setCheckState(0)
     
     def set_down_trigger_polarity(self):
         self.trigger_polarity = 'down'
-        self.b_upgoing_trigger.setCheckState(0)
+        self.cb_Up.setCheckState(0)
+
+    
+    
     
         
         
@@ -342,7 +353,7 @@ class event_coding_window(QMainWindow):
                 self.tile_dict[i]=trig_tile(chan_name=i,include_polarity=True,
                                             meg_fname=self.meg_fname)
                 if i=='UADC016':
-                    self.tile_dict[i].lbl_EvtName.setText('projector')
+                    self.tile_dict[i].te_EvtName.setText('projector')
                 
                 item = QtWidgets.QListWidgetItem(self.ui.list_AnalogChannels)
                 item.setSizeHint(self.tile_dict[i].sizeHint())
