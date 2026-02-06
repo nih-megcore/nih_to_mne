@@ -52,7 +52,7 @@ import mne
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QCheckBox, \
-    QFileDialog, QDialog
+    QFileDialog, QDialog, QListWidgetItem
 # from functools import partial
 import sys
 import os, os.path as op
@@ -100,6 +100,28 @@ class trig_tile(QWidget, trig_singleline_UiForm):
         self.trigger_polarity = 'down'
         self.cb_Up.setCheckState(0)
 
+## ParseMarks Tiles
+from nih2mne.GUI.templates.parse_marks_single_line import Ui_Form as parse_marks_singleline_UiForm
+class parse_marks_tile(QWidget, parse_marks_singleline_UiForm): 
+    def __init__(self, on_lead=True, on_lag=False, start_offset=0, stop_offset=0.5):
+        super().__init__()
+        self.setupUi(self) 
+        # self.ui.cb_OnLead.clicked.connect(self.set_onlead_selection)
+        # self.ui.cb_OnLag.clicked.connect(self.set_onlag_selection)
+        
+    def set_onlead_selection(self):
+        self.mark_on = 'lead'
+        self.ui.cb_OnLag.setCheckState(0) #Cross toggle on lag button
+        
+    def set_onlag_selection(self):
+        self.mark_on = 'lag'
+        self.ui.cb_OnLead.setCheckState(0) #Cross toggle on lead button
+    
+    def fill_combobox(self):  #May need to cross reference lead/lag to prevent doubles
+        pass
+        
+        
+        
     
     
     
@@ -160,106 +182,106 @@ class trig_tile(QWidget, trig_singleline_UiForm):
 #         self.trigger_polarity = 'down'
 #         self.b_upgoing_trigger.setCheckState(0)
 
-class parsemarks_tile(QHBoxLayout):
-    '''Parsemarks tile 
+# class parsemarks_tile(QHBoxLayout):
+#     '''Parsemarks tile 
     
-    | EventsList | MarkOn | EventsList | MarkOn | Time1 | Time2 | Count | Name |
-    | ComboBox   | CheckB | ComboBox   | CheckB  | LineE | LineE | QLabel | LineE | 
+#     | EventsList | MarkOn | EventsList | MarkOn | Time1 | Time2 | Count | Name |
+#     | ComboBox   | CheckB | ComboBox   | CheckB  | LineE | LineE | QLabel | LineE | 
     
-    SET/DEL options will be handled by the main window
+#     SET/DEL options will be handled by the main window
     
-    '''
-    def __init__(self, event_namelist=None):
-        super(parsemarks_tile, self).__init__()
+#     '''
+#     def __init__(self, event_namelist=None):
+#         super(parsemarks_tile, self).__init__()
         
-        #Assemble Tile
-        self.evt_namelist = event_namelist
+#         #Assemble Tile
+#         self.evt_namelist = event_namelist
         
-        self.b_evt1_name = QComboBox()
-        self.b_evt1_name.addItems(event_namelist)
-        self.addWidget(self.b_evt1_name)
+#         self.b_evt1_name = QComboBox()
+#         self.b_evt1_name.addItems(event_namelist)
+#         self.addWidget(self.b_evt1_name)
         
-        self.b_mark_on_lead = QCheckBox()
-        self.b_mark_on_lead.setChecked(True)
-        # self.b_mark_on_lead.clicked.connect(.....)
-        self.addWidget(self.b_mark_on_lead)
+#         self.b_mark_on_lead = QCheckBox()
+#         self.b_mark_on_lead.setChecked(True)
+#         # self.b_mark_on_lead.clicked.connect(.....)
+#         self.addWidget(self.b_mark_on_lead)
         
-        self.b_evt2_name = QComboBox()
-        self.b_evt2_name.addItems(event_namelist)
-        self.addWidget(self.b_evt2_name)
+#         self.b_evt2_name = QComboBox()
+#         self.b_evt2_name.addItems(event_namelist)
+#         self.addWidget(self.b_evt2_name)
         
-        self.b_mark_on_lag = QCheckBox()
-        # self.b_mark_on_lag.clicked.connect(....)
-        self.addWidget(self.b_mark_on_lag)
+#         self.b_mark_on_lag = QCheckBox()
+#         # self.b_mark_on_lag.clicked.connect(....)
+#         self.addWidget(self.b_mark_on_lag)
         
-        self.b_window_t1 = QLineEdit('0')
-        self.addWidget(self.b_window_t1)
-        self.b_window_t2 = QLineEdit('0.5')
-        self.addWidget(self.b_window_t2)
+#         self.b_window_t1 = QLineEdit('0')
+#         self.addWidget(self.b_window_t1)
+#         self.b_window_t2 = QLineEdit('0.5')
+#         self.addWidget(self.b_window_t2)
         
-        self.event_count = QLabel('N=')  #Still need to compute event count and enter
-        self.addWidget(self.event_count)
+#         self.event_count = QLabel('N=')  #Still need to compute event count and enter
+#         self.addWidget(self.event_count)
         
-        self.static_name_label = QLabel('Name:')
-        self.addWidget(self.static_name_label)
+#         self.static_name_label = QLabel('Name:')
+#         self.addWidget(self.static_name_label)
         
-        self.event_name = QLineEdit()
-        self.addWidget(self.event_name)
+#         self.event_name = QLineEdit()
+#         self.addWidget(self.event_name)
 
         
-class grid_selector(QMainWindow):
-    '''Helper function create a grid of items based on a list'''
-    def __init__(self, input_list=[], title=None, 
-                 gridsize_row=None, gridsize_col=None):
-        super(grid_selector, self).__init__()
-        self.setGeometry(100,100, 500, 500) 
-        self.setWindowTitle(title)
-        self.input_list = input_list
-        if (gridsize_col==None) or (gridsize_row==None):
-            self.gridsize_row, self.gridsize_col = self._get_rowcol()
-        else:
-            self.gridsize_row, self.gridsize_col = self.gridsize_row, gridsize_col
+# class grid_selector(QMainWindow):
+#     '''Helper function create a grid of items based on a list'''
+#     def __init__(self, input_list=[], title=None, 
+#                  gridsize_row=None, gridsize_col=None):
+#         super(grid_selector, self).__init__()
+#         self.setGeometry(100,100, 500, 500) 
+#         self.setWindowTitle(title)
+#         self.input_list = input_list
+#         if (gridsize_col==None) or (gridsize_row==None):
+#             self.gridsize_row, self.gridsize_col = self._get_rowcol()
+#         else:
+#             self.gridsize_row, self.gridsize_col = self.gridsize_row, gridsize_col
         
-        _ = self.make_choice_grid()
-        self.setCentralWidget(self.dialog)
-        self.show()
+#         _ = self.make_choice_grid()
+#         self.setCentralWidget(self.dialog)
+#         self.show()
     
-    def make_choice_grid(self):
-        self.dialog = QDialog() 
-        self.grid_layout = QGridLayout()
-        tile_idxs = np.arange(self.gridsize_row * self.gridsize_col)
-        tile_idxs_grid = tile_idxs.reshape(self.gridsize_row, self.gridsize_col)
-        row_idxs, col_idxs = np.unravel_index(tile_idxs, [self.gridsize_row, self.gridsize_col])
-        i=0 
-        for row_idx, col_idx in zip(row_idxs, col_idxs):
-            if i > len(self.input_list) -1:
-                tmp_ = QLabel('')
-            else:
-                tmp_ = QPushButton(self.input_list[i])
-                tmp_.setCheckable(True)
-            self.grid_layout.addWidget(tmp_, row_idx, col_idx)
-            i+=1
+#     def make_choice_grid(self):
+#         self.dialog = QDialog() 
+#         self.grid_layout = QGridLayout()
+#         tile_idxs = np.arange(self.gridsize_row * self.gridsize_col)
+#         tile_idxs_grid = tile_idxs.reshape(self.gridsize_row, self.gridsize_col)
+#         row_idxs, col_idxs = np.unravel_index(tile_idxs, [self.gridsize_row, self.gridsize_col])
+#         i=0 
+#         for row_idx, col_idx in zip(row_idxs, col_idxs):
+#             if i > len(self.input_list) -1:
+#                 tmp_ = QLabel('')
+#             else:
+#                 tmp_ = QPushButton(self.input_list[i])
+#                 tmp_.setCheckable(True)
+#             self.grid_layout.addWidget(tmp_, row_idx, col_idx)
+#             i+=1
         
-        layout = QVBoxLayout()
-        layout.addLayout(self.grid_layout)
-        self.b_set_selection = QPushButton('CLICK to set selection')
-        layout.addWidget(self.b_set_selection)
-        self.dialog.setLayout(layout)
+#         layout = QVBoxLayout()
+#         layout.addLayout(self.grid_layout)
+#         self.b_set_selection = QPushButton('CLICK to set selection')
+#         layout.addWidget(self.b_set_selection)
+#         self.dialog.setLayout(layout)
         
-        return self.grid_layout
+#         return self.grid_layout
             
-    def _get_rowcol(self):
-        listlen = len(self.input_list)
-        if listlen < 4: 
-            return 2,2
-        if listlen < 16: 
-            return 4,4
-        if listlen < 32:
-            return 4,8
-        if listlen < 64: 
-            return 8,8
-        if listlen < 117: 
-            return 9, 13
+#     def _get_rowcol(self):
+#         listlen = len(self.input_list)
+#         if listlen < 4: 
+#             return 2,2
+#         if listlen < 16: 
+#             return 4,4
+#         if listlen < 32:
+#             return 4,8
+#         if listlen < 64: 
+#             return 8,8
+#         if listlen < 117: 
+#             return 9, 13
          
         
         
@@ -305,12 +327,32 @@ class event_coding_window(QMainWindow):
         self.tile_dict = {}
         
         self.ui.pb_SelectMeg.clicked.connect(self.act_pb_SelectMeg)
+        self.ui.pb_AddParser.clicked.connect(self.act_pb_add_parser_line)
         
         #Initialize if meg_fname provided at commandline
         if meg_fname != None:
             self.act_pb_SelectMeg(meg_fname=meg_fname)
             
+    def extract_trig_names_dict(self):
+        trig_dict = {}
+        for key in self.tile_dict.keys():
+            trig_dict[key] = {}
+            trig_dict[key]['type'] = win.tile_dict[key].trig_type
+            trig_dict[key]['name'] = win.tile_dict[key].te_EvtName.text()
+            # trig_dict[key]['value'] = 
+            
+            
+    def act_pb_add_parser_line(self):
+        '''Take all the items in channel labels and prior parser lines output labels
+        Add them to the possible entries in the parser choice'''
         
+        #Add parser line
+        #Update the parser list with a parsemarks tile  list_ParseMarks
+        _pm_tile = parse_marks_tile()
+        item = QListWidgetItem(self.ui.list_ParseMarks)
+        item.setSizeHint(_pm_tile.sizeHint())
+        self.ui.list_ParseMarks.addItem(item)
+        self.ui.list_ParseMarks.setItemWidget(item, _pm_tile)
         
         
     def act_pb_SelectMeg(self, meg_fname=None):
@@ -355,6 +397,7 @@ class event_coding_window(QMainWindow):
                 if i=='UADC016':
                     self.tile_dict[i].te_EvtName.setText('projector')
                 
+                #Add items to list in complicated QT fashion
                 item = QtWidgets.QListWidgetItem(self.ui.list_AnalogChannels)
                 item.setSizeHint(self.tile_dict[i].sizeHint())
                 self.ui.list_AnalogChannels.addItem(item) 
@@ -372,14 +415,12 @@ class event_coding_window(QMainWindow):
                                                  include_polarity=True,
                                                  event_count=dig_event_counts[evt_name], 
                                                  meg_fname = self.meg_fname)
+                    
+                    #Add items to list in complicated QT fashion
                     item = QtWidgets.QListWidgetItem(self.ui.list_DigitalChannels)
                     item.setSizeHint(self.tile_dict[evt_key].sizeHint())
                     self.ui.list_DigitalChannels.addItem(item) 
                     self.ui.list_DigitalChannels.setItemWidget(item, self.tile_dict[evt_key])
-                    
-                    
-                    
-                    # self.dig_trigger_layout.addLayout(self.tile_dict[evt_key])
             else:
                 print(f'Not processing channel {i}')
     
@@ -391,12 +432,21 @@ class event_coding_window(QMainWindow):
     
     
         
-    
+#%% Testing    
         
 
 app = QApplication(sys.argv)
 win = event_coding_window(meg_fname='/fast2/20250205_hv2set/JACTZJMA_MID_20250205_008.ds') 
 win.show()
+
+assert win.ui.list_AnalogChannels.count()==2
+#Test that the UADC016 gets labelled as projector
+test_item = win.ui.list_AnalogChannels.item(1)
+assert win.ui.list_AnalogChannels.itemWidget(test_item).te_EvtName.text()=='projector'
+
+assert win.ui.list_DigitalChannels.count() == 4 
+
+
 
 
 #%%

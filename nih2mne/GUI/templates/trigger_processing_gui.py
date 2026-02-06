@@ -176,15 +176,27 @@ class Ui_MainWindow(object):
         self.te_FixedOffset = QtWidgets.QLineEdit(self.frame_fixOffsets)
         self.te_FixedOffset.setObjectName("te_FixedOffset")
         self.horizontalLayout_2.addWidget(self.te_FixedOffset)
+        spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        self.horizontalLayout_2.addItem(spacerItem)
+        self.pb_AddParser = QtWidgets.QPushButton(self.frame_fixOffsets)
+        font = QtGui.QFont()
+        font.setPointSize(13)
+        font.setBold(True)
+        font.setUnderline(False)
+        font.setWeight(75)
+        font.setStrikeOut(False)
+        self.pb_AddParser.setFont(font)
+        self.pb_AddParser.setObjectName("pb_AddParser")
+        self.horizontalLayout_2.addWidget(self.pb_AddParser)
         self.verticalLayout.addWidget(self.frame_fixOffsets)
-        self.lbl_parseMarks = QtWidgets.QLabel(self.tab_parse_events)
-        self.lbl_parseMarks.setObjectName("lbl_parseMarks")
-        self.verticalLayout.addWidget(self.lbl_parseMarks)
+        self.lbl_ParseMarks = QtWidgets.QLabel(self.tab_parse_events)
+        self.lbl_ParseMarks.setObjectName("lbl_ParseMarks")
+        self.verticalLayout.addWidget(self.lbl_ParseMarks)
         self.scrollArea_parseMarks = QtWidgets.QScrollArea(self.tab_parse_events)
         self.scrollArea_parseMarks.setWidgetResizable(True)
         self.scrollArea_parseMarks.setObjectName("scrollArea_parseMarks")
         self.scrollAreaWidgetContents = QtWidgets.QWidget()
-        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 824, 671))
+        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 824, 668))
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -283,7 +295,7 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
 
         self.retranslateUi(MainWindow)
-        self.tabWidget.setCurrentIndex(4)
+        self.tabWidget.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -293,11 +305,22 @@ class Ui_MainWindow(object):
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Ubuntu\'; font-size:11pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Use the tabs from <span style=\" font-weight:600; text-decoration: underline;\">left to right.</span> Going backwards may cause unintended issues like a label disappearing from the parse events tab after it has been used.  This may cause the program to crash.</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Use the tabs from <span style=\" font-weight:600; text-decoration: underline;\">left to right.</span> Going backwards may cause unintended issues like a label disappearing from the parse events tab after it has been used.  This may cause the program to crash.  Only load a dataset once (this may be fixed in the future).</p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:600; text-decoration: underline;\">(Channel Labels)</span>: Load an MEG file.  For each analog channel and event name from the digital channels, provide an event name.  These will be used later in processing.</p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:600; text-decoration: underline;\">(Parse Events)</span>: Use the channel labels to make more complicated event types. e.g. A correct response can be made from a visual que on UPPT001 combined with a response on UADC006 within a certain amount of time.  Other functionality like adjusting UPPT to the projector timing and auditory delays due to transmission time.</p>\n"
+"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Correct to projector: Popup to select events to adjust timing to projector</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Add Fixed Offset: Set timing and click to open popup for selecting events to correct</p>\n"
+"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">&lt;Click ADD PARSER LINE&gt;</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Choose a lead event</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Choose a lag event</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Determine if the mark will be chosen  on the lead or lag event (eg CorrectResp)</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Start time - From the lead event how much offset (eg wait 100ms for a response to register)</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Stop time - How long from the lead event to search for a lag</p>\n"
+"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:600; text-decoration: underline;\">(Write Parser File):</span> Select the outputs that should be written into the MarkerFile.mrk (inside the .ds folder).  QA the output triggers by visualizing the dataset with the encoded triggers.  Finally, write the trigger processing script for later use.</p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
@@ -306,7 +329,7 @@ class Ui_MainWindow(object):
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:600; font-style:italic;\">&lt;Warning&gt;</span> This utility does not currently support logfile inputs. The final script can be modified to incorporate this information.</p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p></body></html>"))
-        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_instructions), _translate("MainWindow", "Instructions"))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_instructions), _translate("MainWindow", "(Instructions)"))
         self.pb_SelectMeg.setText(_translate("MainWindow", "Select MEG"))
         self.lbl_FName.setText(_translate("MainWindow", "None Loaded"))
         self.lbl_AnalogChannels.setText(_translate("MainWindow", "Analog Channels (UADC---)"))
@@ -314,7 +337,8 @@ class Ui_MainWindow(object):
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_channel_labels), _translate("MainWindow", "Channel Labels"))
         self.pb_CorrectToProjector.setText(_translate("MainWindow", "Correct To Projector"))
         self.pb_FixedOffset.setText(_translate("MainWindow", "Add Fixed Offset (ms)"))
-        self.lbl_parseMarks.setText(_translate("MainWindow", "Parse Events Steps"))
+        self.pb_AddParser.setText(_translate("MainWindow", "ADD PARSER LINE"))
+        self.lbl_ParseMarks.setText(_translate("MainWindow", "Parse Events Steps | [Check instructions tab for guidance]"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_parse_events), _translate("MainWindow", "Parse Events"))
         self.label_2.setText(_translate("MainWindow", "Not fully tested "))
         self.pushButton_3.setText(_translate("MainWindow", "Plot Data and Events"))
