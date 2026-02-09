@@ -295,7 +295,7 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
 
         self.retranslateUi(MainWindow)
-        self.tabWidget.setCurrentIndex(0)
+        self.tabWidget.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -318,7 +318,7 @@ class Ui_MainWindow(object):
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Choose a lead event</p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Choose a lag event</p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Determine if the mark will be chosen  on the lead or lag event (eg CorrectResp)</p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Start time - From the lead event how much offset (eg wait 100ms for a response to register)</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Start time - From the lead event how much offset (eg wait 100ms for a response to register)(Will accept negative values if lead/lag dont always follow)</p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Stop time - How long from the lead event to search for a lag</p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
@@ -332,13 +332,13 @@ class Ui_MainWindow(object):
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_instructions), _translate("MainWindow", "(Instructions)"))
         self.pb_SelectMeg.setText(_translate("MainWindow", "Select MEG"))
         self.lbl_FName.setText(_translate("MainWindow", "None Loaded"))
-        self.lbl_AnalogChannels.setText(_translate("MainWindow", "Analog Channels (UADC---)"))
-        self.lbl_DigitalChannels.setText(_translate("MainWindow", "Digital Events (UPPT---)"))
+        self.lbl_AnalogChannels.setText(_translate("MainWindow", "Analog Channels (UADC-)"))
+        self.lbl_DigitalChannels.setText(_translate("MainWindow", "Digital Events (UPPT-)"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_channel_labels), _translate("MainWindow", "Channel Labels"))
         self.pb_CorrectToProjector.setText(_translate("MainWindow", "Correct To Projector"))
-        self.pb_FixedOffset.setText(_translate("MainWindow", "Add Fixed Offset (ms)"))
+        self.pb_FixedOffset.setText(_translate("MainWindow", "Add Fixed Offset (ms):"))
         self.pb_AddParser.setText(_translate("MainWindow", "ADD PARSER LINE"))
-        self.lbl_ParseMarks.setText(_translate("MainWindow", "Parse Events Steps | [Check instructions tab for guidance]"))
+        self.lbl_ParseMarks.setText(_translate("MainWindow", "Parse Events Steps | [Check instructions tab for guidance]  (adding a line will lock the line above)"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_parse_events), _translate("MainWindow", "Parse Events"))
         self.label_2.setText(_translate("MainWindow", "Not fully tested "))
         self.pushButton_3.setText(_translate("MainWindow", "Plot Data and Events"))

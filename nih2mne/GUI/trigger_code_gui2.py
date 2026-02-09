@@ -194,6 +194,9 @@ class event_coding_window(QMainWindow):
         #Initialize if meg_fname provided at commandline
         if meg_fname != None:
             self.act_pb_SelectMeg(meg_fname=meg_fname)
+        
+        self.ui.pb_CorrectToProjector.clicked.connect(self.act_pb_corr2proj)
+        self.ui.pb_FixedOffset.clicked.connect(self.act_pb_add_fixed_delay)
             
     def extract_trig_names_dict(self):
         evtname_dict = {}
@@ -225,7 +228,104 @@ class event_coding_window(QMainWindow):
         #Logic if event names coincide (parseMarks can have duplicates )
         
         return evtname_dict
+    
+    #>> Begin of changes
+    
+    def update_event_names(self, events_only=False):
+        '''Set action for updating event names.  This will write all of the 
+        events to the an event list and update the parse_marks and evt_keep
+        panels. 
+        raw_event_list: directly evaluated from the raw trigger lines
+        parsed_event_list: parse_marks derived events
+        ## logfile_event_list: Future implementation
+        ## temporal_coding_event_list : Future implementation
+        
+        event_list: combination of the above
+        
+        '''
+        namelist = []
+        for key in self.tile_dict.keys():
+            tmp_txt = self.tile_dict[key].te_EvtName.text()
+            namelist.append(tmp_txt)
+        self.event_namelist = namelist
+        
+        #Check for duplicated names from raw trigger panel
+        for i in reversed(range(len(namelist))):
+            if namelist[i]==None:
+                del(namelist[i])
+            if namelist[i]=='':
+                del(namelist[i])        
+        if len(namelist) != len(set(namelist)):
+            raise ValueError('The event names cannot have duplicates') 
+        
+        if events_only:
+            return
+        
+        ############# Parsemarks Layout ##########################
+        self.parsemarks_tile_list = []
+        self.parsemarks_full_layout_list = []
+        # self.add_parsemarks_line()
+        
+        ############# Keep Events Layout #########################
+        #Empty the keep events layout list, so it doesn't append the previous
+        # self.update_keep_events_list(flush=True)
+    
+        
+    def act_pb_corr2proj(self):
+        # Create a popup to select events that will be corrected to projector
+        self.update_event_names(events_only=True)
+        self.corr2proj_selector = grid_selector(self.event_namelist)  
+        self.corr2proj_selector.b_set_selection.clicked.connect(self._set_correct2proj_list)
+        
+    def act_pb_add_fixed_delay(self):
+        # Create a popup to select the events that will be corrected to a fixed delay
+        self.update_event_names(events_only=True)
+        self.fixed_delay_selector = grid_selector(self.event_namelist)  
+        self.fixed_delay_selector.b_set_selection.clicked.connect(self._set_fixedDelay_list)
+        
+    def _set_fixedDelay_list(self):
+        'Fixed delay added to self.add_offset_list'
+        layout = self.fixed_delay_selector.grid_layout
+        self.add_offset_list = []
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item.widget():
+                if hasattr(item.widget(), 'isChecked'):
+                    if item.widget().isChecked():
+                        self.add_offset_list.append(item.widget().text())
+        print(f'Setting fixed delay to the following: {self.add_offset_list}')
+        
+    def _set_correct2proj_list(self):
+        'Correct to projector list assigned to self.corr2proj_list'
+        layout = self.corr2proj_selector.grid_layout
+        self.corr2proj_list = []
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item.widget():
+                if hasattr(item.widget(), 'isChecked'):
+                    if item.widget().isChecked():
+                        self.corr2proj_list.append(item.widget().text())
+        print(f'Correcting the following to projector timing: {self.corr2proj_list}')        
+            
+    def update_keep_events_list(self, flush=False):
+        num_keep_buttons = self.keep_events_layout.count()
+        if flush==True:
+            if num_keep_buttons > 1:
+                for i in reversed(range(1,num_keep_buttons)):  #Skip the label - remove from the end
+                    item = self.keep_events_layout.takeAt(i)
+                    self.keep_events_layout.removeItem(item)
+                    if item.widget():
+                        item.widget().deleteLater()
 
+        for i in set(self.event_namelist): 
+            tmp=QPushButton(i)
+            tmp.setCheckable(True)
+            self.keep_events_layout.addWidget(tmp)
+            del tmp
+        self.keep_events_layout.update()
+        
+        
+    ## <<<<< END of changes
             
             
     def act_pb_add_parser_line(self):
@@ -335,6 +435,60 @@ class event_coding_window(QMainWindow):
         pass
     
     
+class grid_selector(QMainWindow):
+    '''Helper function create a grid of items based on a list'''
+    def __init__(self, input_list=[], title=None, 
+                 gridsize_row=None, gridsize_col=None):
+        super(grid_selector, self).__init__()
+        self.setGeometry(100,100, 500, 500) 
+        self.setWindowTitle(title)
+        self.input_list = input_list
+        if (gridsize_col==None) or (gridsize_row==None):
+            self.gridsize_row, self.gridsize_col = self._get_rowcol()
+        else:
+            self.gridsize_row, self.gridsize_col = self.gridsize_row, gridsize_col
+        
+        _ = self.make_choice_grid()
+        self.setCentralWidget(self.dialog)
+        self.show()
+    
+    def make_choice_grid(self):
+        self.dialog = QDialog() 
+        self.grid_layout = QGridLayout()
+        tile_idxs = np.arange(self.gridsize_row * self.gridsize_col)
+        tile_idxs_grid = tile_idxs.reshape(self.gridsize_row, self.gridsize_col)
+        row_idxs, col_idxs = np.unravel_index(tile_idxs, [self.gridsize_row, self.gridsize_col])
+        i=0 
+        for row_idx, col_idx in zip(row_idxs, col_idxs):
+            if i > len(self.input_list) -1:
+                tmp_ = QLabel('')
+            else:
+                tmp_ = QPushButton(self.input_list[i])
+                tmp_.setCheckable(True)
+            self.grid_layout.addWidget(tmp_, row_idx, col_idx)
+            i+=1
+        
+        layout = QVBoxLayout()
+        layout.addLayout(self.grid_layout)
+        self.b_set_selection = QPushButton('CLICK to set selection')
+        layout.addWidget(self.b_set_selection)
+        self.dialog.setLayout(layout)
+        
+        return self.grid_layout
+            
+    def _get_rowcol(self):
+        listlen = len(self.input_list)
+        if listlen < 4: 
+            return 2,2
+        if listlen < 16: 
+            return 4,4
+        if listlen < 32:
+            return 4,8
+        if listlen < 64: 
+            return 8,8
+        if listlen < 117: 
+            return 9, 13
+
     
     
     
