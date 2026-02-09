@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(922, 41)
+        Form.resize(994, 43)
         self.horizontalLayout = QtWidgets.QHBoxLayout(Form)
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.combo_LeadSelection = QtWidgets.QComboBox(Form)
@@ -58,6 +58,12 @@ class Ui_Form(object):
         self.te_StopOffset = QtWidgets.QLineEdit(Form)
         self.te_StopOffset.setObjectName("te_StopOffset")
         self.horizontalLayout.addWidget(self.te_StopOffset)
+        self.lbl_MrkName = QtWidgets.QLabel(Form)
+        self.lbl_MrkName.setObjectName("lbl_MrkName")
+        self.horizontalLayout.addWidget(self.lbl_MrkName)
+        self.te_MrkName = QtWidgets.QLineEdit(Form)
+        self.te_MrkName.setObjectName("te_MrkName")
+        self.horizontalLayout.addWidget(self.te_MrkName)
         self.pb_DeleteLine = QtWidgets.QPushButton(Form)
         font = QtGui.QFont()
         font.setBold(True)
@@ -78,6 +84,7 @@ class Ui_Form(object):
         self.cb_OnLag.setText(_translate("Form", "MrkOnLag"))
         self.lbl_StartOffset.setText(_translate("Form", "startOffset (s)"))
         self.lbl_StopOffset.setText(_translate("Form", "stopOffset (s)"))
+        self.lbl_MrkName.setText(_translate("Form", "MrkName"))
         self.pb_DeleteLine.setText(_translate("Form", "X"))
 
 

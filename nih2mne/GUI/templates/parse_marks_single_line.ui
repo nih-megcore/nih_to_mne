@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>922</width>
-    <height>41</height>
+    <width>994</width>
+    <height>43</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -83,6 +83,16 @@
    </item>
    <item>
     <widget class="QLineEdit" name="te_StopOffset"/>
+   </item>
+   <item>
+    <widget class="QLabel" name="lbl_MrkName">
+     <property name="text">
+      <string>MrkName</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLineEdit" name="te_MrkName"/>
    </item>
    <item>
     <widget class="QPushButton" name="pb_DeleteLine">
