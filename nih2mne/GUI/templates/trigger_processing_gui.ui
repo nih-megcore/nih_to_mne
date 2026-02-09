@@ -47,7 +47,7 @@
        </font>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tab_instructions">
        <property name="sizePolicy">
@@ -217,7 +217,7 @@ p, li { white-space: pre-wrap; }
                </sizepolicy>
               </property>
               <property name="text">
-               <string>Analog Channels (UADC---)</string>
+               <string>Analog Channels (UADC-)</string>
               </property>
              </widget>
             </item>
@@ -277,7 +277,7 @@ p, li { white-space: pre-wrap; }
                </sizepolicy>
               </property>
               <property name="text">
-               <string>Digital Events (UPPT---)</string>
+               <string>Digital Events (UPPT-)</string>
               </property>
              </widget>
             </item>
@@ -372,7 +372,7 @@ p, li { white-space: pre-wrap; }
         <item>
          <widget class="QLabel" name="lbl_ParseMarks">
           <property name="text">
-           <string>Parse Events Steps | [Check instructions tab for guidance]</string>
+           <string>Parse Events Steps | [Check instructions tab for guidance]  (adding a line will lock the line above)</string>
           </property>
          </widget>
         </item>

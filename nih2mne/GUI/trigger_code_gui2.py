@@ -66,7 +66,7 @@ from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital,
                                                  append_conditions, correct_to_projector, 
                                                  add_event_offset)
 from collections import OrderedDict
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 
 
 
@@ -109,6 +109,7 @@ class trig_tile(QWidget, trig_singleline_UiForm):
 ## ParseMarks Tiles
 from nih2mne.GUI.templates.parse_marks_single_line import Ui_Form as parse_marks_singleline_UiForm
 class parse_marks_tile(QWidget, parse_marks_singleline_UiForm): 
+    close_clicked = pyqtSignal(object)
     def __init__(self, on_lead=True, on_lag=False, start_offset=0, stop_offset=0.5, 
                  event_name_dict=OrderedDict()):
         super().__init__()
@@ -124,6 +125,9 @@ class parse_marks_tile(QWidget, parse_marks_singleline_UiForm):
         self.cb_OnLag.clicked.connect(self.set_onlag_selection)
         # Assign Default to OnLead
         self.cb_OnLead.setCheckState(2)
+        
+        # Handle tile deletion
+        self.pb_DeleteLine.clicked.connect(lambda: self.close_clicked.emit(self))
         
         
     def set_onlead_selection(self):
@@ -240,6 +244,7 @@ class event_coding_window(QMainWindow):
         #Update the parser list with a parsemarks tile  list_ParseMarks
         evts_names = self.extract_trig_names_dict()
         _pm_tile = parse_marks_tile(event_name_dict=OrderedDict(evts_names))
+        _pm_tile.close_clicked.connect(self.handle_close_request)
                                     
         item = QListWidgetItem(self.ui.list_ParseMarks)
         item.setSizeHint(_pm_tile.sizeHint())
@@ -247,6 +252,18 @@ class event_coding_window(QMainWindow):
         self.ui.list_ParseMarks.setItemWidget(item, _pm_tile)
         
         
+        
+    def handle_close_request(self, widget):
+        '''If file tile "emits" a close signal, this will trigger a loop over
+        filenames to identify the widget that produced the close signal'''
+        item_count = self.ui.list_ParseMarks.count()
+        for i in range(item_count):
+            item = self.ui.list_ParseMarks.item(i)
+            print(type(item))
+            if self.ui.list_ParseMarks.itemWidget(item) == widget:
+                self.ui.list_ParseMarks.takeItem(i)
+                print(f"Parent removed item at row {i}")
+                break
         
     def act_pb_SelectMeg(self, meg_fname=None):
         print(f'MEG fname: {meg_fname}')
@@ -349,6 +366,12 @@ for i in range(win.ui.list_DigitalChannels.count()):
     
     
 win.ui.pb_AddParser.click()
+win.ui.pb_AddParser.click()
+# Do a check to make sure that tile1 is read only
+
+parsemarks_count = win.ui.list_ParseMarks.count()
+
+
 
 
 # _item = win.ui.list_ParseMarks.item(0)
@@ -363,7 +386,15 @@ win.ui.pb_AddParser.click()
 # _widget.combo_LagSelection.setFocusPolicy(Qt.NoFocus)
 
 # _widget.te_MrkName.setReadOnly(True)
+#%%
+GUI: 
+            # Add signal propagation from tile to MainWindow class
+            _tmp_tile.close_clicked.connect(self.handle_close_request)
 
+Tile class property:
+        ## Remove tile
+        self.ui.pb_DeleteTile.clicked.connect(lambda: self.close_clicked.emit(self))
+        
 
 
 
