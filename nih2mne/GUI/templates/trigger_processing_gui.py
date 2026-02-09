@@ -174,6 +174,12 @@ class Ui_MainWindow(object):
         self.pb_FixedOffset.setObjectName("pb_FixedOffset")
         self.horizontalLayout_2.addWidget(self.pb_FixedOffset)
         self.te_FixedOffset = QtWidgets.QLineEdit(self.frame_fixOffsets)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.te_FixedOffset.sizePolicy().hasHeightForWidth())
+        self.te_FixedOffset.setSizePolicy(sizePolicy)
+        self.te_FixedOffset.setMaximumSize(QtCore.QSize(70, 16777215))
         self.te_FixedOffset.setObjectName("te_FixedOffset")
         self.horizontalLayout_2.addWidget(self.te_FixedOffset)
         spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
@@ -216,12 +222,12 @@ class Ui_MainWindow(object):
         self.tabWidget.addTab(self.tab_parse_events, "")
         self.tab_check_events = QtWidgets.QWidget()
         self.tab_check_events.setObjectName("tab_check_events")
-        self.label_2 = QtWidgets.QLabel(self.tab_check_events)
-        self.label_2.setGeometry(QtCore.QRect(110, 90, 431, 111))
-        self.label_2.setObjectName("label_2")
-        self.pushButton_3 = QtWidgets.QPushButton(self.tab_check_events)
-        self.pushButton_3.setGeometry(QtCore.QRect(90, 190, 301, 61))
-        self.pushButton_3.setObjectName("pushButton_3")
+        self.pb_PlotData = QtWidgets.QPushButton(self.tab_check_events)
+        self.pb_PlotData.setGeometry(QtCore.QRect(80, 260, 281, 61))
+        self.pb_PlotData.setObjectName("pb_PlotData")
+        self.pb_FinalEventSelection = QtWidgets.QPushButton(self.tab_check_events)
+        self.pb_FinalEventSelection.setGeometry(QtCore.QRect(80, 180, 281, 71))
+        self.pb_FinalEventSelection.setObjectName("pb_FinalEventSelection")
         self.tabWidget.addTab(self.tab_check_events, "")
         self.tab_write_parser_file = QtWidgets.QWidget()
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
@@ -271,6 +277,9 @@ class Ui_MainWindow(object):
         self.horizontalLayout_4.setSpacing(0)
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
         self.pb_CheckOutputEvents = QtWidgets.QPushButton(self.frame_WriteScriptLayout)
+        font = QtGui.QFont()
+        font.setStrikeOut(True)
+        self.pb_CheckOutputEvents.setFont(font)
         self.pb_CheckOutputEvents.setObjectName("pb_CheckOutputEvents")
         self.horizontalLayout_4.addWidget(self.pb_CheckOutputEvents)
         self.pb_WriteProcessingScript = QtWidgets.QPushButton(self.frame_WriteScriptLayout)
@@ -295,7 +304,7 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
 
         self.retranslateUi(MainWindow)
-        self.tabWidget.setCurrentIndex(2)
+        self.tabWidget.setCurrentIndex(1)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -311,8 +320,8 @@ class Ui_MainWindow(object):
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:600; text-decoration: underline;\">(Parse Events)</span>: Use the channel labels to make more complicated event types. e.g. A correct response can be made from a visual que on UPPT001 combined with a response on UADC006 within a certain amount of time.  Other functionality like adjusting UPPT to the projector timing and auditory delays due to transmission time.</p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Correct to projector: Popup to select events to adjust timing to projector</p>\n"
-"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Add Fixed Offset: Set timing and click to open popup for selecting events to correct</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Correct to projector: Popup to select events to adjust timing to projector (digital evts)</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Add Fixed Offset: Set timing and click to open popup for selecting events to correct (digital evts)</p>\n"
 "<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">&lt;Click ADD PARSER LINE&gt;</p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">- Choose a lead event</p>\n"
@@ -340,8 +349,8 @@ class Ui_MainWindow(object):
         self.pb_AddParser.setText(_translate("MainWindow", "ADD PARSER LINE"))
         self.lbl_ParseMarks.setText(_translate("MainWindow", "Parse Events Steps | [Check instructions tab for guidance]  (adding a line will lock the line above)"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_parse_events), _translate("MainWindow", "Parse Events"))
-        self.label_2.setText(_translate("MainWindow", "Not fully tested "))
-        self.pushButton_3.setText(_translate("MainWindow", "Plot Data and Events"))
+        self.pb_PlotData.setText(_translate("MainWindow", "Plot Data and Events"))
+        self.pb_FinalEventSelection.setText(_translate("MainWindow", "Final Event Selection"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_check_events), _translate("MainWindow", "Check Events"))
         self.lbl_SelectOutputEvents.setText(_translate("MainWindow", "Select Output Events"))
         self.pb_CheckOutputEvents.setText(_translate("MainWindow", "Check Output Events (plot MEG)"))
