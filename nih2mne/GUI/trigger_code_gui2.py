@@ -694,91 +694,15 @@ class grid_selector(QMainWindow):
             return 9, 13
 
     
-    
-    
-        
-#%% Testing    
-        
-
-app = QApplication(sys.argv)
-win = event_coding_window(meg_fname='/fast2/20250205_hv2set/JACTZJMA_MID_20250205_008.ds') 
-win.show()
-
-#%%
-assert win.ui.list_AnalogChannels.count()==2
-#Test that the UADC016 gets labelled as projector
-test_item = win.ui.list_AnalogChannels.item(1)
-assert win.ui.list_AnalogChannels.itemWidget(test_item).te_EvtName.text()=='projector'
-
-assert win.ui.list_DigitalChannels.count() == 4 
-
-# Automatically write out the Ana/Dig trigger names
-for i in range(win.ui.list_AnalogChannels.count()):
-    _item = win.ui.list_AnalogChannels.item(i)
-    _widget = win.ui.list_AnalogChannels.itemWidget(_item)
-    _widget.te_EvtName.setText('ana'+str(i))
-    
-for i in range(win.ui.list_DigitalChannels.count()):
-    _item = win.ui.list_DigitalChannels.item(i)
-    _widget = win.ui.list_DigitalChannels.itemWidget(_item)
-    _widget.te_EvtName.setText('dig'+str(i))
-    
-#%%  ParseMarks test
-    
-win.ui.pb_AddParser.click()
-_item = win.ui.list_ParseMarks.item(0)
-_widget = win.ui.list_ParseMarks.itemWidget(_item)
-_widget.te_MrkName.setText('parse1')
-_widget.combo_LeadSelection.setCurrentIndex(1)
-_widget.combo_LagSelection.setCurrentIndex(2)
-
-
-win.ui.pb_AddParser.click()
-# Do a check to make sure that tile1 is read only
-parsemarks_count = win.ui.list_ParseMarks.count()
-assert parsemarks_count == 2
-#Verify that the newly created marker name is in the combobox listing
-assert 'parse1' in [win.ui.list_ParseMarks.itemWidget(win.ui.list_ParseMarks.item(i)).te_MrkName.text() for i in range(win.ui.list_ParseMarks.count())]
-
-# Verify that it fills out according to the above automated inputs
-win.update_event_names()
-assert win.event_namelist == ['ana0', 'ana1', 'dig0', 'dig1', 'dig2', 'dig3', 'parse1']
-
-#%%
-
-
-
-
-
-
-#%%
-
-# _item = win.ui.list_ParseMarks.item(0)
-# _widget = win.ui.list_ParseMarks.itemWidget(_item)
-# #Lead Combo
-# # _widget.combo_LeadSelection.setReadOnly(True)
-# _widget.combo_LeadSelection.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-# _widget.combo_LeadSelection.setFocusPolicy(Qt.NoFocus)
-# #Lag Combo
-# # _widget.combo_LagSelection.setReadOnly(True)
-# _widget.combo_LagSelection.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-# _widget.combo_LagSelection.setFocusPolicy(Qt.NoFocus)
-
-# _widget.te_MrkName.setReadOnly(True)
-
-
-
-def window():
-    app = QApplication(sys.argv)
-    win = event_coding_Window() 
-    win.show()
-    sys.exit(app.exec_())
-    
-# window()
-
 
 
 #%% CMD line section
+
+def window():
+    app = QApplication(sys.argv)
+    win = event_coding_window() 
+    win.show()
+    sys.exit(app.exec_())
     
 def cmdline_main():
     window()
