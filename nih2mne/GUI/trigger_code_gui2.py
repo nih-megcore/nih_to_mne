@@ -473,18 +473,25 @@ class event_coding_window(QMainWindow):
                 print(f'Not processing channel {i}')
     
     def get_default_scriptname(self):
-        default_loc = config.TRIG_FILE_LOC
-        basename = op.basename(self.meg_fname)
-        if basename.split('_').__len__() > 3:
-            task_name = basename.split('_')[1]
-        else:
-            task_name = 'taskName'
-        
-        all_versions = glob.glob(op.join(default_loc, f'{task_name.lower()}_v?.py'))
-        all_versions = sorted(all_versions)
-        last_version = all_versions[-1].split('_v')[-1].split('.')[0]
-        new_version = str(int(last_version) + 1)
-        default_name = f'{task_name}_v{new_version}.py'
+        try:
+            default_loc = config.TRIG_FILE_LOC
+            basename = op.basename(self.meg_fname)
+            if basename.split('_').__len__() > 3:
+                task_name = basename.split('_')[1]
+            else:
+                task_name = 'taskName'
+            
+            all_versions = glob.glob(op.join(default_loc, f'{task_name.lower()}_v?.py'))
+            if len(all_versions) > 0:
+                all_versions = sorted(all_versions)
+                last_version = all_versions[-1].split('_v')[-1].split('.')[0]
+                new_version = str(int(last_version) + 1)
+            else:
+                new_version = '1'
+            default_name = f'{task_name}_v{new_version}.py'
+        except:
+            default_loc = op.expanduser('~')
+            default_name = 'task_v1.py'
         return op.join(default_loc, default_name)
     
     def write_parser_script(self):
