@@ -159,6 +159,7 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.ui.setupUi(self)
         
         # Determine filename info
+        if fname.endswith('/'): fname=fname[:-1] #Remove trailing slash - has caused problems on Mac
         self.fname = fname
         base_fname = op.basename(fname)
         _splits = base_fname.split('_')
