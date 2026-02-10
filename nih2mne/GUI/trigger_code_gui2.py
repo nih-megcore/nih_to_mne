@@ -484,7 +484,7 @@ class event_coding_window(QMainWindow):
         all_versions = sorted(all_versions)
         last_version = all_versions[-1].split('_v')[-1].split('.')[0]
         new_version = str(int(last_version) + 1)
-        default_name = f'{task_name}_v{new_version}'
+        default_name = f'{task_name}_v{new_version}.py'
         return op.join(default_loc, default_name)
     
     def write_parser_script(self):
