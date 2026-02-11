@@ -337,11 +337,13 @@ class InputDatasetTile(QtWidgets.QWidget):
     
     def trigprocess(self):
         import subprocess
+        import sys
         current_trigfile = self.ui.ProcFileComboBox.currentText()
         print(f'No associated trigger processing file for task: {self.taskname.lower()}')
         if (current_trigfile == None) or (current_trigfile == ""):
             return
-        cmd = f'{self.trigfile_dir}/{current_trigfile} {self.fname}'
+        _python_path = sys.executable
+        cmd = f'{_python_path} {self.trigfile_dir}/{current_trigfile} {self.fname}'
         subprocess.run(cmd.split())  #Add errror processing
         self.load_meg() #Reload to get the newly created annotations
         self.set_events_label()
