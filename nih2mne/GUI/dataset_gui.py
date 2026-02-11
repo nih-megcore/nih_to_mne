@@ -184,6 +184,7 @@ class InputDatasetTile(QtWidgets.QWidget):
             
         self.load_meg()
         self.taskname = taskname
+        self._trigproc_error = False  #Initialize, because referenced in info section
         
         self.ui.ReadoutFilename.setText(f'File: {base_fname}')
         self.ui.ReadoutSubjid.setText(f'  Subjid: {subjid}')
@@ -208,6 +209,7 @@ class InputDatasetTile(QtWidgets.QWidget):
         
         ## Remove tile
         self.ui.pb_DeleteTile.clicked.connect(lambda: self.close_clicked.emit(self))
+        
         
         
     def load_meg(self):
@@ -269,6 +271,16 @@ class InputDatasetTile(QtWidgets.QWidget):
         else:
             _term_text = ''
         status_text+=_term_text
+        
+        # Check trigproc errors
+        _trigproc_text=''
+        if not self._trigproc_script_present:
+            _trigproc_text = 'NoTrigProc Script: '
+        else:
+            if self._trigproc_error not in [None, False, '']:
+                _trigproc_text = 'Error Processing: ' # Eventually pipe in error text
+        status_text += _trigproc_text
+        
         self.ui.lbl_Status.setText(f'STATUS: {status_text}')
         
     def set_events_label(self):
@@ -333,17 +345,27 @@ class InputDatasetTile(QtWidgets.QWidget):
         task_trig_files = glob.glob(op.join(self.trigfile_dir, self.taskname.lower() + '*'))
         if len(task_trig_files) > 0:
             _tt_files = [op.basename(i) for i in task_trig_files]
+            _tt_files = sorted(_tt_files, reverse=True)
             self.ui.ProcFileComboBox.addItems(_tt_files)
+            self._trigproc_script_present = True
+        else:
+            self._trigproc_script_present = False
     
     def trigprocess(self):
         import subprocess
         import sys
         current_trigfile = self.ui.ProcFileComboBox.currentText()
-        print(f'No associated trigger processing file for task: {self.taskname.lower()}')
+        if current_trigfile.strip() == '':
+            print(f'No associated trigger processing file for task: {self.taskname.lower()}')
         if (current_trigfile == None) or (current_trigfile == ""):
             return
-        _python_path = sys.executable
-        cmd = f'{_python_path} {self.trigfile_dir}/{current_trigfile} {self.fname}'
+        if current_trigfile.endswith('.py'):
+            _python_path = sys.executable
+            cmd = f'{_python_path} {self.trigfile_dir}/{current_trigfile} {self.fname}'
+        else:  #All non python files require executable permissions
+            print('This file does not end with .py - It is required to have executable permissions')
+            print(f'If an error occurs, this can be accomplished on the commandline with:  chmod +x {self.trigfile_dir}/{current_trigfile}')
+            cmd = f'{self.trigfile_dir}/{current_trigfile} {self.fname}'
         subprocess.run(cmd.split())  #Add errror processing
         self.load_meg() #Reload to get the newly created annotations
         self.set_events_label()

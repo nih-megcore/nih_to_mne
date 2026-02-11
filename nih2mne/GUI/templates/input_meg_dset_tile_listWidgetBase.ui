@@ -252,6 +252,11 @@
          </item>
          <item>
           <widget class="QPushButton" name="pb_FullQA">
+           <property name="font">
+            <font>
+             <strikeout>true</strikeout>
+            </font>
+           </property>
            <property name="text">
             <string>FullQA</string>
            </property>

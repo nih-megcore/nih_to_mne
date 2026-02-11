@@ -126,6 +126,9 @@ class Ui_InputDatasetTile(object):
         self.pb_FFT.setObjectName("pb_FFT")
         self.horizontalLayout_2.addWidget(self.pb_FFT)
         self.pb_FullQA = QtWidgets.QPushButton(self.widget_2)
+        font = QtGui.QFont()
+        font.setStrikeOut(True)
+        self.pb_FullQA.setFont(font)
         self.pb_FullQA.setObjectName("pb_FullQA")
         self.horizontalLayout_2.addWidget(self.pb_FullQA)
         self.verticalLayout.addWidget(self.widget_2)
@@ -173,3 +176,13 @@ class Ui_InputDatasetTile(object):
         self.pb_FullQA.setText(_translate("InputDatasetTile", "FullQA"))
         self.lbl_EventInfo.setText(_translate("InputDatasetTile", "Top5Trig:"))
         self.lbl_Status.setText(_translate("InputDatasetTile", "Status:"))
+
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    InputDatasetTile = QtWidgets.QWidget()
+    ui = Ui_InputDatasetTile()
+    ui.setupUi(InputDatasetTile)
+    InputDatasetTile.show()
+    sys.exit(app.exec_())
