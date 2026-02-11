@@ -278,7 +278,7 @@ class InputDatasetTile(QtWidgets.QWidget):
             _trigproc_text = 'NoTrigProc Script: '
         else:
             if self._trigproc_error not in [None, False, '']:
-                _trigproc_text = 'Error Processing: ' # Eventually pipe in error text
+                _trigproc_text = 'Trigproc Error (check terminal): ' # Eventually pipe in error text
         status_text += _trigproc_text
         
         self.ui.lbl_Status.setText(f'STATUS: {status_text}')
@@ -366,7 +366,9 @@ class InputDatasetTile(QtWidgets.QWidget):
             print('This file does not end with .py - It is required to have executable permissions')
             print(f'If an error occurs, this can be accomplished on the commandline with:  chmod +x {self.trigfile_dir}/{current_trigfile}')
             cmd = f'{self.trigfile_dir}/{current_trigfile} {self.fname}'
-        subprocess.run(cmd.split())  #Add errror processing
+        _subproc = subprocess.run(cmd.split())  #Add errror processing
+        if _subproc.returncode !=0:
+            self._trigproc_error = True
         self.load_meg() #Reload to get the newly created annotations
         self.set_events_label()
         self.set_status_label() 
