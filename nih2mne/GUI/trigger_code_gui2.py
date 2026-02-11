@@ -222,6 +222,7 @@ class event_coding_window(QMainWindow):
         
             
     def extract_evt_dict(self):
+        '''Pull event information from trig channs and parsed events'''
         evtname_dict = {}
         # Get trig_tile names (Triggers)
         for key in self.tile_dict.keys():

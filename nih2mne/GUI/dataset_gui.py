@@ -369,6 +369,8 @@ class InputDatasetTile(QtWidgets.QWidget):
         _subproc = subprocess.run(cmd.split())  #Add errror processing
         if _subproc.returncode !=0:
             self._trigproc_error = True
+        else:
+            self._trigproc_error = False
         self.load_meg() #Reload to get the newly created annotations
         self.set_events_label()
         self.set_status_label() 
