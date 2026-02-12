@@ -111,7 +111,9 @@ class trig_tile(QWidget, trig_singleline_UiForm):
 ## ParseMarks Tiles
 from nih2mne.GUI.templates.parse_marks_single_line import Ui_Form as parse_marks_singleline_UiForm
 class parse_marks_tile(QWidget, parse_marks_singleline_UiForm): 
-    close_clicked = pyqtSignal(object)
+    close_clicked = pyqtSignal(object)  #Send signal to Event Window Object
+    check_clicked = pyqtSignal(object)
+    
     def __init__(self, on_lead=True, on_lag=False, start_offset=0, stop_offset=0.5, 
                  event_name_dict=OrderedDict()):
         super().__init__()
@@ -130,7 +132,7 @@ class parse_marks_tile(QWidget, parse_marks_singleline_UiForm):
         
         # Handle tile deletion
         self.pb_DeleteLine.clicked.connect(lambda: self.close_clicked.emit(self))
-        
+        self.pb_Check.clicked.connect(lambda: self.check_clicked.emit(self))
         
     def set_onlead_selection(self):
         self.mark_on = 'lead'
@@ -337,7 +339,7 @@ class event_coding_window(QMainWindow):
         print(f'Correcting the following to projector timing: {self.corr2proj_list}')  
         
     def _set_final_events_list(self):
-        'Set the final events and assign to self.finalEvents_list'
+        'Set the final events and assign to self.final_events_list'
         layout = self.set_final_events_selector.grid_layout
         self.final_events_list = []
         for i in range(layout.count()):
@@ -352,7 +354,13 @@ class event_coding_window(QMainWindow):
             plot_data_font.setStrikeOut(False)
             self.ui.pb_PlotData.setFont(plot_data_font)
             self.ui.pb_PlotData.setEnabled(True)
-            
+        self._populate_output_events_display()
+        
+    def _populate_output_events_display(self):
+        output_evts_text = ''
+        for evt in self.final_events_list:
+            output_evts_text += f'{evt} \n'
+        self.ui.te_OutputEvents.setText(output_evts_text)
             
             
     def update_keep_events_list(self, flush=False):
@@ -392,13 +400,12 @@ class event_coding_window(QMainWindow):
         evts_names = self.extract_evt_dict()
         _pm_tile = parse_marks_tile(event_name_dict=OrderedDict(evts_names))
         _pm_tile.close_clicked.connect(self.handle_close_request)
+        _pm_tile.check_clicked.connect(self.handle_check_request)
                                     
         item = QListWidgetItem(self.ui.list_ParseMarks)
         item.setSizeHint(_pm_tile.sizeHint())
         self.ui.list_ParseMarks.addItem(item)
         self.ui.list_ParseMarks.setItemWidget(item, _pm_tile)
-        
-        
         
     def handle_close_request(self, widget):
         '''If file tile "emits" a close signal, this will trigger a loop over
@@ -412,6 +419,73 @@ class event_coding_window(QMainWindow):
                 print(f"Parent removed item at row {i}")
                 break
         self.re_enable_parser_tile()
+    
+    #>>
+    def handle_check_request(self, widget):
+        '''Handle check button click from parse_marks_tile'''
+        # Get the parse marks parameters from the widget
+        outputs = widget.get_outputs()
+        
+        print('NEWNEW \n \n')
+        
+        # # Perform your calculation
+        # try:
+        #     # Build the full dframe with all triggers
+        #     self.update_event_names(events_only=True)
+            
+        #     # Get your dataframes (you'll need to adapt this to your data structure)
+        #     dframe_list = []
+            
+        #     # Add analog triggers to dframe_list
+        #     for i, tile in self.tile_dict.items():
+        #         if i.startswith('UADC'):
+        #             markname = tile.te_EvtName.text()
+        #             if markname == '':
+        #                 continue
+        #             invert_val = tile.cb_Down.checkState() == 2
+        #             tmp_dframe = threshold_detect(dsname=self.meg_fname, 
+        #                                          channel=i, 
+        #                                          mark=markname, 
+        #                                          invert=invert_val)
+        #             dframe_list.append(tmp_dframe)
+            
+        #     # Add digital triggers
+        #     dig_dframe = detect_digital(filename=self.meg_fname, channel='UPPT001')
+        #     for i, tile in self.tile_dict.items():
+        #         if i.startswith('UPPT'):
+        #             markname = tile.te_EvtName.text()
+        #             if markname == '':
+        #                 continue
+        #             dig_val = i.split('_')[-1]
+        #             dig_dframe.loc[dig_dframe.condition==dig_val, 'condition'] = markname
+        #     dframe_list.append(dig_dframe)
+            
+        #     # Combine dataframes
+        #     dframe = append_conditions(dframe_list)
+            
+        #     # Perform parse_marks calculation
+        #     result_dframe = parse_marks(
+        #         dframe=dframe,
+        #         lead_condition=outputs['lead_evt'],
+        #         lag_condition=outputs['lag_evt'],
+        #         window=[float(outputs['start_offset']), float(outputs['stop_offset'])],
+        #         marker_on=outputs['mark_on'],
+        #         marker_name=outputs['name'],
+        #         append_result=False  # Don't append, just return the result
+        #     )
+            
+        #     # Calculate the count
+        #     event_count = len(result_dframe)
+            
+        #     # Update the widget's button text
+        #     widget.pb_Check.setText(f"N={event_count}")
+            
+        # except Exception as e:
+        #     # Handle errors
+        #     widget.pb_Check.setText(f"Error: {str(e)[:10]}")
+        #     print(f"Error calculating parse marks: {e}")
+    #<<
+    
             
     def re_enable_parser_tile(self):
         _count = self.ui.list_ParseMarks.count()
