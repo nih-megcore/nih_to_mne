@@ -68,6 +68,7 @@ from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital,
 from collections import OrderedDict
 from PyQt5.QtCore import Qt, pyqtSignal
 from nih2mne import config
+from nih2mne.GUI.templates.trigger_processing_gui import Ui_MainWindow as trigUi_mw
 
 
 
@@ -170,15 +171,17 @@ class parse_marks_tile(QWidget, parse_marks_singleline_UiForm):
         self.combo_LagSelection.setFocusPolicy(Qt.NoFocus)
         #MarkerName
         self.te_MrkName.setReadOnly(True)
-        
     
-      
+    def _enable(self):
+        #Lead Combo 
+        self.combo_LeadSelection.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        self.combo_LeadSelection.setFocusPolicy(Qt.StrongFocus)
+        #Lag Combo
+        self.combo_LagSelection.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        self.combo_LagSelection.setFocusPolicy(Qt.StrongFocus)
+        #MarkerName
+        self.te_MrkName.setReadOnly(False)
         
-# tmp = parse_marks_tile(event_name_dict=OrderedDict(test1='test',test2=3))        
-
-
-#%%
-from nih2mne.GUI.templates.trigger_processing_gui import Ui_MainWindow as trigUi_mw        
 class event_coding_window(QMainWindow):
     def __init__(self, meg_fname=None):
         super().__init__()
@@ -415,6 +418,15 @@ class event_coding_window(QMainWindow):
                 self.ui.list_ParseMarks.takeItem(i)
                 print(f"Parent removed item at row {i}")
                 break
+        self.re_enable_parser_tile()
+            
+    def re_enable_parser_tile(self):
+        _count = self.ui.list_ParseMarks.count()
+        last_idx = _count - 1
+        if _count > 0:
+            _item = self.ui.list_ParseMarks.item(last_idx)
+            _widget = self.ui.list_ParseMarks.itemWidget(_item)
+            _widget._enable() 
         
     def act_pb_SelectMeg(self, meg_fname=None):
         print(f'MEG fname: {meg_fname}')
