@@ -16,6 +16,8 @@ class Ui_Form(object):
         Form.setObjectName("Form")
         Form.resize(994, 43)
         self.horizontalLayout = QtWidgets.QHBoxLayout(Form)
+        self.horizontalLayout.setContentsMargins(2, 4, 2, 4)
+        self.horizontalLayout.setSpacing(6)
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.combo_LeadSelection = QtWidgets.QComboBox(Form)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.Fixed)
@@ -78,6 +80,9 @@ class Ui_Form(object):
         self.te_MrkName = QtWidgets.QLineEdit(Form)
         self.te_MrkName.setObjectName("te_MrkName")
         self.horizontalLayout.addWidget(self.te_MrkName)
+        self.pb_Check = QtWidgets.QPushButton(Form)
+        self.pb_Check.setObjectName("pb_Check")
+        self.horizontalLayout.addWidget(self.pb_Check)
         self.pb_DeleteLine = QtWidgets.QPushButton(Form)
         self.pb_DeleteLine.setMinimumSize(QtCore.QSize(40, 0))
         font = QtGui.QFont()
@@ -100,6 +105,7 @@ class Ui_Form(object):
         self.lbl_StartOffset.setText(_translate("Form", "startOffset (s)"))
         self.lbl_StopOffset.setText(_translate("Form", "stopOffset (s)"))
         self.lbl_MrkName.setText(_translate("Form", "MrkName"))
+        self.pb_Check.setText(_translate("Form", "Check N=?"))
         self.pb_DeleteLine.setText(_translate("Form", "X"))
 
 
