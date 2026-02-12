@@ -420,71 +420,67 @@ class event_coding_window(QMainWindow):
                 break
         self.re_enable_parser_tile()
     
-    #>>
     def handle_check_request(self, widget):
         '''Handle check button click from parse_marks_tile'''
         # Get the parse marks parameters from the widget
         outputs = widget.get_outputs()
         
-        print('NEWNEW \n \n')
-        
-        # # Perform your calculation
-        # try:
-        #     # Build the full dframe with all triggers
-        #     self.update_event_names(events_only=True)
+        # Perform your calculation
+        try:
+            # Build the full dframe with all triggers
+            self.update_event_names(events_only=True)
             
-        #     # Get your dataframes (you'll need to adapt this to your data structure)
-        #     dframe_list = []
+            # Get your dataframes (you'll need to adapt this to your data structure)
+            dframe_list = []
             
-        #     # Add analog triggers to dframe_list
-        #     for i, tile in self.tile_dict.items():
-        #         if i.startswith('UADC'):
-        #             markname = tile.te_EvtName.text()
-        #             if markname == '':
-        #                 continue
-        #             invert_val = tile.cb_Down.checkState() == 2
-        #             tmp_dframe = threshold_detect(dsname=self.meg_fname, 
-        #                                          channel=i, 
-        #                                          mark=markname, 
-        #                                          invert=invert_val)
-        #             dframe_list.append(tmp_dframe)
+            # Add analog triggers to dframe_list
+            for i, tile in self.tile_dict.items():
+                if i.startswith('UADC'):
+                    markname = tile.te_EvtName.text()
+                    if markname == '':
+                        continue
+                    invert_val = tile.cb_Down.checkState() == 2
+                    tmp_dframe = threshold_detect(dsname=self.meg_fname, 
+                                                 channel=i, 
+                                                 mark=markname, 
+                                                 invert=invert_val)
+                    dframe_list.append(tmp_dframe)
             
-        #     # Add digital triggers
-        #     dig_dframe = detect_digital(filename=self.meg_fname, channel='UPPT001')
-        #     for i, tile in self.tile_dict.items():
-        #         if i.startswith('UPPT'):
-        #             markname = tile.te_EvtName.text()
-        #             if markname == '':
-        #                 continue
-        #             dig_val = i.split('_')[-1]
-        #             dig_dframe.loc[dig_dframe.condition==dig_val, 'condition'] = markname
-        #     dframe_list.append(dig_dframe)
+            # Add digital triggers
+            dig_dframe = detect_digital(filename=self.meg_fname, channel='UPPT001')
+            for i, tile in self.tile_dict.items():
+                if i.startswith('UPPT'):
+                    markname = tile.te_EvtName.text()
+                    if markname == '':
+                        continue
+                    dig_val = i.split('_')[-1]
+                    dig_dframe.loc[dig_dframe.condition==dig_val, 'condition'] = markname
+            dframe_list.append(dig_dframe)
             
-        #     # Combine dataframes
-        #     dframe = append_conditions(dframe_list)
+            # Combine dataframes
+            dframe = append_conditions(dframe_list)
             
-        #     # Perform parse_marks calculation
-        #     result_dframe = parse_marks(
-        #         dframe=dframe,
-        #         lead_condition=outputs['lead_evt'],
-        #         lag_condition=outputs['lag_evt'],
-        #         window=[float(outputs['start_offset']), float(outputs['stop_offset'])],
-        #         marker_on=outputs['mark_on'],
-        #         marker_name=outputs['name'],
-        #         append_result=False  # Don't append, just return the result
-        #     )
+            # Perform parse_marks calculation
+            result_dframe = parse_marks(
+                dframe=dframe,
+                lead_condition=outputs['lead_evt'],
+                lag_condition=outputs['lag_evt'],
+                window=[float(outputs['start_offset']), float(outputs['stop_offset'])],
+                marker_on=outputs['mark_on'],
+                marker_name=outputs['name'],
+                append_result=False  # Don't append, just return the result
+            )
             
-        #     # Calculate the count
-        #     event_count = len(result_dframe)
+            # Calculate the count
+            event_count = len(result_dframe)
             
-        #     # Update the widget's button text
-        #     widget.pb_Check.setText(f"N={event_count}")
+            # Update the widget's button text
+            widget.pb_Check.setText(f"N={event_count}")
             
-        # except Exception as e:
-        #     # Handle errors
-        #     widget.pb_Check.setText(f"Error: {str(e)[:10]}")
-        #     print(f"Error calculating parse marks: {e}")
-    #<<
+        except Exception as e:
+            # Handle errors
+            widget.pb_Check.setText(f"Error: {str(e)[:10]}")
+            print(f"Error calculating parse marks: {e}")
     
             
     def re_enable_parser_tile(self):
