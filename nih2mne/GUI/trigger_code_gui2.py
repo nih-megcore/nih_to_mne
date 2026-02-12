@@ -206,6 +206,7 @@ class event_coding_window(QMainWindow):
         
         self.ui.pb_FinalEventSelection.clicked.connect(self.act_pb_select_final_events)
         self.ui.pb_PlotData.clicked.connect(self.act_plot_data)
+        self.ui.pb_PlotData.setEnabled(False)
         
         self.ui.pb_WriteProcessingScript.clicked.connect(self.write_parser_script)
     
@@ -258,8 +259,6 @@ class event_coding_window(QMainWindow):
         
         return evtname_dict
     
-    #>> Begin of changes
-    
     def update_event_names(self, events_only=False):
         '''Set action for updating event names.  This will write all of the 
         events to the an event list and update the parse_marks and evt_keep
@@ -280,9 +279,6 @@ class event_coding_window(QMainWindow):
                 continue
             namelist.append(name_text)
         
-        # for key in self.tile_dict.keys():
-        #     tmp_txt = self.tile_dict[key].te_EvtName.text()
-        #     namelist.append(tmp_txt)
         self.event_namelist = namelist
         
         #Check for duplicated names from raw trigger panel
@@ -296,16 +292,6 @@ class event_coding_window(QMainWindow):
         
         if events_only:
             return
-        
-        ############# Parsemarks Layout ##########################
-        # self.parsemarks_tile_list = []
-        # self.parsemarks_full_layout_list = []
-        # self.add_parsemarks_line()
-        
-        ############# Keep Events Layout #########################
-        #Empty the keep events layout list, so it doesn't append the previous
-        # self.update_keep_events_list(flush=True)
-    
         
     def act_pb_corr2proj(self):
         # Create a popup to select events that will be corrected to projector
@@ -324,6 +310,7 @@ class event_coding_window(QMainWindow):
         self.update_event_names(events_only=True)
         self.set_final_events_selector = grid_selector(self.event_namelist)  
         self.set_final_events_selector.b_set_selection.clicked.connect(self._set_final_events_list)
+
         
     def _set_fixedDelay_list(self):
         'Fixed delay added to self.add_offset_list'
@@ -360,6 +347,13 @@ class event_coding_window(QMainWindow):
                     if item.widget().isChecked():
                         self.final_events_list.append(item.widget().text())
         print(f'Final events in markerfil: {self.final_events_list}') 
+        if len(self.final_events_list) > 0:
+            plot_data_font = self.ui.pb_PlotData.font()
+            plot_data_font.setStrikeOut(False)
+            self.ui.pb_PlotData.setFont(plot_data_font)
+            self.ui.pb_PlotData.setEnabled(True)
+            
+            
             
     def update_keep_events_list(self, flush=False):
         num_keep_buttons = self.keep_events_layout.count()
@@ -379,7 +373,6 @@ class event_coding_window(QMainWindow):
         self.keep_events_layout.update()
         
         
-    ## <<<<< END of changes
             
             
     def act_pb_add_parser_line(self):
