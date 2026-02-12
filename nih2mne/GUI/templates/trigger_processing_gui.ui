@@ -47,7 +47,7 @@
        </font>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="tab_instructions">
        <property name="sizePolicy">
@@ -385,7 +385,7 @@ p, li { white-space: pre-wrap; }
         <item>
          <widget class="QLabel" name="lbl_ParseMarks">
           <property name="text">
-           <string>Parse Events Steps | [Check instructions tab for guidance]  (adding a line will lock the line above)</string>
+           <string>Parse Events Steps | [Check instructions tab for guidance]  (only the last line has editable names)</string>
           </property>
          </widget>
         </item>
@@ -442,32 +442,74 @@ p, li { white-space: pre-wrap; }
        <attribute name="title">
         <string>Check Events</string>
        </attribute>
-       <widget class="QPushButton" name="pb_PlotData">
-        <property name="geometry">
-         <rect>
-          <x>80</x>
-          <y>260</y>
-          <width>281</width>
-          <height>61</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Plot Data and Events</string>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="pb_FinalEventSelection">
-        <property name="geometry">
-         <rect>
-          <x>80</x>
-          <y>180</y>
-          <width>281</width>
-          <height>71</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Final Event Selection</string>
-        </property>
-       </widget>
+       <layout class="QHBoxLayout" name="horizontalLayout_3">
+        <item>
+         <widget class="QFrame" name="frame_2">
+          <property name="frameShape">
+           <enum>QFrame::StyledPanel</enum>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Raised</enum>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_11">
+           <item>
+            <widget class="QPushButton" name="pb_FinalEventSelection">
+             <property name="text">
+              <string>Final Event Selection</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pb_PlotData">
+             <property name="font">
+              <font>
+               <strikeout>true</strikeout>
+              </font>
+             </property>
+             <property name="text">
+              <string>Plot Data and Events</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="verticalSpacer">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>662</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QFrame" name="frame">
+          <property name="frameShape">
+           <enum>QFrame::StyledPanel</enum>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Raised</enum>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_10">
+           <item>
+            <widget class="QLabel" name="lbl_OutputEvents">
+             <property name="text">
+              <string>Output Events</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QTextEdit" name="te_OutputEvents"/>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
       </widget>
       <widget class="QWidget" name="tab_write_parser_file">
        <property name="sizePolicy">
