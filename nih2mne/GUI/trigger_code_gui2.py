@@ -469,7 +469,7 @@ class event_coding_window(QMainWindow):
                 marker_on=outputs['mark_on'],
                 marker_name=outputs['name'],
                 append_result=False  # Don't append, just return the result
-            )
+            ).dropna()
             
             # Calculate the count
             event_count = sum(result_dframe.condition==outputs['name'])
