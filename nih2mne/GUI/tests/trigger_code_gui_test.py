@@ -118,7 +118,17 @@ assert win.final_events_list == ['dig0', 'dig2', 'parse1']
 assert win.ui.te_OutputEvents.toPlainText() == 'dig0 \ndig2 \nparse1 \n'
 
 #%% Check the parsemarks Check N=? button 
+    
+win.ui.pb_AddParser.click()
+_item = win.ui.list_ParseMarks.item(0)
+_widget = win.ui.list_ParseMarks.itemWidget(_item)
+_widget.te_MrkName.setText('parse1')
+_widget.combo_LeadSelection.setCurrentIndex(3)
+_widget.combo_LagSelection.setCurrentIndex(5)
 
+
+win.handle_check_request(_widget)
+assert _widget.pb_Check.text() == 'N=38'
 
 
 

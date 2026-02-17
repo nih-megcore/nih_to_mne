@@ -152,9 +152,9 @@ class parse_marks_tile(QWidget, parse_marks_singleline_UiForm):
     
     def get_outputs(self):
         outputs = {}
-        if self.cb_OnLead==2:
+        if self.cb_OnLead.checkState()==2:
             outputs['mark_on'] = 'lead'
-        elif self.cb_OnLag==2:
+        elif self.cb_OnLag.checkState()==2:
             outputs['mark_on'] = 'lag'
         
         outputs['lead_evt'] = self.combo_LeadSelection.currentText()
@@ -472,7 +472,7 @@ class event_coding_window(QMainWindow):
             )
             
             # Calculate the count
-            event_count = len(result_dframe)
+            event_count = sum(result_dframe.condition==outputs['name'])
             
             # Update the widget's button text
             widget.pb_Check.setText(f"N={event_count}")
