@@ -112,7 +112,6 @@ class trig_tile(QWidget, trig_singleline_UiForm):
 from nih2mne.GUI.templates.parse_marks_single_line import Ui_Form as parse_marks_singleline_UiForm
 class parse_marks_tile(QWidget, parse_marks_singleline_UiForm): 
     close_clicked = pyqtSignal(object)  #Send signal to Event Window Object
-    check_clicked = pyqtSignal(object)
     
     def __init__(self, on_lead=True, on_lag=False, start_offset=0, stop_offset=0.5, 
                  event_name_dict=OrderedDict()):
@@ -132,7 +131,6 @@ class parse_marks_tile(QWidget, parse_marks_singleline_UiForm):
         
         # Handle tile deletion
         self.pb_DeleteLine.clicked.connect(lambda: self.close_clicked.emit(self))
-        self.pb_Check.clicked.connect(lambda: self.check_clicked.emit(self))
         
     def set_onlead_selection(self):
         self.mark_on = 'lead'
@@ -211,6 +209,7 @@ class event_coding_window(QMainWindow):
         self.ui.pb_PlotData.setEnabled(False)
         
         self.ui.pb_WriteProcessingScript.clicked.connect(self.write_parser_script)
+        self.ui.pb_Check.clicked.connect(self.handle_check_request)
     
     def act_plot_data(self):   ##FIX !!!!!!!  no events plotted
         self.raw = mne.io.read_raw_ctf(self.meg_fname, system_clock='ignore', 
@@ -224,8 +223,6 @@ class event_coding_window(QMainWindow):
         
         self.raw.plot() #events = evts,  #[row, [samp, duration, ID_int]]
                       #event_id = {})
-        
-        
             
     def extract_evt_dict(self):
         '''Pull event information from trig channs and parsed events'''
@@ -348,7 +345,7 @@ class event_coding_window(QMainWindow):
                 if hasattr(item.widget(), 'isChecked'):
                     if item.widget().isChecked():
                         self.final_events_list.append(item.widget().text())
-        print(f'Final events in markerfil: {self.final_events_list}') 
+        print(f'Final events in markerfile: {self.final_events_list}') 
         if len(self.final_events_list) > 0:
             plot_data_font = self.ui.pb_PlotData.font()
             plot_data_font.setStrikeOut(False)
@@ -379,9 +376,6 @@ class event_coding_window(QMainWindow):
             self.keep_events_layout.addWidget(tmp)
             del tmp
         self.keep_events_layout.update()
-        
-        
-            
             
     def act_pb_add_parser_line(self):
         '''Take all the items in channel labels and prior parser lines output labels
@@ -400,7 +394,6 @@ class event_coding_window(QMainWindow):
         evts_names = self.extract_evt_dict()
         _pm_tile = parse_marks_tile(event_name_dict=OrderedDict(evts_names))
         _pm_tile.close_clicked.connect(self.handle_close_request)
-        _pm_tile.check_clicked.connect(self.handle_check_request)
                                     
         item = QListWidgetItem(self.ui.list_ParseMarks)
         item.setSizeHint(_pm_tile.sizeHint())
@@ -420,10 +413,8 @@ class event_coding_window(QMainWindow):
                 break
         self.re_enable_parser_tile()
     
-    def handle_check_request(self, widget):
+    def handle_check_request(self):
         '''Handle check button click from parse_marks_tile'''
-        # Get the parse marks parameters from the widget
-        outputs = widget.get_outputs()
         
         # Perform your calculation
         try:
@@ -432,6 +423,7 @@ class event_coding_window(QMainWindow):
             
             # Get your dataframes (you'll need to adapt this to your data structure)
             dframe_list = []
+            self.proc_dframe_dict = OrderedDict()
             
             # Add analog triggers to dframe_list
             for i, tile in self.tile_dict.items():
@@ -445,6 +437,8 @@ class event_coding_window(QMainWindow):
                                                  mark=markname, 
                                                  invert=invert_val)
                     dframe_list.append(tmp_dframe)
+            self.proc_dframe_dict['ADC'] = append_conditions(dframe_list)
+            
             
             # Add digital triggers
             dig_dframe = detect_digital(filename=self.meg_fname, channel='UPPT001')
@@ -456,11 +450,32 @@ class event_coding_window(QMainWindow):
                     dig_val = i.split('_')[-1]
                     dig_dframe.loc[dig_dframe.condition==dig_val, 'condition'] = markname
             dframe_list.append(dig_dframe)
+            self.proc_dframe_dict['PPT'] = dig_dframe
             
             # Combine dataframes
             dframe = append_conditions(dframe_list)
             
+            # Correct to projector
+            
+            # Add fixed time offset
+            
             # Perform parse_marks calculation
+            if self.ui.list_ParseMarks.count() > 0:
+                for idx in range(self.ui.list_ParseMarks.count()):
+                    _item = self.ui.list_ParseMarks.item(idx)
+                    _widget = self.ui.list_ParseMarks.itemWidget(_item)
+                    self._compute_parsemarks_events(widget=_widget, 
+                                                    dframe=dframe)
+            
+        except Exception as e:
+            # Handle errors
+            print(f"Error calculating parse marks: {e}")
+            
+    def _compute_parsemarks_events(self, widget, dframe):
+        try:
+            # Get the parse marks parameters from the widget
+            outputs = widget.get_outputs()
+            
             result_dframe = parse_marks(
                 dframe=dframe,
                 lead_condition=outputs['lead_evt'],
@@ -481,7 +496,6 @@ class event_coding_window(QMainWindow):
             # Handle errors
             widget.pb_Check.setText(f"Error: {str(e)[:10]}")
             print(f"Error calculating parse marks: {e}")
-    
             
     def re_enable_parser_tile(self):
         _count = self.ui.list_ParseMarks.count()
@@ -506,6 +520,7 @@ class event_coding_window(QMainWindow):
                                                verbose=False)
         self.trig_ch_names = [i for i in self.meg_raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
         self.fill_trig_chan_layout()
+        self.ui.pb_SelectMeg.setDisabled(True)
         
         
     def fill_trig_chan_layout(self):
