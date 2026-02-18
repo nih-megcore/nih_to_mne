@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'templates/trigger_processing_gui.ui'
+# Form implementation generated from reading ui file 'trigger_processing_gui.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.9
 #
@@ -194,6 +194,16 @@ class Ui_MainWindow(object):
         self.pb_AddParser.setFont(font)
         self.pb_AddParser.setObjectName("pb_AddParser")
         self.horizontalLayout_2.addWidget(self.pb_AddParser)
+        self.pb_Check = QtWidgets.QPushButton(self.frame_fixOffsets)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.pb_Check.sizePolicy().hasHeightForWidth())
+        self.pb_Check.setSizePolicy(sizePolicy)
+        self.pb_Check.setMinimumSize(QtCore.QSize(120, 0))
+        self.pb_Check.setMaximumSize(QtCore.QSize(200, 16777215))
+        self.pb_Check.setObjectName("pb_Check")
+        self.horizontalLayout_2.addWidget(self.pb_Check)
         self.verticalLayout.addWidget(self.frame_fixOffsets)
         self.lbl_ParseMarks = QtWidgets.QLabel(self.tab_parse_events)
         self.lbl_ParseMarks.setObjectName("lbl_ParseMarks")
@@ -331,7 +341,7 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
 
         self.retranslateUi(MainWindow)
-        self.tabWidget.setCurrentIndex(3)
+        self.tabWidget.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -374,6 +384,7 @@ class Ui_MainWindow(object):
         self.pb_CorrectToProjector.setText(_translate("MainWindow", "Correct To Projector"))
         self.pb_FixedOffset.setText(_translate("MainWindow", "Add Fixed Offset (ms):"))
         self.pb_AddParser.setText(_translate("MainWindow", "ADD PARSER LINE"))
+        self.pb_Check.setText(_translate("MainWindow", "Check (N=)"))
         self.lbl_ParseMarks.setText(_translate("MainWindow", "Parse Events Steps | [Check instructions tab for guidance]  (only the last line has editable names)"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_parse_events), _translate("MainWindow", "Parse Events"))
         self.pb_FinalEventSelection.setText(_translate("MainWindow", "Final Event Selection"))

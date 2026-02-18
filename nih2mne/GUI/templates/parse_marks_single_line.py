@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(994, 43)
+        Form.resize(1048, 43)
         self.horizontalLayout = QtWidgets.QHBoxLayout(Form)
         self.horizontalLayout.setContentsMargins(2, 4, 2, 4)
         self.horizontalLayout.setSpacing(6)
@@ -105,7 +105,7 @@ class Ui_Form(object):
         self.lbl_StartOffset.setText(_translate("Form", "startOffset (s)"))
         self.lbl_StopOffset.setText(_translate("Form", "stopOffset (s)"))
         self.lbl_MrkName.setText(_translate("Form", "MrkName"))
-        self.pb_Check.setText(_translate("Form", "Check N=?"))
+        self.pb_Check.setText(_translate("Form", "N=?"))
         self.pb_DeleteLine.setText(_translate("Form", "X"))
 
 
