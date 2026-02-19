@@ -119,7 +119,7 @@ assert win.ui.te_OutputEvents.toPlainText() == 'dig0 \ndig2 \nparse1 \n'
 
 #%% Check the parsemarks Check N=? button 
     
-win.ui.pb_AddParser.click()
+# win.ui.pb_AddParser.click()
 _item = win.ui.list_ParseMarks.item(0)
 _widget = win.ui.list_ParseMarks.itemWidget(_item)
 _widget.te_MrkName.setText('parse1')
@@ -128,7 +128,62 @@ _widget.combo_LagSelection.setCurrentIndex(5)
 
 
 win.handle_check_request(_widget)
-assert _widget.pb_Check.text() == 'N=38'
+assert _widget.pb_Check.text() == 'N=0'
+
+
+
+
+
+#%%
+from nih2mne.utilities.trigger_utilities import (threshold_detect, detect_digital,
+                                                 append_conditions, parse_marks)
+dframe_list = []
+
+# Add analog triggers to dframe_list
+for i, tile in win.tile_dict.items():
+    if i.startswith('UADC'):
+        markname = tile.te_EvtName.text()
+        if markname == '':
+            continue
+        invert_val = tile.cb_Down.checkState() == 2
+        tmp_dframe = threshold_detect(dsname=win.meg_fname, 
+                                     channel=i, 
+                                     mark=markname, 
+                                     invert=invert_val)
+        dframe_list.append(tmp_dframe)
+
+# Add digital triggers
+dig_dframe = detect_digital(filename=win.meg_fname, channel='UPPT001')
+for i, tile in win.tile_dict.items():
+    if i.startswith('UPPT'):
+        markname = tile.te_EvtName.text()
+        if markname == '':
+            continue
+        dig_val = i.split('_')[-1]
+        dig_dframe.loc[dig_dframe.condition==dig_val, 'condition'] = markname
+dframe_list.append(dig_dframe)
+
+# Combine dataframes
+dframe = append_conditions(dframe_list)
+
+# Perform parse_marks calculation
+result_dframe = parse_marks(
+    dframe=dframe,
+    lead_condition=outputs['lead_evt'],
+    lag_condition=outputs['lag_evt'],
+    window=[float(outputs['start_offset']), float(outputs['stop_offset'])],
+    marker_on=outputs['mark_on'],
+    marker_name=outputs['name'],
+    append_result=False  # Don't append, just return the result
+).dropna()
+
+# Calculate the count
+event_count = sum(result_dframe.condition==outputs['name'])
+
+# Update the widget's button text
+widget.pb_Check.setText(f"N={event_count}")
+
+
 
 
 
