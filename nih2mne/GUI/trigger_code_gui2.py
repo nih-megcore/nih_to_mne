@@ -70,7 +70,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from nih2mne import config
 from nih2mne.GUI.templates.trigger_processing_gui import Ui_MainWindow as trigUi_mw
 import pandas as pd
-
+import numpy as np
 
 
 ############## Setup Main Classes ################
@@ -212,18 +212,35 @@ class event_coding_window(QMainWindow):
         self.ui.pb_WriteProcessingScript.clicked.connect(self.write_parser_script)
         self.ui.pb_Check.clicked.connect(self.handle_check_request)
     
-    def act_plot_data(self):   ##FIX !!!!!!!  no events plotted
+    def act_plot_data(self):   
         self.raw = mne.io.read_raw_ctf(self.meg_fname, system_clock='ignore', 
                                        clean_names=True, verbose=False)
+        self.raw.set_annotations(None)
         self.raw.pick_types(meg=False, eeg=False, misc=True)
         self.raw.load_data()
-        import numpy as np
+        self._extract_final_events() #Isolate data frame to selected events
         
-        event_list = self.event_namelist  #Make this the keep namelist after testing
-        evts = np.zeros([len(event_list), 3])
+        dframe = self.proc_dframe_dict['FINAL_selected']
+        evts = np.zeros([len(dframe), 3],
+                        dtype='int64')
+        _samp = self.meg_raw.info['sfreq'] * dframe.onset
+        evts[:,0] = _samp.to_numpy(dtype='int64')
         
-        self.raw.plot() #events = evts,  #[row, [samp, duration, ID_int]]
-                      #event_id = {})
+        _cond = dframe.condition
+        evts_id = {j:i for i,j in enumerate(dframe.condition.unique(), start=1)}
+        evts[:,2] = _cond.map(evts_id).to_numpy(dtype='int64')
+        
+        self.raw.plot(events = evts, event_id = evts_id, scalings=10)
+    
+    def _extract_final_events(self):
+        dframe = self.proc_dframe_dict['FINAL_preselect']
+        
+        final_dframe_list = []
+        for evt_name in self.final_events_list:
+            keep_dframe=dframe[dframe.condition==evt_name]
+            final_dframe_list.append(keep_dframe)
+        self.proc_dframe_dict['FINAL_selected'] = append_conditions(final_dframe_list)
+        
             
     def extract_evt_dict(self):
         '''Pull event information from trig channs and parsed events'''
