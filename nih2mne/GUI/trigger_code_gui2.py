@@ -69,6 +69,7 @@ from collections import OrderedDict
 from PyQt5.QtCore import Qt, pyqtSignal
 from nih2mne import config
 from nih2mne.GUI.templates.trigger_processing_gui import Ui_MainWindow as trigUi_mw
+import pandas as pd
 
 
 
@@ -460,12 +461,17 @@ class event_coding_window(QMainWindow):
             # Add fixed time offset
             
             # Perform parse_marks calculation
+            self.proc_dframe_dict['PARSE'] = []
             if self.ui.list_ParseMarks.count() > 0:
                 for idx in range(self.ui.list_ParseMarks.count()):
                     _item = self.ui.list_ParseMarks.item(idx)
                     _widget = self.ui.list_ParseMarks.itemWidget(_item)
-                    self._compute_parsemarks_events(widget=_widget, 
+                    parse_dframe = self._compute_parsemarks_events(widget=_widget, 
                                                     dframe=dframe)
+                    self.proc_dframe_dict['PARSE'].append(parse_dframe)
+                    dframe = append_conditions([dframe, parse_dframe])
+                    
+            self.proc_dframe_dict['FINAL_preselect'] = dframe
             
         except Exception as e:
             # Handle errors
@@ -492,10 +498,13 @@ class event_coding_window(QMainWindow):
             # Update the widget's button text
             widget.pb_Check.setText(f"N={event_count}")
             
+            return result_dframe
+            
         except Exception as e:
             # Handle errors
             widget.pb_Check.setText(f"Error: {str(e)[:10]}")
             print(f"Error calculating parse marks: {e}")
+            return pd.DataFrame()
             
     def re_enable_parser_tile(self):
         _count = self.ui.list_ParseMarks.count()
