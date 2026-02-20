@@ -444,7 +444,10 @@ class event_coding_window(QMainWindow):
                                                  mark=markname, 
                                                  invert=invert_val)
                     dframe_list.append(tmp_dframe)
-            self.proc_dframe_dict['ADC'] = append_conditions(dframe_list)
+            if len(dframe_list) > 0:
+                self.proc_dframe_dict['ADC'] = append_conditions(dframe_list)
+            else:
+                self.proc_dframe_dict['ADC'] = []
             
             
             # Add digital triggers
