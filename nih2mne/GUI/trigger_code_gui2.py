@@ -421,7 +421,7 @@ class event_coding_window(QMainWindow):
         self.re_enable_parser_tile()
     
     def handle_check_request(self):
-        '''Handle check button click from parse_marks_tile'''
+        '''Handle check button click from Parse Events tab'''
         
         # Perform your calculation
         try:
@@ -545,6 +545,8 @@ class event_coding_window(QMainWindow):
                                                system_clock='ignore', preload=False, 
                                                verbose=False)
         self.trig_ch_names = [i for i in self.meg_raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
+        if 'UADC016' not in self.trig_ch_names:
+            self.ui.pb_CorrectToProjector.setDisabled(True)
         self.fill_trig_chan_layout()
         self.ui.pb_SelectMeg.setDisabled(True)
         
