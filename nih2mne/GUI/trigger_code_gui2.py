@@ -325,6 +325,13 @@ class event_coding_window(QMainWindow):
     def act_pb_select_final_events(self):
         # Create a popup to select the events that will be used to be added to Markerfile
         self.update_event_names(events_only=True)
+        
+        # Force attribute generation of FINAL_preselect in cases where Check N not run
+        if not hasattr(self, 'proc_dframe_dict'):
+            self.handle_check_request()
+        elif 'FINAL_preselect' not in self.proc_dframe_dict.keys():
+            self.handle_check_request()
+        
         self.set_final_events_selector = grid_selector(self.event_namelist)  
         self.set_final_events_selector.b_set_selection.clicked.connect(self._set_final_events_list)
 
