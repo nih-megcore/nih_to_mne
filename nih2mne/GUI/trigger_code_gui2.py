@@ -7,25 +7,6 @@ Created on 02/04/2026
 
 Trigger Channel Coding GUI (v2)
 
-MainWindow w/ tabs
-Channel tab -- 
-   reads the trigger channels
-   gen trig_tile for each ADC chan and per event on UPPT
-   and adds those to trig_dict
-Parse Marks tab -- 
-  generate parse_marks tile
-
-TODO: Temporal coding on PPT -- a 1 followed by a 5 is a Y event 
-Set action to invert trigger for counts    
-Set all dig trigs to invert together   
-Create a parsemarks list and remove all after an erase command
-detect_digital currently does not support downgoing triggers
-
-Add trigger inversion for digital trigger
-"""
-#%% Defaults section
-
-"""
 [tab_channel_labels]
 -lbl_FName
 -pb_SelectMeg
@@ -73,7 +54,7 @@ import pandas as pd
 import numpy as np
 
 
-############## Setup Main Classes ################
+############## Setup Tiles ################
 from nih2mne.GUI.templates.trigger_single_line import Ui_Form as trig_singleline_UiForm
 
 class trig_tile(QWidget, trig_singleline_UiForm): 
@@ -182,7 +163,8 @@ class parse_marks_tile(QWidget, parse_marks_singleline_UiForm):
         self.combo_LagSelection.setFocusPolicy(Qt.StrongFocus)
         #MarkerName
         self.te_MrkName.setReadOnly(False)
-        
+
+### Setup Main Window to import and use tiles ###        
 class event_coding_window(QMainWindow):
     def __init__(self, meg_fname=None):
         super().__init__()
@@ -481,8 +463,19 @@ class event_coding_window(QMainWindow):
             dframe = append_conditions(dframe_list)
             
             # Correct to projector
+            if hasattr(self, 'corr2proj_list'):
+                if len(self.corr2proj_list) > 0:
+                    dframe = correct_to_projector(dframe, 
+                                                  event_list=self.corr2proj_list, 
+                                                  window=[-0.2,0.2])
             
             # Add fixed time offset
+            if self.ui.te_FixedOffset.text().strip() not in ['0', '']:
+                offset_val_ms = float(self.ui.te_FixedOffset.text().strip())
+                if hasattr(self, 'add_offset_list'):
+                    if len(self.add_offset_list) > 0:
+                        offset_val_s = offset_val_ms / 1000 # convert to seconds
+                        dframe = add_event_offset(dframe, event_list=self.add_offset_list, offset=offset_val_s)
             
             # Perform parse_marks calculation
             self.proc_dframe_dict['PARSE'] = []
