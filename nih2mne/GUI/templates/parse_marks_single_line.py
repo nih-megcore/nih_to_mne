@@ -98,14 +98,22 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         _translate = QtCore.QCoreApplication.translate
         Form.setWindowTitle(_translate("Form", "Form"))
+        self.combo_LeadSelection.setToolTip(_translate("Form", "<html><head/><body><p>Initial Event in sequence to be parsed.  </p><p>(Technically it doesn\'t have to lead)</p></body></html>"))
         self.combo_LeadSelection.setItemText(0, _translate("Form", "--LeadEvt--"))
+        self.cb_OnLead.setToolTip(_translate("Form", "<html><head/><body><p>Set the output event time on the lead event</p></body></html>"))
         self.cb_OnLead.setText(_translate("Form", "MrkOnLead"))
+        self.combo_LagSelection.setToolTip(_translate("Form", "<html><head/><body><p>The second event in a sequence.</p><p>Responses (lag) are a good example of this type (A cue would be the lead event)</p></body></html>"))
         self.combo_LagSelection.setItemText(0, _translate("Form", "--LagEvt--"))
+        self.cb_OnLag.setToolTip(_translate("Form", "<html><head/><body><p>Set the event time on the second event in a sequence.</p><p>(eg. Correct Reponse)</p></body></html>"))
         self.cb_OnLag.setText(_translate("Form", "MrkOnLag"))
+        self.lbl_StartOffset.setToolTip(_translate("Form", "<html><head/><body><p>Timing offset from the lead event to search for the lag event.  An offset of 0.1s might be appropriate for visual stimuli - as the subject has not fully perceived the stimuli yet.</p><p>This can be negative (helpful if the lead/lag have nearly identical timing)</p></body></html>"))
         self.lbl_StartOffset.setText(_translate("Form", "startOffset (s)"))
+        self.lbl_StopOffset.setToolTip(_translate("Form", "<html><head/><body><p>Duration offset from the lead event to stop searching.  You may not want events to be registered after a certain time as this may cause the response times to be skewed or outsied of your analysis time.</p></body></html>"))
         self.lbl_StopOffset.setText(_translate("Form", "stopOffset (s)"))
         self.lbl_MrkName.setText(_translate("Form", "MrkName"))
+        self.pb_Check.setToolTip(_translate("Form", "<html><head/><body><p>Event count of parse event.  This will update when hitting the button on the main window.  All processing from previous steps must be evaluated to adjust this number.</p></body></html>"))
         self.pb_Check.setText(_translate("Form", "N=?"))
+        self.pb_DeleteLine.setToolTip(_translate("Form", "<html><head/><body><p>Remove this line</p></body></html>"))
         self.pb_DeleteLine.setText(_translate("Form", "X"))
 
 

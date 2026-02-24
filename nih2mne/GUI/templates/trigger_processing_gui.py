@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'templates/trigger_processing_gui.ui'
+# Form implementation generated from reading ui file 'trigger_processing_gui.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.9
 #
@@ -326,14 +326,20 @@ class Ui_MainWindow(object):
         self.lbl_AnalogChannels.setText(_translate("MainWindow", "Analog Channels (UADC-)"))
         self.lbl_DigitalChannels.setText(_translate("MainWindow", "Digital Events (UPPT-)"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_channel_labels), _translate("MainWindow", "Channel Labels"))
+        self.pb_CorrectToProjector.setToolTip(_translate("MainWindow", "<html><head/><body><p>Open a menu to select items to be corrected to the projector timing.  A window of [-0.2, 0.2] will be used in the search for the nearest projector event for the timing adjustment.</p></body></html>"))
         self.pb_CorrectToProjector.setText(_translate("MainWindow", "Correct To Projector"))
+        self.pb_FixedOffset.setToolTip(_translate("MainWindow", "<html><head/><body><p>Open a menu to set events that need to be adjusted in time by a static amount.  This is typical of auditory tasks due to the propagation time of the sound through the air tubes.  <span style=\" font-weight:600;\">Make sure to set the time </span>in the text line to the right of this button.</p></body></html>"))
         self.pb_FixedOffset.setText(_translate("MainWindow", "Add Fixed Offset (ms):"))
+        self.pb_AddParser.setToolTip(_translate("MainWindow", "<html><head/><body><p>Add a line to make more complicated &quot;parsed&quot; events.  e.g) This may be a Cue1 and a Response1 as a correct_response.  And a Cue1 and a Response2 as an incorrect_response.  As new events are created, they can be used in subsequent parser lines.</p></body></html>"))
         self.pb_AddParser.setText(_translate("MainWindow", "ADD PARSER LINE"))
+        self.pb_Check.setToolTip(_translate("MainWindow", "<html><head/><body><p>Click to update the value counts in the parser lines.  This will eveluate all logic prior to these steps (projector correction and offsets).</p></body></html>"))
         self.pb_Check.setText(_translate("MainWindow", "Check (N=)"))
         self.lbl_ParseMarks.setText(_translate("MainWindow", "Parse Events Steps | [Check instructions tab for guidance]  (only the last line has editable names)"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_parse_events), _translate("MainWindow", "Parse Events"))
+        self.pb_FinalEventSelection.setToolTip(_translate("MainWindow", "<html><head/><body><p>Click to mark the events that will be written into the MarkerFile.mrk in the dataset. All other events processed will be temporarily assigned, but will not be marked in the output file.</p><p>After selection, the &quot;Plot Data and Events&quot; button will be activated</p></body></html>"))
         self.pb_FinalEventSelection.setText(_translate("MainWindow", "Final Event Selection"))
         self.pb_PlotData.setText(_translate("MainWindow", "Plot Data and Events"))
+        self.pb_WriteProcessingScript.setToolTip(_translate("MainWindow", "<html><head/><body><p>Write the processing steps to a processing script. The default location coincides with the &lt;&lt;homeFolder&gt;&gt;/megcore/trigproc, which is referenced by other GUIs in processing the datasets.  For the other processing scripts to access, the filename should be   &lt;&lt;taskname&gt;&gt;_v&lt;&lt;version&gt;&gt;.py   (eg: airpuff_v1.py).</p></body></html>"))
         self.pb_WriteProcessingScript.setText(_translate("MainWindow", "Write Processing Script"))
         self.lbl_OutputEvents.setText(_translate("MainWindow", "Output Events"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_check_events), _translate("MainWindow", "Check Events"))

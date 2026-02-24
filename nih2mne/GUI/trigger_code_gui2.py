@@ -71,6 +71,7 @@ class trig_tile(QWidget, trig_singleline_UiForm):
         self.cb_Up.clicked.connect(self.set_up_trigger_polarity)
         self.cb_Down.setCheckState(0)
         self.cb_Down.clicked.connect(self.set_down_trigger_polarity)
+        self.cb_HistUp.setVisible(False)
 
         # Event counter display
         if self.trig_type == 'ADC':
@@ -439,6 +440,16 @@ class event_coding_window(QMainWindow):
                     if markname == '':
                         continue
                     invert_val = tile.cb_Down.checkState() == 2
+                    # Make projector case
+                    if i.startswith('UADC016'):
+                        btn_invert_val = invert_val
+                        if tile.cb_HistUp.checkState() == 2:
+                            invert_val = check_analog_inverted(fname=self.meg_fname, ch_name='UADC016')
+                            if btn_invert_val:
+                                invert_val = not invert_val
+                    
+                    # Make non-projector case
+                    
                     tmp_dframe = threshold_detect(dsname=self.meg_fname, 
                                                  channel=i, 
                                                  mark=markname, 
@@ -566,6 +577,8 @@ class event_coding_window(QMainWindow):
                                             meg_fname=self.meg_fname)
                 if i=='UADC016':
                     self.tile_dict[i].te_EvtName.setText('projector')
+                    #Enable the histogram based polarity assessment option
+                    self.tile_dict[i].cb_HistUp.setVisible(True)
                 
                 #Add items to list in complicated QT fashion
                 item = QtWidgets.QListWidgetItem(self.ui.list_AnalogChannels)
@@ -672,6 +685,15 @@ class event_coding_window(QMainWindow):
                     invert_val = True
                 else:
                     invert_val = False
+                
+                if i.startswith('UADC016'):
+                    if tile.cb_HistUp.checkState()==2:
+                        tmp_code = f"invert_val = check_analog_inverted(fname=meg_fname, ch_name='UADC016')"
+                        ana_trig_code.append(tmp_code)
+                        if invert_val == True:
+                            tmp_code = "invert_val = not invert_val"
+                            ana_trig_code.append(tmp_code)
+                        
                 tmp_code = f"tmp_dframe = threshold_detect(dsname=meg_fname, channel='{i}', mark='{markname}', invert={invert_val})"
                 ana_trig_code.append(tmp_code)
                 tmp_code = f"dframe_list.append(tmp_dframe)"

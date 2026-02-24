@@ -322,6 +322,9 @@ p, li { white-space: pre-wrap; }
           <layout class="QHBoxLayout" name="horizontalLayout_2">
            <item>
             <widget class="QPushButton" name="pb_CorrectToProjector">
+             <property name="toolTip">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Open a menu to select items to be corrected to the projector timing.  A window of [-0.2, 0.2] will be used in the search for the nearest projector event for the timing adjustment.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
              <property name="text">
               <string>Correct To Projector</string>
              </property>
@@ -329,6 +332,9 @@ p, li { white-space: pre-wrap; }
            </item>
            <item>
             <widget class="QPushButton" name="pb_FixedOffset">
+             <property name="toolTip">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Open a menu to set events that need to be adjusted in time by a static amount.  This is typical of auditory tasks due to the propagation time of the sound through the air tubes.  &lt;span style=&quot; font-weight:600;&quot;&gt;Make sure to set the time &lt;/span&gt;in the text line to the right of this button.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
              <property name="text">
               <string>Add Fixed Offset (ms):</string>
              </property>
@@ -374,6 +380,9 @@ p, li { white-space: pre-wrap; }
                <strikeout>false</strikeout>
               </font>
              </property>
+             <property name="toolTip">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Add a line to make more complicated &amp;quot;parsed&amp;quot; events.  e.g) This may be a Cue1 and a Response1 as a correct_response.  And a Cue1 and a Response2 as an incorrect_response.  As new events are created, they can be used in subsequent parser lines.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
              <property name="text">
               <string>ADD PARSER LINE</string>
              </property>
@@ -398,6 +407,9 @@ p, li { white-space: pre-wrap; }
                <width>200</width>
                <height>16777215</height>
               </size>
+             </property>
+             <property name="toolTip">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Click to update the value counts in the parser lines.  This will eveluate all logic prior to these steps (projector correction and offsets).&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
              <property name="text">
               <string>Check (N=)</string>
@@ -479,6 +491,9 @@ p, li { white-space: pre-wrap; }
           <layout class="QVBoxLayout" name="verticalLayout_11">
            <item>
             <widget class="QPushButton" name="pb_FinalEventSelection">
+             <property name="toolTip">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Click to mark the events that will be written into the MarkerFile.mrk in the dataset. All other events processed will be temporarily assigned, but will not be marked in the output file.&lt;/p&gt;&lt;p&gt;After selection, the &amp;quot;Plot Data and Events&amp;quot; button will be activated&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
              <property name="text">
               <string>Final Event Selection</string>
              </property>
@@ -498,6 +513,9 @@ p, li { white-space: pre-wrap; }
            </item>
            <item>
             <widget class="QPushButton" name="pb_WriteProcessingScript">
+             <property name="toolTip">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Write the processing steps to a processing script. The default location coincides with the &amp;lt;&amp;lt;homeFolder&amp;gt;&amp;gt;/megcore/trigproc, which is referenced by other GUIs in processing the datasets.  For the other processing scripts to access, the filename should be   &amp;lt;&amp;lt;taskname&amp;gt;&amp;gt;_v&amp;lt;&amp;lt;version&amp;gt;&amp;gt;.py   (eg: airpuff_v1.py).&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
              <property name="text">
               <string>Write Processing Script</string>
              </property>

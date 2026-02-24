@@ -35,6 +35,9 @@
    </item>
    <item>
     <widget class="QCheckBox" name="cb_Up">
+     <property name="toolTip">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Evaluate on rising edge of trigger pulse&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
      <property name="text">
       <string>Up</string>
      </property>
@@ -42,8 +45,37 @@
    </item>
    <item>
     <widget class="QCheckBox" name="cb_Down">
+     <property name="toolTip">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Evaluate on the down-going edge of the trigger&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
      <property name="text">
       <string>Down</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="horizontalSpacer_2">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="sizeType">
+      <enum>QSizePolicy::Minimum</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>20</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="cb_HistUp">
+     <property name="toolTip">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Some protocols produce projector polarity that is ambiguous run to run. This selection will force the polarity to be assessed and assumes that the projector trigger value is off most of the time. This gaurantees that what you have set will work for all of your data.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+     <property name="text">
+      <string>(ForceMinUp)</string>
      </property>
     </widget>
    </item>
@@ -75,6 +107,9 @@
    </item>
    <item>
     <widget class="QLabel" name="lbl_EvtCount">
+     <property name="toolTip">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Number of events evaluated from trigger line&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
      <property name="text">
       <string>N=</string>
      </property>
