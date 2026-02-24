@@ -1,59 +1,44 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Jan  2 10:55:27 2025
+Created on 02/04/2026
 
 @author: jstout
 
-Trigger Channel Coding GUI
+Trigger Channel Coding GUI (v2)
 
-Layout:
-    File Lookup
-    Initial Trigger Procs (Identify transitions):
-        UADC1-15  - Analog
-        UADC16 - Projector Analog
-        PPT001 - Parrallel Port
-        --LIST Output Counts per line--
-    Code out Line variable names:
-        UADC1-15 - what are they named
-        UADC16 - Projector
-        PPT001:
-            Code for each trigger value
-    Visual Tasks:
-        Correct all to projector?
-        Check for projector inversion?
-    Auditory Tasks:
-        Add static delay to event time
-    General Add static delay:
-        Didn't code out projector so add 19ms delay
-    Parse Marks:
-        In1
-        In2
-        MarkOn
-        MarkName
-    Display  Totals:
-        For each condition write out the pandas value counts
-    Check Visual scan of data:
-        Invoke MNE display
-    WriteScript:
-        Create a trigger processing script
+[tab_channel_labels]
+-lbl_FName
+-pb_SelectMeg
 
+scrollAreaAnaContents
+-label_AnalogChannels
+-list_AnalogChannels
 
-TODO: Temporal coding on PPT -- a 1 followed by a 5 is a Y event 
-Set action to invert trigger for counts    
-Set all dig trigs to invert together   
-Create a parsemarks list and remove all after an erase command
-detect_digital currently does not support downgoing triggers
+lbl_DigitalChannels
+list_DigitalChannels
 
-Add trigger inversion for digital trigger
+[tab_parse_events]
+pb_CorrectToProjector
+pb_FixedOffset
+te_FixedOffset
+lbl_ParseMarks
+list_ParseMarks
+
+[tab_write_parser_file]
+pb_CheckOutputEvents
+pb_WriteProcessingScript
+lbl_SelectOutputEvents
+list_SelectOutputEvents
 """
+
+
 import glob
 import mne
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QCheckBox, \
-    QFileDialog, QDialog
-# from functools import partial
+    QFileDialog, QDialog, QListWidgetItem
 import sys
 import os, os.path as op
 import numpy as np
@@ -61,43 +46,33 @@ from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital,
                                                  check_analog_inverted, threshold_detect, 
                                                  append_conditions, correct_to_projector, 
                                                  add_event_offset)
+from collections import OrderedDict
+from PyQt5.QtCore import Qt, pyqtSignal
+from nih2mne import config
+from nih2mne.GUI.templates.trigger_processing_gui import Ui_MainWindow as trigUi_mw
+import pandas as pd
+import numpy as np
 
 
+############## Setup Tiles ################
+from nih2mne.GUI.templates.trigger_single_line import Ui_Form as trig_singleline_UiForm
 
-############## Setup Main Classes ################
-
-
-
-class trig_tile(QHBoxLayout):
-    '''Trigger tile for the analogue and digital panels'''
+class trig_tile(QWidget, trig_singleline_UiForm): 
     def __init__(self, chan_name=None, include_polarity=True, 
                  event_count=None, meg_fname=None):
-        super(trig_tile, self).__init__()
-        
+        super().__init__()
+        self.setupUi(self) 
         self.meg_fname = meg_fname
         self.trig_type = chan_name[1:4]
-        self.ch_name = chan_name
+        self.ch_name = chan_name 
+        self.lbl_ChannelName.setText(f'{chan_name} :')
+        self.cb_Up.setCheckState(2)
+        self.trigger_polarity = 'up' #Initialize to up
+        self.cb_Up.clicked.connect(self.set_up_trigger_polarity)
+        self.cb_Down.setCheckState(0)
+        self.cb_Down.clicked.connect(self.set_down_trigger_polarity)
+        self.cb_HistUp.setVisible(False)
 
-        self.addWidget(QLabel(f'{chan_name} :'))  
-        
-        # Add Checkboxes for upgoing/Downgoing trigger polarity 
-        self.b_upgoing_trigger = QCheckBox()
-        self.b_upgoing_trigger.setCheckState(2)
-        self.b_upgoing_trigger.clicked.connect(self.set_up_trigger_polarity)
-        self.b_downgoing_trigger = QCheckBox()
-        self.b_downgoing_trigger.setCheckState(0)
-        self.b_downgoing_trigger.clicked.connect(self.set_down_trigger_polarity)
-        
-        self.addWidget(self.b_upgoing_trigger)
-        self.addWidget(QLabel('Up'))
-        self.addWidget(self.b_downgoing_trigger)
-        self.addWidget(QLabel('Down'))
-        
-        # Name the event, so that it can be referenced later
-        self.addWidget(QLabel('   Event Name:'))
-        self.event_name = QLineEdit()
-        self.addWidget(self.event_name)
-        
         # Event counter display
         if self.trig_type == 'ADC':
             self.event_dframe = threshold_detect(self.meg_fname,  channel=self.ch_name)
@@ -106,65 +81,715 @@ class trig_tile(QHBoxLayout):
             self.event_count = event_count
         else:
             self.event_count = 'ERR'
-        self.event_count_label = QLabel(f'N={self.event_count}')
-        self.addWidget(self.event_count_label)
-
+        self.lbl_EvtCount.setText(f'N={self.event_count}')
+        
     def set_up_trigger_polarity(self):
         self.trigger_polarity = 'up'
-        self.b_downgoing_trigger.setCheckState(0)
-        print(self.b_upgoing_trigger.checkState())
+        self.cb_Down.setCheckState(0)
     
     def set_down_trigger_polarity(self):
         self.trigger_polarity = 'down'
-        self.b_upgoing_trigger.setCheckState(0)
+        self.cb_Up.setCheckState(0)
 
-class parsemarks_tile(QHBoxLayout):
-    '''Parsemarks tile 
+## ParseMarks Tiles
+from nih2mne.GUI.templates.parse_marks_single_line import Ui_Form as parse_marks_singleline_UiForm
+class parse_marks_tile(QWidget, parse_marks_singleline_UiForm): 
+    close_clicked = pyqtSignal(object)  #Send signal to Event Window Object
     
-    | EventsList | MarkOn | EventsList | MarkOn | Time1 | Time2 | Count | Name |
-    | ComboBox   | CheckB | ComboBox   | CheckB  | LineE | LineE | QLabel | LineE | 
+    def __init__(self, on_lead=True, on_lag=False, start_offset=0, stop_offset=0.5, 
+                 event_name_dict=OrderedDict()):
+        super().__init__()
+        self.setupUi(self) 
+        assert isinstance(event_name_dict, OrderedDict)
+        self.possible_items = event_name_dict
+        self.fill_lag_combobox()
+        self.fill_lead_combobox()
+        self.te_StartOffset.setText(str(start_offset))
+        self.te_StopOffset.setText(str(stop_offset))
+        
+        self.cb_OnLead.clicked.connect(self.set_onlead_selection)
+        self.cb_OnLag.clicked.connect(self.set_onlag_selection)
+        # Assign Default to OnLead
+        self.cb_OnLead.setCheckState(2)
+        
+        # Handle tile deletion
+        self.pb_DeleteLine.clicked.connect(lambda: self.close_clicked.emit(self))
+        
+    def set_onlead_selection(self):
+        self.mark_on = 'lead'
+        self.cb_OnLag.setCheckState(0) #Cross toggle on lag button
+        
+    def set_onlag_selection(self):
+        self.mark_on = 'lag'
+        self.cb_OnLead.setCheckState(0) #Cross toggle on lead button
     
-    SET/DEL options will be handled by the main window
+    def fill_lead_combobox(self):  #May need to cross reference lead/lag to prevent doubles
+        _tmp =  [self.possible_items[i]['name'] for i in self.possible_items.keys()]   
+        self.combo_LeadSelection.addItems(_tmp)
+        
+    def fill_lag_combobox(self):
+        _tmp = [self.possible_items[i]['name'] for i in self.possible_items.keys()]      
+        self.combo_LagSelection.addItems(_tmp)
     
-    '''
-    def __init__(self, event_namelist=None):
-        super(parsemarks_tile, self).__init__()
+    def get_outputs(self):
+        outputs = {}
+        if self.cb_OnLead.checkState()==2:
+            outputs['mark_on'] = 'lead'
+        elif self.cb_OnLag.checkState()==2:
+            outputs['mark_on'] = 'lag'
         
-        #Assemble Tile
-        self.evt_namelist = event_namelist
+        outputs['lead_evt'] = self.combo_LeadSelection.currentText()
+        outputs['lag_evt'] = self.combo_LagSelection.currentText()
+        outputs['start_offset'] = self.te_StartOffset.text()
+        outputs['stop_offset'] = self.te_StopOffset.text()
+        outputs['name'] = self.te_MrkName.text()
+        return outputs
+    
+    def _disable(self):
+        #Lead Combo 
+        self.combo_LeadSelection.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.combo_LeadSelection.setFocusPolicy(Qt.NoFocus)
+        #Lag Combo
+        self.combo_LagSelection.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.combo_LagSelection.setFocusPolicy(Qt.NoFocus)
+        #MarkerName
+        self.te_MrkName.setReadOnly(True)
+    
+    def _enable(self):
+        #Lead Combo 
+        self.combo_LeadSelection.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        self.combo_LeadSelection.setFocusPolicy(Qt.StrongFocus)
+        #Lag Combo
+        self.combo_LagSelection.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        self.combo_LagSelection.setFocusPolicy(Qt.StrongFocus)
+        #MarkerName
+        self.te_MrkName.setReadOnly(False)
+
+### Setup Main Window to import and use tiles ###        
+class event_coding_window(QMainWindow):
+    def __init__(self, meg_fname=None):
+        super().__init__()
+        self.ui = trigUi_mw()
+        self.ui.setupUi(self)
         
-        self.b_evt1_name = QComboBox()
-        self.b_evt1_name.addItems(event_namelist)
-        self.addWidget(self.b_evt1_name)
+        #Make the active tab the Channel Labels tab
+        self.ui.tabWidget.setCurrentIndex(1) 
+        self.tile_dict = {}
         
-        self.b_mark_on_lead = QCheckBox()
-        self.b_mark_on_lead.setChecked(True)
-        # self.b_mark_on_lead.clicked.connect(.....)
-        self.addWidget(self.b_mark_on_lead)
+        self.ui.pb_SelectMeg.clicked.connect(self.act_pb_SelectMeg)
+        self.ui.pb_AddParser.clicked.connect(self.act_pb_add_parser_line)
         
-        self.b_evt2_name = QComboBox()
-        self.b_evt2_name.addItems(event_namelist)
-        self.addWidget(self.b_evt2_name)
+        #Initialize if meg_fname provided at commandline
+        if meg_fname != None:
+            self.act_pb_SelectMeg(meg_fname=meg_fname)
+        else:
+            self.meg_fname = meg_fname
         
-        self.b_mark_on_lag = QCheckBox()
-        # self.b_mark_on_lag.clicked.connect(....)
-        self.addWidget(self.b_mark_on_lag)
+        self.ui.pb_CorrectToProjector.clicked.connect(self.act_pb_corr2proj)
+        self.ui.pb_FixedOffset.clicked.connect(self.act_pb_add_fixed_delay)
         
-        self.b_window_t1 = QLineEdit('0')
-        self.addWidget(self.b_window_t1)
-        self.b_window_t2 = QLineEdit('0.5')
-        self.addWidget(self.b_window_t2)
+        self.ui.pb_FinalEventSelection.clicked.connect(self.act_pb_select_final_events)
+        self.ui.pb_PlotData.clicked.connect(self.act_plot_data)
+        self.ui.pb_PlotData.setEnabled(False)
         
-        self.event_count = QLabel('N=')  #Still need to compute event count and enter
-        self.addWidget(self.event_count)
+        self.ui.pb_WriteProcessingScript.clicked.connect(self.write_parser_script)
+        self.ui.pb_Check.clicked.connect(self.handle_check_request)
+    
+    def act_plot_data(self):   
+        self.raw = mne.io.read_raw_ctf(self.meg_fname, system_clock='ignore', 
+                                       clean_names=True, verbose=False)
+        self.raw.set_annotations(None)
+        self.raw.pick_types(meg=False, eeg=False, misc=True)
+        self.raw.load_data()
+        self._extract_final_events() #Isolate data frame to selected events
         
-        self.static_name_label = QLabel('Name:')
-        self.addWidget(self.static_name_label)
+        dframe = self.proc_dframe_dict['FINAL_selected']
+        evts = np.zeros([len(dframe), 3],
+                        dtype='int64')
+        _samp = self.meg_raw.info['sfreq'] * dframe.onset
+        evts[:,0] = _samp.to_numpy(dtype='int64')
         
-        self.event_name = QLineEdit()
-        self.addWidget(self.event_name)
+        _cond = dframe.condition
+        evts_id = {j:i for i,j in enumerate(dframe.condition.unique(), start=1)}
+        evts[:,2] = _cond.map(evts_id).to_numpy(dtype='int64')
+        
+        self.raw.plot(events = evts, event_id = evts_id, scalings=10)
+    
+    def _extract_final_events(self):
+        dframe = self.proc_dframe_dict['FINAL_preselect']
+        
+        final_dframe_list = []
+        for evt_name in self.final_events_list:
+            keep_dframe=dframe[dframe.condition==evt_name]
+            final_dframe_list.append(keep_dframe)
+        self.proc_dframe_dict['FINAL_selected'] = append_conditions(final_dframe_list)
+        
+            
+    def extract_evt_dict(self):
+        '''Pull event information from trig channs and parsed events'''
+        evtname_dict = {}
+        # Get trig_tile names (Triggers)
+        for key in self.tile_dict.keys():
+            _name = self.tile_dict[key].te_EvtName.text()
+            if _name in [None, '']:
+                continue
+            else:
+                if key.startswith('UADC'):
+                    _type='ADC'
+                else:
+                    _type='PPT'
+            evtname_dict[key] = {}
+            evtname_dict[key]['type'] = _type
+            evtname_dict[key]['name'] = _name
+            evtname_dict[key]['tile'] = self.tile_dict[key]
+            
+        # Get parse_marks names 
+        if self.ui.list_ParseMarks.count() > 0:
+            for idx in range(self.ui.list_ParseMarks.count()):
+                evtname_dict[f'parse_{idx}']={}
+                evtname_dict[f'parse_{idx}']['type'] = 'parse'
+                
+                _item = self.ui.list_ParseMarks.item(idx)
+                _widget = self.ui.list_ParseMarks.itemWidget(_item)
+                _outputs = _widget.get_outputs()
+                evtname_dict[f'parse_{idx}']['name'] = _outputs['name']
+                evtname_dict[f'parse_{idx}']['tile'] = _widget
+        
+        #Logic if event names coincide (parseMarks can have duplicates )
+        
+        return evtname_dict
+    
+    def update_event_names(self, events_only=False):
+        '''Set action for updating event names.  This will write all of the 
+        events to the an event list and update the parse_marks and evt_keep
+        panels. 
+        raw_event_list: directly evaluated from the raw trigger lines
+        parsed_event_list: parse_marks derived events
+        ## logfile_event_list: Future implementation
+        ## temporal_coding_event_list : Future implementation
+        
+        event_list: combination of the above
+        
+        '''
+        namelist = []
+        name_dict = self.extract_evt_dict()
+        for key in name_dict.keys():
+            name_text = name_dict[key]['name']
+            if name_text.strip() == '':
+                continue
+            namelist.append(name_text)
+        
+        self.event_namelist = namelist
+        
+        #Check for duplicated names from raw trigger panel
+        for i in reversed(range(len(namelist))):
+            if namelist[i]==None:
+                del(namelist[i])
+            if namelist[i]=='':
+                del(namelist[i])        
+        if len(namelist) != len(set(namelist)):
+            raise ValueError('The event names cannot have duplicates') 
+        
+        if events_only:
+            return
+        
+    def act_pb_corr2proj(self):
+        # Create a popup to select events that will be corrected to projector
+        self.update_event_names(events_only=True)
+        self.corr2proj_selector = grid_selector(self.event_namelist)  
+        self.corr2proj_selector.b_set_selection.clicked.connect(self._set_correct2proj_list)
+        
+    def act_pb_add_fixed_delay(self):
+        # Create a popup to select the events that will be corrected to a fixed delay
+        self.update_event_names(events_only=True)
+        self.fixed_delay_selector = grid_selector(self.event_namelist)  
+        self.fixed_delay_selector.b_set_selection.clicked.connect(self._set_fixedDelay_list)
+        
+    def act_pb_select_final_events(self):
+        # Create a popup to select the events that will be used to be added to Markerfile
+        self.update_event_names(events_only=True)
+        
+        # Force attribute generation of FINAL_preselect in cases where Check N not run
+        if not hasattr(self, 'proc_dframe_dict'):
+            self.handle_check_request()
+        elif 'FINAL_preselect' not in self.proc_dframe_dict.keys():
+            self.handle_check_request()
+        
+        self.set_final_events_selector = grid_selector(self.event_namelist)  
+        self.set_final_events_selector.b_set_selection.clicked.connect(self._set_final_events_list)
 
         
+    def _set_fixedDelay_list(self):
+        'Fixed delay added to self.add_offset_list'
+        layout = self.fixed_delay_selector.grid_layout
+        self.add_offset_list = []
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item.widget():
+                if hasattr(item.widget(), 'isChecked'):
+                    if item.widget().isChecked():
+                        self.add_offset_list.append(item.widget().text())
+        print(f'Setting fixed delay to the following: {self.add_offset_list}')
+        
+    def _set_correct2proj_list(self):
+        'Correct to projector list assigned to self.corr2proj_list'
+        layout = self.corr2proj_selector.grid_layout
+        self.corr2proj_list = []
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item.widget():
+                if hasattr(item.widget(), 'isChecked'):
+                    if item.widget().isChecked():
+                        self.corr2proj_list.append(item.widget().text())
+        print(f'Correcting the following to projector timing: {self.corr2proj_list}')  
+        
+    def _set_final_events_list(self):
+        'Set the final events and assign to self.final_events_list'
+        layout = self.set_final_events_selector.grid_layout
+        self.final_events_list = []
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item.widget():
+                if hasattr(item.widget(), 'isChecked'):
+                    if item.widget().isChecked():
+                        self.final_events_list.append(item.widget().text())
+        print(f'Final events in markerfile: {self.final_events_list}') 
+        if len(self.final_events_list) > 0:
+            plot_data_font = self.ui.pb_PlotData.font()
+            plot_data_font.setStrikeOut(False)
+            self.ui.pb_PlotData.setFont(plot_data_font)
+            self.ui.pb_PlotData.setEnabled(True)
+        self._populate_output_events_display()
+        
+    def _populate_output_events_display(self):
+        output_evts_text = ''
+        for evt in self.final_events_list:
+            output_evts_text += f'{evt} \n'
+        self.ui.te_OutputEvents.setText(output_evts_text)
+            
+            
+    def update_keep_events_list(self, flush=False):
+        num_keep_buttons = self.keep_events_layout.count()
+        if flush==True:
+            if num_keep_buttons > 1:
+                for i in reversed(range(1,num_keep_buttons)):  #Skip the label - remove from the end
+                    item = self.keep_events_layout.takeAt(i)
+                    self.keep_events_layout.removeItem(item)
+                    if item.widget():
+                        item.widget().deleteLater()
+
+        for i in set(self.event_namelist): 
+            tmp=QPushButton(i)
+            tmp.setCheckable(True)
+            self.keep_events_layout.addWidget(tmp)
+            del tmp
+        self.keep_events_layout.update()
+            
+    def act_pb_add_parser_line(self):
+        '''Take all the items in channel labels and prior parser lines output labels
+        Add them to the possible entries in the parser choice'''
+
+        #Disable prior parser line so it cannot be edited
+        _count = self.ui.list_ParseMarks.count()
+        last_idx = _count - 1
+        if _count > 0:
+            _item = self.ui.list_ParseMarks.item(last_idx)
+            _widget = self.ui.list_ParseMarks.itemWidget(_item)
+            _widget._disable() 
+        
+        #Add parser line
+        #Update the parser list with a parsemarks tile  list_ParseMarks
+        evts_names = self.extract_evt_dict()
+        _pm_tile = parse_marks_tile(event_name_dict=OrderedDict(evts_names))
+        _pm_tile.close_clicked.connect(self.handle_close_request)
+                                    
+        item = QListWidgetItem(self.ui.list_ParseMarks)
+        item.setSizeHint(_pm_tile.sizeHint())
+        self.ui.list_ParseMarks.addItem(item)
+        self.ui.list_ParseMarks.setItemWidget(item, _pm_tile)
+        
+    def handle_close_request(self, widget):
+        '''If file tile "emits" a close signal, this will trigger a loop over
+        filenames to identify the widget that produced the close signal'''
+        item_count = self.ui.list_ParseMarks.count()
+        for i in range(item_count):
+            item = self.ui.list_ParseMarks.item(i)
+            print(type(item))
+            if self.ui.list_ParseMarks.itemWidget(item) == widget:
+                self.ui.list_ParseMarks.takeItem(i)
+                print(f"Parent removed item at row {i}")
+                break
+        self.re_enable_parser_tile()
+    
+    def handle_check_request(self):
+        '''Handle check button click from Parse Events tab'''
+        
+        # Perform your calculation
+        try:
+            # Build the full dframe with all triggers
+            self.update_event_names(events_only=True)
+            
+            # Get your dataframes (you'll need to adapt this to your data structure)
+            dframe_list = []
+            self.proc_dframe_dict = OrderedDict()
+            
+            # Add analog triggers to dframe_list
+            for i, tile in self.tile_dict.items():
+                if i.startswith('UADC'):
+                    markname = tile.te_EvtName.text()
+                    if markname == '':
+                        continue
+                    invert_val = tile.cb_Down.checkState() == 2
+                    # Make projector case
+                    if i.startswith('UADC016'):
+                        btn_invert_val = invert_val
+                        if tile.cb_HistUp.checkState() == 2:
+                            invert_val = check_analog_inverted(fname=self.meg_fname, ch_name='UADC016')
+                            if btn_invert_val:
+                                invert_val = not invert_val
+                    
+                    # Make non-projector case
+                    
+                    tmp_dframe = threshold_detect(dsname=self.meg_fname, 
+                                                 channel=i, 
+                                                 mark=markname, 
+                                                 invert=invert_val)
+                    dframe_list.append(tmp_dframe)
+            if len(dframe_list) > 0:
+                self.proc_dframe_dict['ADC'] = append_conditions(dframe_list)
+            else:
+                self.proc_dframe_dict['ADC'] = []
+            
+            
+            # Add digital triggers
+            dig_dframe = detect_digital(filename=self.meg_fname, channel='UPPT001')
+            for i, tile in self.tile_dict.items():
+                if i.startswith('UPPT'):
+                    markname = tile.te_EvtName.text()
+                    if markname == '':
+                        continue
+                    dig_val = i.split('_')[-1]
+                    dig_dframe.loc[dig_dframe.condition==dig_val, 'condition'] = markname
+            dframe_list.append(dig_dframe)
+            self.proc_dframe_dict['PPT'] = dig_dframe
+            
+            # Combine dataframes
+            dframe = append_conditions(dframe_list)
+            
+            # Correct to projector
+            if hasattr(self, 'corr2proj_list'):
+                if len(self.corr2proj_list) > 0:
+                    dframe = correct_to_projector(dframe, 
+                                                  event_list=self.corr2proj_list, 
+                                                  window=[-0.2,0.2])
+            
+            # Add fixed time offset
+            if self.ui.te_FixedOffset.text().strip() not in ['0', '']:
+                offset_val_ms = float(self.ui.te_FixedOffset.text().strip())
+                if hasattr(self, 'add_offset_list'):
+                    if len(self.add_offset_list) > 0:
+                        offset_val_s = offset_val_ms / 1000 # convert to seconds
+                        dframe = add_event_offset(dframe, event_list=self.add_offset_list, offset=offset_val_s)
+            
+            # Perform parse_marks calculation
+            self.proc_dframe_dict['PARSE'] = []
+            if self.ui.list_ParseMarks.count() > 0:
+                for idx in range(self.ui.list_ParseMarks.count()):
+                    _item = self.ui.list_ParseMarks.item(idx)
+                    _widget = self.ui.list_ParseMarks.itemWidget(_item)
+                    parse_dframe = self._compute_parsemarks_events(widget=_widget, 
+                                                    dframe=dframe)
+                    self.proc_dframe_dict['PARSE'].append(parse_dframe)
+                    dframe = append_conditions([dframe, parse_dframe])
+                    
+            self.proc_dframe_dict['FINAL_preselect'] = dframe
+            
+        except Exception as e:
+            # Handle errors
+            print(f"Error calculating parse marks: {e}")
+            
+    def _compute_parsemarks_events(self, widget, dframe):
+        try:
+            # Get the parse marks parameters from the widget
+            outputs = widget.get_outputs()
+            
+            result_dframe = parse_marks(
+                dframe=dframe,
+                lead_condition=outputs['lead_evt'],
+                lag_condition=outputs['lag_evt'],
+                window=[float(outputs['start_offset']), float(outputs['stop_offset'])],
+                marker_on=outputs['mark_on'],
+                marker_name=outputs['name'],
+                append_result=False  # Don't append, just return the result
+            ).dropna()
+            
+            # Calculate the count
+            event_count = sum(result_dframe.condition==outputs['name'])
+            
+            # Update the widget's button text
+            widget.pb_Check.setText(f"N={event_count}")
+            
+            return result_dframe
+            
+        except Exception as e:
+            # Handle errors
+            widget.pb_Check.setText(f"Error: {str(e)[:10]}")
+            print(f"Error calculating parse marks: {e}")
+            return pd.DataFrame()
+            
+    def re_enable_parser_tile(self):
+        _count = self.ui.list_ParseMarks.count()
+        last_idx = _count - 1
+        if _count > 0:
+            _item = self.ui.list_ParseMarks.item(last_idx)
+            _widget = self.ui.list_ParseMarks.itemWidget(_item)
+            _widget._enable() 
+        
+    def act_pb_SelectMeg(self, meg_fname=None):
+        print(f'MEG fname: {meg_fname}')
+        if meg_fname in [None, False]:
+            meg_fname = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select a MEG folder (.ds)')
+        self.meg_fname = meg_fname
+        if meg_fname.endswith('/'): meg_fname=meg_fname[:-1]  
+        
+        meg_display_name = meg_fname.split('/')[-1]
+        self.ui.lbl_FName.setText(meg_display_name)    
+        if meg_fname not in [None, False]:
+            self.meg_raw = mne.io.read_raw_ctf(meg_fname, clean_names=True, 
+                                               system_clock='ignore', preload=False, 
+                                               verbose=False)
+        self.trig_ch_names = [i for i in self.meg_raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
+        if 'UADC016' not in self.trig_ch_names:
+            self.ui.pb_CorrectToProjector.setDisabled(True)
+        self.fill_trig_chan_layout()
+        self.ui.pb_SelectMeg.setDisabled(True)
+        
+        
+    def fill_trig_chan_layout(self):
+        '''
+        Iterates over analog channels and PPT conditions to fill panel
+        | Trig Name | b_UpTrig | b_DownTrig | Count=  | OutName: | 
+        '''
+        for i in self.trig_ch_names:
+            ### Analogue Channels ###
+            if i.startswith('UADC'):
+                self.tile_dict[i]=trig_tile(chan_name=i,include_polarity=True,
+                                            meg_fname=self.meg_fname)
+                if i=='UADC016':
+                    self.tile_dict[i].te_EvtName.setText('projector')
+                    #Enable the histogram based polarity assessment option
+                    self.tile_dict[i].cb_HistUp.setVisible(True)
+                
+                #Add items to list in complicated QT fashion
+                item = QtWidgets.QListWidgetItem(self.ui.list_AnalogChannels)
+                item.setSizeHint(self.tile_dict[i].sizeHint())
+                self.ui.list_AnalogChannels.addItem(item) 
+                self.ui.list_AnalogChannels.setItemWidget(item, self.tile_dict[i])
+
+            ### Digital Channels - Breakout the Codes ###
+            elif i.startswith('UPPT'):
+                dig_dframe = detect_digital(self.meg_fname, channel=i)
+                event_vals = list(dig_dframe.condition.unique())
+                event_vals = sorted(event_vals, key=int)
+                dig_event_counts = dig_dframe.condition.value_counts()
+                for evt_name in event_vals:
+                    evt_key = f'{i}_{evt_name}'
+                    self.tile_dict[evt_key]= trig_tile(chan_name=f'{i} [{evt_name}]', 
+                                                 include_polarity=True,
+                                                 event_count=dig_event_counts[evt_name], 
+                                                 meg_fname = self.meg_fname)
+                    
+                    #Add items to list in complicated QT fashion
+                    item = QtWidgets.QListWidgetItem(self.ui.list_DigitalChannels)
+                    item.setSizeHint(self.tile_dict[evt_key].sizeHint())
+                    self.ui.list_DigitalChannels.addItem(item) 
+                    self.ui.list_DigitalChannels.setItemWidget(item, self.tile_dict[evt_key])
+            else:
+                print(f'Not processing channel {i}')
+    
+    def get_default_scriptname(self):
+        try:
+            default_loc = config.TRIG_FILE_LOC
+            basename = op.basename(self.meg_fname)
+            if basename.split('_').__len__() > 3:
+                task_name = basename.split('_')[1]
+            else:
+                task_name = 'taskName'
+            
+            all_versions = glob.glob(op.join(default_loc, f'{task_name.lower()}_v?.py'))
+            if len(all_versions) > 0:
+                all_versions = sorted(all_versions)
+                last_version = all_versions[-1].split('_v')[-1].split('.')[0]
+                new_version = str(int(last_version) + 1)
+            else:
+                new_version = '1'
+            default_name = f'{task_name}_v{new_version}.py'
+        except:
+            default_loc = op.expanduser('~')
+            default_name = 'task_v1.py'
+        return op.join(default_loc, default_name)
+    
+    def write_parser_script(self):
+        '''    
+        Part 1: Write Threshold Detect Options
+        Part 2: Write Digital Detect components
+        Part 3: Write Parse_marks components
+        Part 4: Combine dataframes
+        Part 5: Select Keep options
+        Part 6: Write the markerfile to the input dataset
+        '''
+        
+        ##### Finalize selections list ###### 
+        self.events_to_write = self.final_events_list
+        print(self.events_to_write)
+        
+        ##### Python Header Section #####
+        header=["#!/usr/bin/env python3\n",
+                "# -*- coding: utf-8 -*-\n",
+                "\n\n",
+                "'''\n"
+                "This code was generated by the nih2mne package: \n",
+                "https://github.com/nih-megcore/nih_to_mne.git  \n",
+                "'''\n"
+                "\n\n", 
+                "import sys\n"
+                "import mne\n",
+                "import nih2mne\n",
+                '''from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital,
+                    check_analog_inverted, threshold_detect, append_conditions, correct_to_projector, add_event_offset)\n''',
+                '''from nih2mne.utilities.markerfile_write import main as write_markerfile\n'''
+                "\n\n",
+                "meg_fname = sys.argv[1]\n\n"
+                ]
+        default_fname = self.get_default_scriptname()
+        fname, _ = QFileDialog.getSaveFileName(self, "Save File", default_fname, 
+                                               "Text Files (*.py);;All Files (*)")#, options=options)
+        with open(fname, 'w') as f:
+            f.writelines(header)
+        
+        ##### Make a list of dataframes ####
+        init_code = []
+        init_code.append('dframe_list=[]')
+                         
+        
+        ##### Analog Triggers #####
+        ana_trig_code = []
+        ana_trig_code.append('##### Analog Trigger Coding ######')
+        for i, tile in self.tile_dict.items():
+            if i.startswith('UADC'):
+                print(i, tile.te_EvtName.text())
+                markname = tile.te_EvtName.text()
+                if markname == '':
+                    continue
+                if tile.cb_Down.checkState()==2:
+                    invert_val = True
+                else:
+                    invert_val = False
+                
+                if i.startswith('UADC016'):
+                    if tile.cb_HistUp.checkState()==2:
+                        tmp_code = f"invert_val = check_analog_inverted(fname=meg_fname, ch_name='UADC016')"
+                        ana_trig_code.append(tmp_code)
+                        if invert_val == True:
+                            tmp_code = "invert_val = not invert_val"
+                            ana_trig_code.append(tmp_code)
+                        
+                tmp_code = f"tmp_dframe = threshold_detect(dsname=meg_fname, channel='{i}', mark='{markname}', invert={invert_val})"
+                ana_trig_code.append(tmp_code)
+                tmp_code = f"dframe_list.append(tmp_dframe)"
+                ana_trig_code.append(tmp_code)
+                
+        ##### Digital Triggers #####       
+        dig_trig_code = []
+        dig_trig_code.append('##### Digital Trigger Coding ######')
+        tmp_code = f"dig_dframe = detect_digital(filename=meg_fname, channel='UPPT001')" #, mark='{markname}')"
+        dig_trig_code.append(tmp_code)
+        for i, tile in self.tile_dict.items():
+            if i.startswith('UPPT'):
+                print(i, tile.te_EvtName.text())
+                markname = tile.te_EvtName.text()
+                if markname == '':
+                    continue
+                dig_val = i.split('_')[-1]
+                tmp_code = f"dig_dframe.loc[dig_dframe.condition=='{dig_val}', 'condition']='{markname}'"
+                dig_trig_code.append(tmp_code)        
+        tmp_code = f"dframe_list.append(dig_dframe)"
+        dig_trig_code.append(tmp_code)
+        
+        ##### Tidy up data   #######
+        time_corr_code = []
+        time_corr_code.append('##### Projector Correction and Event Offset ######')
+        time_corr_code.append(f"dframe = append_conditions(dframe_list)")
+                
+        ##### Correct to Projector ###### 
+        if hasattr(self, 'corr2proj_list'):
+            if len(self.corr2proj_list) > 0:
+                tmp_code = f'dframe = correct_to_projector(dframe, event_list={self.corr2proj_list}, window=[-0.2,0.2])'
+                time_corr_code.append(tmp_code)        
+        
+        ##### Add offset to events ######
+        if self.ui.te_FixedOffset.text().strip()=='':
+            offset_val_ms = 0
+        else: 
+            offset_val_ms = float(self.ui.te_FixedOffset.text().strip())
+        if hasattr(self, 'add_offset_list'):
+            if len(self.add_offset_list) > 0:
+                offset_val_s = offset_val_ms / 1000 # convert to seconds
+                tmp_code = f'dframe = add_event_offset(dframe, event_list={self.add_offset_list}, offset={offset_val_s})'
+                time_corr_code.append(tmp_code)
+        
+        #####  Parsed Triggers  #######
+        parsed_trig_code = []
+        parsed_trig_code.append('##### Parse Marks Coding ######')
+        # Append the above triggers for parsemarks reference
+        # parsed_trig_code.append(f"dframe = append_conditions(dframe_list)")
+        parsemarks_dict = {i:j for i,j in self.extract_evt_dict().items() if j['type']=='parse' }  ### --- here
+        for entry in parsemarks_dict.values():
+            parse_tile = entry['tile']
+            markname = parse_tile.te_MrkName.text()
+            if markname in self.events_to_write:
+                print(markname)
+                
+                lead_cond = parse_tile.combo_LeadSelection.currentText() 
+                lag_cond = parse_tile.combo_LagSelection.currentText()
+                window_start = float(parse_tile.te_StartOffset.text().strip())
+                window_end = float(parse_tile.te_StopOffset.text().strip())
+                window = [window_start, window_end]
+                if parse_tile.cb_OnLead.isChecked():
+                    on_val = 'lead'
+                elif parse_tile.cb_OnLag.isChecked():
+                    on_val = 'lag'
+                else:
+                    raise ValueError('Cannot interpret lead/lag for parsemarks: {markname}')
+                
+                tmp_code = f"dframe = parse_marks(dframe=dframe, lead_condition='{lead_cond}', lag_condition='{lag_cond}', window={window},  marker_on='{on_val}', marker_name='{markname}', append_result=True)"
+                parsed_trig_code.append(tmp_code)
+                tmp_code = "dframe.dropna(inplace=True)"
+                parsed_trig_code.append(tmp_code)
+                
+        ##### Keep Events Section ######
+        keep_evts_code = []
+        tmp_ = \
+f"""
+##### Set Events to Keep ######
+final_dframe_list = []
+for evt_name in {self.events_to_write}:
+    keep_dframe=dframe[dframe.condition==evt_name]
+    final_dframe_list.append(keep_dframe)
+final_dframe = append_conditions(final_dframe_list)
+"""
+        keep_evts_code.append(tmp_)
+        keep_evts_code.append('write_markerfile(dframe=final_dframe, ds_filename=meg_fname)')
+        
+                
+        ##### Combine Initial Trigger Processing #####
+        init_trig_code = init_code + ana_trig_code + dig_trig_code + time_corr_code + parsed_trig_code + keep_evts_code
+        with open(fname, 'a') as f:
+            for i in init_trig_code:
+                f.write(i+'\n')
+                f.write('\n')
+
+    
 class grid_selector(QMainWindow):
     '''Helper function create a grid of items based on a list'''
     def __init__(self, input_list=[], title=None, 
@@ -218,440 +843,17 @@ class grid_selector(QMainWindow):
             return 8,8
         if listlen < 117: 
             return 9, 13
-         
-        
-        
-        
-        
-############# Setup Window ######################            
-        
-        
-        
-
-class event_coding_Window(QMainWindow):
-    def __init__(self, cmdline_meg_fname=False):
-        super(event_coding_Window, self).__init__()
-        self.setGeometry(100,100, 1000, 1000) #250*gridsize_col, 100*gridsize_row)
-        self.setWindowTitle('Event Coding GUI')
-        
-        self.tile_dict = {}
-        
-        # Finalize Widget and display
-        main_layout = self.setup_full_layout()
-        widget = QWidget()
-        widget.setLayout(main_layout)
-        self.setCentralWidget(widget)
-        
-        ####### -- FOR TESTING ONLY -- #######
-        if cmdline_meg_fname != False:   
-            self.meg_fname = cmdline_meg_fname
-            meg_display_name = cmdline_meg_fname.split('/')[-1]
-            self.meg_display_name.setText(meg_display_name)
-            self.meg_raw = mne.io.read_raw_ctf(cmdline_meg_fname, clean_names=True, 
-                                               system_clock='ignore', preload=False, 
-                                               verbose=False)
-            self.trig_ch_names = [i for i in self.meg_raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
-            self.fill_trig_chan_layout()
-            self.b_update_event_names = QPushButton('Update Event Names: Will erase below')
-            self.b_update_event_names.clicked.connect(self.update_event_names)
-            self.trig_parsemarks_layout.addWidget(self.b_update_event_names)
-            self.trig_parsemarks_layout.addWidget(QLabel('Create New Events from Other Events'))
-            self.keep_events_layout.addWidget(QLabel('Events To Write'))
-        ####### -- FOR TESTING ONLY -- #######
-            
-    
-    def setup_full_layout(self):
-        main_layout = QVBoxLayout()
-
-        # Setup File Chooser
-        meg_choose_layout = QHBoxLayout()
-        self.b_choose_meg = QPushButton('Select MEG')
-        # self.b_choose_meg.clicked.connect(self.select_meg_dset)
-        self.b_choose_meg.clicked.connect(lambda: self.select_meg_dset(meg_fname=None))
-        
-        meg_choose_layout.addWidget(self.b_choose_meg)
-        self.meg_display_name = QLabel('')
-        meg_choose_layout.addWidget(self.meg_display_name)
-        main_layout.addLayout(meg_choose_layout)
-        
-        self.ana_trigger_layout = QVBoxLayout()
-        main_layout.addLayout(self.ana_trigger_layout)
-        self.dig_trigger_layout = QVBoxLayout()
-        main_layout.addLayout(self.dig_trigger_layout)
-        
-        # Middle operations after dig/ana setup
-        self.middle_operations = QHBoxLayout()
-        self.b_corr2proj = QPushButton('Correct to Projector')
-        self.b_corr2proj.clicked.connect(self.open_corr2proj)
-        self.middle_operations.addWidget(self.b_corr2proj)
-        self.b_add_fixed_delay = QPushButton('Add Fixed Offset')
-        self.b_add_fixed_delay.clicked.connect(self.open_add_fixed_delay)
-        self.middle_operations.addWidget(self.b_add_fixed_delay) 
-        self.delay_label = QLabel('Offset (ms):')
-        self.middle_operations.addWidget(self.delay_label)
-        self.b_fixed_delay_edit = QLineEdit()
-        self.middle_operations.addWidget(self.b_fixed_delay_edit)
-        main_layout.addLayout(self.middle_operations)
-        
-        self.trig_parsemarks_layout = QVBoxLayout()
-        main_layout.addLayout(self.trig_parsemarks_layout)
-        
-        self.keep_events_layout = QVBoxLayout()
-        main_layout.addLayout(self.keep_events_layout)
-        
-        self.b_write_parser_file = QPushButton('Write Parser File')
-        self.b_write_parser_file.clicked.connect(self.write_parser_script)
-        main_layout.addWidget(self.b_write_parser_file)
-                
-        return main_layout
-    
-    def fill_trig_chan_layout(self):
-        '''
-        Iterates over analog channels and PPT conditions to fill panel
-        | Trig Name | b_UpTrig | b_DownTrig | Count=  | OutName: | 
-        '''
-        # Setup panel headers
-        self.ana_trigger_layout.addWidget(QLabel('Analogue Channels'))
-        self.dig_trigger_layout.addWidget(QLabel('Digital Channel Trigger Values'))
-        for i in self.trig_ch_names:
-            ### Analogue Channels ###
-            if i.startswith('UADC'):
-                self.tile_dict[i]=trig_tile(chan_name=i,include_polarity=True,
-                                            meg_fname=self.meg_fname)
-                self.ana_trigger_layout.addLayout(self.tile_dict[i])
-                if i=='UADC016':
-                    self.tile_dict[i].event_name.setText('projector')
-            ### Digital Channels - Breakout the Codes ###
-            elif i.startswith('UPPT'):
-                dig_dframe = detect_digital(self.meg_fname, channel=i)
-                event_vals = list(dig_dframe.condition.unique())
-                event_vals = sorted(event_vals, key=int)
-                dig_event_counts = dig_dframe.condition.value_counts()
-                for evt_name in event_vals:
-                    evt_key = f'{i}_{evt_name}'
-                    self.tile_dict[evt_key]= trig_tile(chan_name=f'{i} [{evt_name}]', 
-                                                 include_polarity=True,
-                                                 event_count=dig_event_counts[evt_name], 
-                                                 meg_fname = self.meg_fname)
-                    self.dig_trigger_layout.addLayout(self.tile_dict[evt_key])
-            else:
-                print(f'Not processing channel {i}')
-    
-    def update_event_names(self, events_only=False):
-        '''Set action for updating event names.  This will write all of the 
-        events to the an event list and update the parse_marks and evt_keep
-        panels. 
-        raw_event_list: directly evaluated from the raw trigger lines
-        parsed_event_list: parse_marks derived events
-        ## logfile_event_list: Future implementation
-        ## temporal_coding_event_list : Future implementation
-        
-        event_list: combination of the above
-        
-        '''
-        namelist = []
-        for key in self.tile_dict.keys():
-            tmp_txt = self.tile_dict[key].event_name.text()
-            namelist.append(tmp_txt)
-        self.event_namelist = namelist
-        
-        #Check for duplicated names from raw trigger panel
-        for i in reversed(range(len(namelist))):
-            if namelist[i]==None:
-                del(namelist[i])
-            if namelist[i]=='':
-                del(namelist[i])        
-        if len(namelist) != len(set(namelist)):
-            raise ValueError('The event names cannot have duplicates') 
-        
-        if events_only:
-            return
-        
-        ############# Parsemarks Layout ##########################
-        self.parsemarks_tile_list = []
-        self.parsemarks_full_layout_list = []
-        self.add_parsemarks_line()
-        
-        ############# Keep Events Layout #########################
-        #Empty the keep events layout list, so it doesn't append the previous
-        self.update_keep_events_list(flush=True)
-        
-    def open_corr2proj(self):
-        # Create a popup to select events that will be corrected to projector
-        self.update_event_names(events_only=True)
-        self.corr2proj_selector = grid_selector(self.event_namelist)  
-        self.corr2proj_selector.b_set_selection.clicked.connect(self._set_correct2proj_list)
-    
-    def open_add_fixed_delay(self):
-        # Create a popup to select the events that will be corrected to a fixed delay
-        self.update_event_names(events_only=True)
-        self.fixed_delay_selector = grid_selector(self.event_namelist)  
-        self.fixed_delay_selector.b_set_selection.clicked.connect(self._set_fixedDelay_list)
-    
-    def _set_fixedDelay_list(self):
-        'Fixed delay added to self.add_offset_list'
-        layout = self.fixed_delay_selector.grid_layout
-        self.add_offset_list = []
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            if item.widget():
-                if hasattr(item.widget(), 'isChecked'):
-                    if item.widget().isChecked():
-                        self.add_offset_list.append(item.widget().text())
-        print(f'Setting fixed delay to the following: {self.add_offset_list}')
-    
-    def _set_correct2proj_list(self):
-        'Correct to projector list assigned to self.corr2proj_list'
-        layout = self.corr2proj_selector.grid_layout
-        self.corr2proj_list = []
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            if item.widget():
-                if hasattr(item.widget(), 'isChecked'):
-                    if item.widget().isChecked():
-                        self.corr2proj_list.append(item.widget().text())
-        print(f'Correcting the following to projector timing: {self.corr2proj_list}')        
-        
-    def update_keep_events_list(self, flush=False):
-        num_keep_buttons = self.keep_events_layout.count()
-        if flush==True:
-            if num_keep_buttons > 1:
-                for i in reversed(range(1,num_keep_buttons)):  #Skip the label - remove from the end
-                    item = self.keep_events_layout.takeAt(i)
-                    self.keep_events_layout.removeItem(item)
-                    if item.widget():
-                        item.widget().deleteLater()
-
-        for i in set(self.event_namelist): 
-            tmp=QPushButton(i)
-            tmp.setCheckable(True)
-            self.keep_events_layout.addWidget(tmp)
-            del tmp
-        self.keep_events_layout.update()
-        
-        
-    def add_parsemarks_line(self):
-        '''Add an additional line to the parsemarks panel 
-        Create parsemarks tile and append ADD and SET buttons
-        Finally add new name to the event list'''
-        if len(self.parsemarks_tile_list)>0:
-            self.set_parsemarks_line() #Add the name of the previous entry to the namelist
-            
-        tmp_pm_tile = parsemarks_tile(event_namelist=self.event_namelist)
-        tmp_full_pm_layout = QHBoxLayout()
-        tmp_full_pm_layout.addLayout(tmp_pm_tile)
-        
-        b_parsemarks_set = QPushButton('SET')
-        b_parsemarks_set.clicked.connect(self.set_parsemarks_line) 
-        tmp_full_pm_layout.addWidget(b_parsemarks_set)
-        b_parsemarks_add = QPushButton('ADD')
-        b_parsemarks_add.clicked.connect(self.add_parsemarks_line)
-        tmp_full_pm_layout.addWidget(b_parsemarks_add)
-        self.trig_parsemarks_layout.addLayout(tmp_full_pm_layout)  
-        self.parsemarks_tile_list.append(tmp_pm_tile)  #Add the new entry to the list
-        self.parsemarks_full_layout_list.append(tmp_full_pm_layout)  #Hate that this has to be added
-          
-    def set_parsemarks_line(self):
-        '''Add the parsemarks name to the name list and update Keep list panel'''
-        last_button = self.parsemarks_tile_list[-1]
-        last_event_name = last_button.event_name.text() #event_name_widget.text()
-        self.event_namelist.append(last_event_name)
-        self.update_keep_events_list(flush=True)
-        self.keep_events_layout.update()
-                
-
-
-    def select_meg_dset(self, meg_fname=None):
-        if meg_fname==None:
-            print('Here is the dialogue')
-            meg_fname = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select a MEG folder (.ds)')
-        self.meg_fname = meg_fname
-        meg_display_name = meg_fname.split('/')[-1]
-        self.meg_display_name.setText(meg_display_name)
-        print(meg_fname)
-        if meg_fname != None:
-            self.meg_raw = mne.io.read_raw_ctf(meg_fname, clean_names=True, 
-                                               system_clock='ignore', preload=False, 
-                                               verbose=False)
-        self.trig_ch_names = [i for i in self.meg_raw.ch_names if i.startswith('UADC') or i.startswith('UPPT')]
-        self.fill_trig_chan_layout()
-        
-        self.b_update_event_names = QPushButton('Update Event Names: Will erase below')
-        self.b_update_event_names.clicked.connect(self.update_event_names)
-        self.trig_parsemarks_layout.addWidget(self.b_update_event_names)
-        self.trig_parsemarks_layout.addWidget(QLabel('Create New Events from Other Events'))
-        
-        self.keep_events_layout.addWidget(QLabel('Events To Write'))
-        
-        
-    def write_parser_script(self):
-        '''    
-        Part 1: Write Threshold Detect Options
-        Part 2: Write Digital Detect components
-        Part 3: Write Parse_marks components
-        Part 4: Combine dataframes
-        Part 5: Select Keep options
-        Part 6: Write the markerfile to the input dataset
-        '''
-        
-        ##### Finalize selections list ###### 
-        self.events_to_write = []
-        for i in range(self.keep_events_layout.layout().count()):
-            try:
-                if self.keep_events_layout.layout().itemAt(i).widget().isChecked():
-                    self.events_to_write.append(self.keep_events_layout.layout().itemAt(i).widget().text())
-            except:
-                pass  #This is in case the widget doesn't have the isChecked tag
-        print(self.events_to_write)
-        
-        ##### Python Header Section #####
-        header=["#!/usr/bin/env python3\n",
-                "# -*- coding: utf-8 -*-\n",
-                "\n\n",
-                "'''\n"
-                "This code was generated by the nih2mne package: \n",
-                "https://github.com/nih-megcore/nih_to_mne.git  \n",
-                "'''\n"
-                "\n\n", 
-                "import sys\n"
-                "import mne\n",
-                "import nih2mne\n",
-                '''from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital,
-                    check_analog_inverted, threshold_detect, append_conditions, correct_to_projector, add_event_offset)\n''',
-                '''from nih2mne.utilities.markerfile_write import main as write_markerfile\n'''
-                "\n\n",
-                "meg_fname = sys.argv[1]\n\n"
-                ]
-        fname, _ = QFileDialog.getSaveFileName(self, "Save File", "trig_parser.sh", "Text Files (*.sh);;All Files (*)")#, options=options)
-        with open(fname, 'w') as f:
-            f.writelines(header)
-        
-        ##### Make a list of dataframes ####
-        init_code = []
-        init_code.append('dframe_list=[]')
-                         
-        
-        ##### Analog Triggers #####
-        ana_trig_code = []
-        ana_trig_code.append('##### Analog Trigger Coding ######')
-        for i, tile in self.tile_dict.items():
-            if i.startswith('UADC'):
-                print(i, tile.event_name.text())
-                markname = tile.event_name.text()
-                if markname == '':
-                    continue
-                if tile.b_downgoing_trigger.checkState()==2:
-                    invert_val = True
-                else:
-                    invert_val = False
-                tmp_code = f"tmp_dframe = threshold_detect(dsname=meg_fname, channel='{i}', mark='{markname}', invert={invert_val})"
-                ana_trig_code.append(tmp_code)
-                tmp_code = f"dframe_list.append(tmp_dframe)"
-                ana_trig_code.append(tmp_code)
-                
-        ##### Digital Triggers #####       
-        dig_trig_code = []
-        dig_trig_code.append('##### Digital Trigger Coding ######')
-        tmp_code = f"dig_dframe = detect_digital(filename=meg_fname, channel='UPPT001')" #, mark='{markname}')"
-        dig_trig_code.append(tmp_code)
-        for i, tile in self.tile_dict.items():
-            if i.startswith('UPPT'):
-                print(i, tile.event_name.text())
-                markname = tile.event_name.text()
-                if markname == '':
-                    continue
-                dig_val = i.split('_')[-1]
-                tmp_code = f"dig_dframe.loc[dig_dframe.condition=='{dig_val}', 'condition']='{markname}'"
-                dig_trig_code.append(tmp_code)        
-        tmp_code = f"dframe_list.append(dig_dframe)"
-        dig_trig_code.append(tmp_code)
-        
-        ##### Tidy up data   #######
-        time_corr_code = []
-        time_corr_code.append('##### Projector Correction and Event Offset ######')
-        time_corr_code.append(f"dframe = append_conditions(dframe_list)")
-                
-        ##### Correct to Projector ###### 
-        if hasattr(self, 'corr2proj_list'):
-            if len(self.corr2proj_list) > 0:
-                tmp_code = f'dframe = correct_to_projector(dframe, event_list={self.corr2proj_list}, window=[-0.2,0.2])'
-                time_corr_code.append(tmp_code)        
-        
-        ##### Add offset to events ######
-        if self.b_fixed_delay_edit.text()=='':
-            offset_val_ms = 0
-        else: 
-            offset_val_ms = float(self.b_fixed_delay_edit.text())
-        if hasattr(self, 'add_offset_list'):
-            if len(self.add_offset_list) > 0:
-                offset_val_s = offset_val_ms / 1000 # convert to seconds
-                tmp_code = f'dframe = add_event_offset(dframe, event_list={self.add_offset_list}, offset={offset_val_s})'
-                time_corr_code.append(tmp_code)
-        
-        #####  Parsed Triggers  #######
-        parsed_trig_code = []
-        parsed_trig_code.append('##### Parse Marks Coding ######')
-        # Append the above triggers for parsemarks reference
-        # parsed_trig_code.append(f"dframe = append_conditions(dframe_list)")
-        for parse_tile in self.parsemarks_tile_list:
-            markname = parse_tile.event_name.text()
-            if markname in self.events_to_write:
-                print(markname)
-                
-                lead_cond = parse_tile.b_evt1_name.currentText()
-                lag_cond = parse_tile.b_evt2_name.currentText()
-                window_start = float(parse_tile.b_window_t1.text())
-                window_end = float(parse_tile.b_window_t2.text())
-                window = [window_start, window_end]
-                if parse_tile.b_mark_on_lead.isChecked():
-                    on_val = 'lead'
-                elif parse_tile.b_mark_on_lag.isChecked():
-                    on_val = 'lag'
-                else:
-                    raise ValueError('Cannot interpret lead/lag for parsemarks: {markname}')
-                
-                tmp_code = f"dframe = parse_marks(dframe=dframe, lead_condition='{lead_cond}', lag_condition='{lag_cond}', window={window},  marker_on='{on_val}', marker_name='{markname}', append_result=True)"
-                parsed_trig_code.append(tmp_code)
-                tmp_code = "dframe.dropna(inplace=True)"
-                parsed_trig_code.append(tmp_code)
-                
-        ##### Keep Events Section ######
-        keep_evts_code = []
-        tmp_ = \
-f"""
-##### Set Events to Keep ######
-final_dframe_list = []
-for evt_name in {self.events_to_write}:
-    keep_dframe=dframe[dframe.condition==evt_name]
-    final_dframe_list.append(keep_dframe)
-final_dframe = append_conditions(final_dframe_list)
-"""
-        keep_evts_code.append(tmp_)
-        keep_evts_code.append('write_markerfile(dframe=final_dframe, ds_filename=meg_fname)')
-        
-                
-        ##### Combine Initial Trigger Processing #####
-        init_trig_code = init_code + ana_trig_code + dig_trig_code + time_corr_code + parsed_trig_code + keep_evts_code
-        with open(fname, 'a') as f:
-            for i in init_trig_code:
-                f.write(i+'\n')
-                f.write('\n')
 
     
-#%%    
-
-
-def window():
-    app = QApplication(sys.argv)
-    win = event_coding_Window() 
-    win.show()
-    sys.exit(app.exec_())
-    
-# window()
-
 
 
 #%% CMD line section
+
+def window():
+    app = QApplication(sys.argv)
+    win = event_coding_window() 
+    win.show()
+    sys.exit(app.exec_())
     
 def cmdline_main():
     window()
