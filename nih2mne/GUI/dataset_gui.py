@@ -224,9 +224,12 @@ class InputDatasetTile(QtWidgets.QWidget):
         _has_hz = op.exists(op.join(self.fname, 'hz.ds'))
         _has_hz2 = op.exists(op.join(self.fname, 'hz2.ds'))
         if _has_hz and _has_hz2:
-            dframe = get_localizer_dframe(self.fname)
-            move_dict = compute_movement(dframe)
-            self.head_movement = move_dict['Max']
+            try:
+                dframe = get_localizer_dframe(self.fname)
+                move_dict = compute_movement(dframe)
+                self.head_movement = move_dict['Max']
+            except:
+                self.head_movement = 'Mvt - Hz Read Error'
         elif not _has_hz:
             self.head_movement = 'No hz.ds'
         elif not _has_hz2:
