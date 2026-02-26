@@ -137,6 +137,9 @@
              <verstretch>0</verstretch>
             </sizepolicy>
            </property>
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Delete this tile&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
            <property name="styleSheet">
             <string notr="true">color: rgb(224, 27, 36);</string>
            </property>
@@ -217,6 +220,9 @@
                 <verstretch>0</verstretch>
                </sizepolicy>
               </property>
+              <property name="toolTip">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Display of associated processing files for the current Task.  These should follow the format &lt;span style=&quot; font-weight:600;&quot;&gt;TASKNAME&lt;/span&gt;_v&lt;span style=&quot; font-weight:600;&quot;&gt;#&lt;/span&gt;.__ (eg flanker_v1.py).  These will be found in the users home folder (/home/user/megcore/trigproc/....py).  These do not have to be python files, but must follow the naming convention above.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
              </widget>
             </item>
            </layout>
@@ -224,6 +230,9 @@
          </item>
          <item>
           <widget class="QPushButton" name="pb_TrigProcess">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Run the processing script (left dropdown) on the data to compile the events into the MarkerFile.mrk in the .ds folder&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
            <property name="text">
             <string>TrigProcess</string>
            </property>
@@ -231,6 +240,9 @@
          </item>
          <item>
           <widget class="QPushButton" name="pb_PlotTrig">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Plot the trigger line time series&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
            <property name="text">
             <string>PlotTrig</string>
            </property>
@@ -238,6 +250,9 @@
          </item>
          <item>
           <widget class="QPushButton" name="pb_PlotData">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Plot all of the data (meg, eeg, triggers)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
            <property name="text">
             <string>PlotData</string>
            </property>
@@ -245,6 +260,9 @@
          </item>
          <item>
           <widget class="QPushButton" name="pb_FFT">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Plot the power spectral density map of the data.  For datasets that have been terminated prior to the set time, will have the zeros cropped before the PSD is calculated.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
            <property name="text">
             <string>FFT</string>
            </property>

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'input_meg_dset_tile_listWidgetBase.ui'
+# Form implementation generated from reading ui file './input_meg_dset_tile_listWidgetBase.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.9
 #
@@ -167,11 +167,17 @@ class Ui_InputDatasetTile(object):
         self.ReadoutSubjid.setText(_translate("InputDatasetTile", "Subjid"))
         self.ReadoutTaskname.setText(_translate("InputDatasetTile", "TaskName"))
         self.label_Duration.setText(_translate("InputDatasetTile", "Duration:"))
+        self.pb_DeleteTile.setToolTip(_translate("InputDatasetTile", "<html><head/><body><p>Delete this tile</p></body></html>"))
         self.pb_DeleteTile.setText(_translate("InputDatasetTile", "X"))
         self.lbl_StaticProcFile.setText(_translate("InputDatasetTile", "ProcFile:"))
+        self.ProcFileComboBox.setToolTip(_translate("InputDatasetTile", "<html><head/><body><p>Display of associated processing files for the current Task.  These should follow the format <span style=\" font-weight:600;\">TASKNAME</span>_v<span style=\" font-weight:600;\">#</span>.__ (eg flanker_v1.py).  These will be found in the users home folder (/home/user/megcore/trigproc/....py).  These do not have to be python files, but must follow the naming convention above.</p></body></html>"))
+        self.pb_TrigProcess.setToolTip(_translate("InputDatasetTile", "<html><head/><body><p>Run the processing script (left dropdown) on the data to compile the events into the MarkerFile.mrk in the .ds folder</p></body></html>"))
         self.pb_TrigProcess.setText(_translate("InputDatasetTile", "TrigProcess"))
+        self.pb_PlotTrig.setToolTip(_translate("InputDatasetTile", "<html><head/><body><p>Plot the trigger line time series</p></body></html>"))
         self.pb_PlotTrig.setText(_translate("InputDatasetTile", "PlotTrig"))
+        self.pb_PlotData.setToolTip(_translate("InputDatasetTile", "<html><head/><body><p>Plot all of the data (meg, eeg, triggers)</p></body></html>"))
         self.pb_PlotData.setText(_translate("InputDatasetTile", "PlotData"))
+        self.pb_FFT.setToolTip(_translate("InputDatasetTile", "<html><head/><body><p>Plot the power spectral density map of the data.  For datasets that have been terminated prior to the set time, will have the zeros cropped before the PSD is calculated.</p></body></html>"))
         self.pb_FFT.setText(_translate("InputDatasetTile", "FFT"))
         self.pb_FullQA.setText(_translate("InputDatasetTile", "FullQA"))
         self.lbl_EventInfo.setText(_translate("InputDatasetTile", "Top5Trig:"))
