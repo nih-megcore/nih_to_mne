@@ -693,8 +693,9 @@ class event_coding_window(QMainWindow):
                         if invert_val == True:
                             tmp_code = "invert_val = not invert_val"
                             ana_trig_code.append(tmp_code)
-                        
-                tmp_code = f"tmp_dframe = threshold_detect(dsname=meg_fname, channel='{i}', mark='{markname}', invert={invert_val})"
+                
+                # NOTE: invert val below needs to be evaluated in code and not set in {}
+                tmp_code = f"tmp_dframe = threshold_detect(dsname=meg_fname, channel='{i}', mark='{markname}', invert=invert_val)" 
                 ana_trig_code.append(tmp_code)
                 tmp_code = f"dframe_list.append(tmp_dframe)"
                 ana_trig_code.append(tmp_code)
