@@ -686,6 +686,9 @@ class event_coding_window(QMainWindow):
                 else:
                     invert_val = False
                 
+                tmp_code = f"invert_val = {invert_val}"
+                ana_trig_code.append(tmp_code)
+                
                 if i.startswith('UADC016'):
                     if tile.cb_HistUp.checkState()==2:
                         tmp_code = f"invert_val = check_analog_inverted(fname=meg_fname, ch_name='UADC016')"
