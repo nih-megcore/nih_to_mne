@@ -39,6 +39,8 @@ from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QCheckBox, \
     QFileDialog, QDialog, QListWidgetItem
+    
+from PyQt5 import QtGui
 import sys
 import os, os.path as op
 import numpy as np
@@ -855,6 +857,10 @@ class grid_selector(QMainWindow):
 
 def window():
     app = QApplication(sys.argv)
+    # Add App Icon
+    icon_img = op.join(op.dirname(__file__), 'templates', 'opposum_squid_icon.png')
+    if op.exists(icon_img): app.setWindowIcon(QtGui.QIcon(icon_img))
+    
     win = event_coding_window() 
     win.show()
     sys.exit(app.exec_())
