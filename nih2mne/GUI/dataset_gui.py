@@ -344,8 +344,9 @@ class InputDatasetTile(QtWidgets.QWidget):
             self.trigfile_dir = TRIG_FILE_LOC
         else:
             self.trigfile_dir = None
-        
-        task_trig_files = glob.glob(op.join(self.trigfile_dir, self.taskname.lower() + '*'))
+            
+        _tmp_list = os.listdir(self.trigfile_dir)
+        task_trig_files = [i for i in _tmp_list if op.basename(i).split('_')[0].lower() == self.taskname.lower()]
         if len(task_trig_files) > 0:
             _tt_files = [op.basename(i) for i in task_trig_files]
             _tt_files = sorted(_tt_files, reverse=True)
