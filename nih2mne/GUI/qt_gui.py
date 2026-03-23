@@ -25,7 +25,8 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
     QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QMessageBox, QCheckBox
 
 import sys
-from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project
+import shlex
+from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project, run_sbatch
 import os, os.path as op
 import numpy as np
 from nih2mne.utilities.montages import montages
@@ -34,6 +35,171 @@ import glob
 import time
 from PyQt5.QtCore import QTimer
 import pandas as pd
+
+DATPROC_DIR = op.expanduser('~/megcore/datproc')
+
+
+def get_task_datproc_files(task_name, datproc_dir=DATPROC_DIR):
+    if (task_name == None) or (str(task_name).strip() == ''):
+        return []
+    if not op.isdir(datproc_dir):
+        return []
+
+    matching_files = []
+    for fname in os.listdir(datproc_dir):
+        if op.basename(fname).split('_')[0].lower() == str(task_name).lower():
+            matching_files.append(fname)
+    return sorted(matching_files, reverse=True)
+
+
+def build_datproc_command(processing_file, dataset_fname):
+    if (processing_file == None) or (dataset_fname == None):
+        raise ValueError('processing_file and dataset_fname are required')
+
+    quoted_processing_file = shlex.quote(processing_file)
+    quoted_dataset = shlex.quote(dataset_fname)
+    if str(processing_file).endswith('.py'):
+        return f'{shlex.quote(sys.executable)} {quoted_processing_file} {quoted_dataset}'
+    else:
+        return f'{quoted_processing_file} {quoted_dataset}'
+
+
+class DatprocSubmissionDialog(QtWidgets.QDialog):
+    def __init__(self, subject_gui):
+        super().__init__(subject_gui)
+        self.subject_gui = subject_gui
+        self.bids_info = subject_gui.bids_info
+        self.setWindowTitle('Submit Datproc Job')
+
+        main_layout = QVBoxLayout()
+        self.l_task_info = QLabel()
+        self.l_dataset_info = QLabel()
+        self.l_match_status = QLabel()
+        self.l_cmd_preview = QLabel()
+        self.l_cmd_preview.setWordWrap(True)
+
+        main_layout.addWidget(self.l_task_info)
+        main_layout.addWidget(self.l_dataset_info)
+
+        datproc_dir_layout = QHBoxLayout()
+        datproc_dir_layout.addWidget(QLabel('Datproc Dir'))
+        self.b_datproc_dir = QLineEdit(DATPROC_DIR)
+        datproc_dir_layout.addWidget(self.b_datproc_dir)
+        self.b_refresh = QPushButton('Refresh')
+        self.b_refresh.clicked.connect(self.refresh_matches)
+        datproc_dir_layout.addWidget(self.b_refresh)
+        main_layout.addLayout(datproc_dir_layout)
+
+        processing_file_layout = QHBoxLayout()
+        processing_file_layout.addWidget(QLabel('Processing File'))
+        self.b_processing_file = QComboBox()
+        self.b_processing_file.currentIndexChanged.connect(self.update_command_preview)
+        processing_file_layout.addWidget(self.b_processing_file)
+        main_layout.addLayout(processing_file_layout)
+        main_layout.addWidget(self.l_match_status)
+
+        resources_layout = QHBoxLayout()
+        resources_layout.addWidget(QLabel('Mem(GB)'))
+        self.b_mem = QLineEdit('8')
+        resources_layout.addWidget(self.b_mem)
+        resources_layout.addWidget(QLabel('Threads'))
+        self.b_threads = QLineEdit('2')
+        resources_layout.addWidget(self.b_threads)
+        resources_layout.addWidget(QLabel('Time'))
+        self.b_time = QLineEdit('24:00:00')
+        resources_layout.addWidget(self.b_time)
+        main_layout.addLayout(resources_layout)
+
+        main_layout.addWidget(QLabel('Command Preview'))
+        main_layout.addWidget(self.l_cmd_preview)
+
+        button_layout = QHBoxLayout()
+        self.b_submit = QPushButton('Submit')
+        self.b_submit.clicked.connect(self.submit_job)
+        button_layout.addWidget(self.b_submit)
+        self.b_close = QPushButton('Close')
+        self.b_close.clicked.connect(self.close)
+        button_layout.addWidget(self.b_close)
+        main_layout.addLayout(button_layout)
+
+        self.setLayout(main_layout)
+        self.refresh_matches()
+
+    def get_selected_processing_path(self):
+        current_file = self.b_processing_file.currentText().strip()
+        datproc_dir = self.b_datproc_dir.text().strip()
+        if (current_file == '') or (datproc_dir == ''):
+            return None
+        return op.join(datproc_dir, current_file)
+
+    def refresh_matches(self):
+        current_task = self.subject_gui.get_current_task()
+        current_dataset = self.subject_gui.get_current_meg_dataset()
+        dataset_name = getattr(current_dataset, 'fname', '')
+
+        self.l_task_info.setText(f'Task: {current_task}')
+        self.l_dataset_info.setText(f'Dataset: {dataset_name}')
+
+        datproc_dir = self.b_datproc_dir.text().strip()
+        self.b_processing_file.clear()
+        task_files = get_task_datproc_files(current_task, datproc_dir=datproc_dir)
+        if len(task_files) > 0:
+            self.b_processing_file.addItems(task_files)
+            self.l_match_status.setText(f'Found {len(task_files)} matching processing files')
+            self.b_submit.setEnabled(True)
+        else:
+            self.l_match_status.setText(f'No processing files found in {datproc_dir}')
+            self.b_submit.setEnabled(False)
+        self.update_command_preview()
+
+    def update_command_preview(self):
+        processing_path = self.get_selected_processing_path()
+        dataset_path = self.subject_gui.get_current_meg_dataset().rel_path
+        if processing_path == None:
+            self.l_cmd_preview.setText('No matching processing file selected')
+            return
+        try:
+            cmd = build_datproc_command(processing_path, dataset_path)
+        except ValueError:
+            cmd = 'Invalid processing file or dataset'
+        self.l_cmd_preview.setText(cmd)
+
+    def submit_job(self):
+        datproc_dir = self.b_datproc_dir.text().strip()
+        if not op.isdir(datproc_dir):
+            QMessageBox.warning(self, 'Datproc Not Found',
+                                f'Datproc directory does not exist:\n{datproc_dir}')
+            return
+
+        processing_path = self.get_selected_processing_path()
+        if processing_path == None:
+            QMessageBox.warning(self, 'No Processing File',
+                                'No task-matched processing file is selected')
+            return
+
+        try:
+            mem = int(self.b_mem.text().strip())
+            threads = int(self.b_threads.text().strip())
+        except ValueError:
+            QMessageBox.warning(self, 'Invalid Resources',
+                                'Memory and threads must be integers')
+            return
+
+        dataset = self.subject_gui.get_current_meg_dataset()
+        cmd = build_datproc_command(processing_path, dataset.rel_path)
+        log_root = getattr(self.bids_info, 'bids_root', os.getcwd())
+        logfile_prefix = f'datproc_{self.bids_info.subject}_{dataset.task}'
+        outcode = run_sbatch(cmd, mem=mem, threads=threads,
+                             time=self.b_time.text().strip(),
+                             logdir=op.join(log_root, 'logdir'),
+                             logfile_prefix=logfile_prefix)
+        if outcode != None:
+            QMessageBox.information(self, 'Submitted',
+                                    f'Submitted job for task {dataset.task}\n{str(outcode).strip()}')
+            self.accept()
+        else:
+            QMessageBox.warning(self, 'Submission Failed',
+                                'Slurm submission failed. Check terminal output for details.')
 
 
 ## Create subject tile
@@ -135,6 +301,9 @@ class Subject_GUI(QWidget):
         self.b_save = QPushButton('Save')
         self.b_save.clicked.connect(self.save)
         top_button_layout.addWidget(self.b_save)
+        self.b_launch_datproc = QPushButton('Run Datproc')
+        self.b_launch_datproc.clicked.connect(self.open_datproc_dialog)
+        top_button_layout.addWidget(self.b_launch_datproc)
         
         if self.bids_info.mri == 'Multiple':
             mri_picker_layout = QHBoxLayout()
@@ -220,6 +389,12 @@ class Subject_GUI(QWidget):
         
     def get_meg_choices(self):
         return [f'{i}: {j.fname}' for i,j in enumerate(self.bids_info.meg_list)]
+
+    def get_current_meg_dataset(self):
+        return self.bids_info.meg_list[self.b_chooser_meg.currentIndex()]
+
+    def get_current_task(self):
+        return self.get_current_meg_dataset().task
     
     def get_mri_choices(self):
         return [f'{i}: {op.basename(j)}' for i,j in enumerate(self.bids_info.all_mris)]
@@ -334,6 +509,10 @@ class Subject_GUI(QWidget):
         idx = self.b_mri_override_selection.currentIndex()
         mri_to_set = self.bids_info.all_mris[idx]
         self.bids_info.mri_selection_override(override_mri=mri_to_set)
+
+    def open_datproc_dialog(self):
+        self.datproc_dialog = DatprocSubmissionDialog(self)
+        self.datproc_dialog.exec_()
         
         
                               
@@ -601,5 +780,4 @@ if __name__ == '__main__':
 
 
     
-
 

@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import QApplication
 fake_bids_project_interface = types.ModuleType("nih2mne.dataQA.bids_project_interface")
 fake_bids_project_interface.subject_bids_info = object
 fake_bids_project_interface.bids_project = object
+fake_bids_project_interface.run_sbatch = lambda *args, **kwargs: "Submitted batch job 123"
 sys.modules["nih2mne.dataQA.bids_project_interface"] = fake_bids_project_interface
 
 fake_montages_module = types.ModuleType("nih2mne.utilities.montages")
@@ -25,7 +26,13 @@ fake_qa_module.qa_dataset = lambda *args, **kwargs: "QA_DATASET"
 fake_qa_module.read_yml = lambda *args, **kwargs: {"qa": "ok"}
 sys.modules["nih2mne.dataQA.qa_config_reader"] = fake_qa_module
 
-from nih2mne.GUI.qt_gui import BIDS_Project_Window, Subject_GUI, Subject_Tile
+from nih2mne.GUI.qt_gui import (
+    BIDS_Project_Window,
+    Subject_GUI,
+    Subject_Tile,
+    build_datproc_command,
+    get_task_datproc_files,
+)
 
 
 class FakeEventCounts:
@@ -57,6 +64,7 @@ class FakeBidsInfo:
         self.fs_recon = {"fs_success": fs_success}
         self.mri = mri
         self.mri_json_qa = mri_json_qa
+        self.bids_root = "/tmp/fake_bids"
         self.all_mris = ["/tmp/mri_a.nii.gz", "/tmp/mri_b.nii.gz"]
         self.current_meg_dset = SimpleNamespace(
             info={"bads": ["MEG 001"]},
@@ -169,6 +177,24 @@ def test_subject_gui_plot_save_and_override_actions(qapp):
     assert bids_info.plot_3d_coreg_calls == [0]
     assert bids_info.saved is True
     assert bids_info.override_calls == ["/tmp/mri_b.nii.gz"]
+
+
+def test_get_task_datproc_files_filters_by_task_prefix(tmp_path):
+    (tmp_path / "rest_v2.py").write_text("")
+    (tmp_path / "rest_v1.sh").write_text("")
+    (tmp_path / "task_v1.py").write_text("")
+    (tmp_path / "resting_extra.py").write_text("")
+
+    assert get_task_datproc_files("rest", datproc_dir=str(tmp_path)) == ["rest_v2.py", "rest_v1.sh"]
+
+
+def test_build_datproc_command_uses_python_for_py_files():
+    py_cmd = build_datproc_command("/tmp/rest_v2.py", "/tmp/sub-01_task-rest_meg.ds")
+    shell_cmd = build_datproc_command("/tmp/rest_v2.sh", "/tmp/sub-01_task-rest_meg.ds")
+
+    assert py_cmd.endswith("/tmp/rest_v2.py /tmp/sub-01_task-rest_meg.ds")
+    assert ".py" in py_cmd
+    assert shell_cmd == "/tmp/rest_v2.sh /tmp/sub-01_task-rest_meg.ds"
 
 
 def test_return_message_box_response_saves_bads_and_segments(qapp, monkeypatch):
