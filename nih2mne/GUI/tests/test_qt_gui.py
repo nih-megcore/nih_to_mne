@@ -11,6 +11,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication
 
+_MODULE_NAMES = [
+    "nih2mne.dataQA.bids_project_interface",
+    "nih2mne.utilities.montages",
+    "nih2mne.dataQA.qa_config_reader",
+]
+_ORIGINAL_MODULES = {name: sys.modules.get(name) for name in _MODULE_NAMES}
+
 fake_bids_project_interface = types.ModuleType("nih2mne.dataQA.bids_project_interface")
 fake_bids_project_interface.subject_bids_info = object
 fake_bids_project_interface.bids_project = object
@@ -26,13 +33,20 @@ fake_qa_module.qa_dataset = lambda *args, **kwargs: "QA_DATASET"
 fake_qa_module.read_yml = lambda *args, **kwargs: {"qa": "ok"}
 sys.modules["nih2mne.dataQA.qa_config_reader"] = fake_qa_module
 
-from nih2mne.GUI.qt_gui import (
-    BIDS_Project_Window,
-    Subject_GUI,
-    Subject_Tile,
-    build_datproc_command,
-    get_task_datproc_files,
-)
+import nih2mne.GUI.qt_gui as qt_gui_module
+
+for _module_name, _original_module in _ORIGINAL_MODULES.items():
+    if _original_module is None:
+        sys.modules.pop(_module_name, None)
+    else:
+        sys.modules[_module_name] = _original_module
+
+BIDS_Project_Window = qt_gui_module.BIDS_Project_Window
+Subject_GUI = qt_gui_module.Subject_GUI
+Subject_Tile = qt_gui_module.Subject_Tile
+build_datproc_command = qt_gui_module.build_datproc_command
+collect_task_datasets = qt_gui_module.collect_task_datasets
+get_task_datproc_files = qt_gui_module.get_task_datproc_files
 
 
 class FakeEventCounts:
@@ -197,6 +211,20 @@ def test_build_datproc_command_uses_python_for_py_files():
     assert shell_cmd == "/tmp/rest_v2.sh /tmp/sub-01_task-rest_meg.ds"
 
 
+def test_collect_task_datasets_returns_all_matching_project_datasets():
+    subjects = {
+        "sub-01": FakeBidsInfo(subject="sub-01"),
+        "sub-02": FakeBidsInfo(subject="sub-02"),
+    }
+
+    matched = collect_task_datasets(FakeProject(subjects), "rest")
+
+    assert [(subject, dset.task, dset.fname) for subject, _, dset in matched] == [
+        ("sub-01", "rest", "rest.ds"),
+        ("sub-02", "rest", "rest.ds"),
+    ]
+
+
 def test_return_message_box_response_saves_bads_and_segments(qapp, monkeypatch):
     gui = Subject_GUI(FakeBidsInfo())
     recorded = {}
@@ -265,8 +293,10 @@ def test_project_window_task_filter_and_pagination(qapp):
     )
 
     assert window.task_set == ["All : ", "rest : 3", "task : 3"]
+    assert window.get_available_task_names() == ["rest", "task"]
     assert window.b_subject_number.text() == "Subject Totals: #3"
     assert window.b_current_page_idx.text() == "Page: 0 / 1"
+    assert window.b_project_datproc.text() == "Batch Datproc"
 
     window.b_task_chooser.setCurrentIndex(1)
     window.filter_task_qa_vis()

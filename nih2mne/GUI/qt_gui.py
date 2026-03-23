@@ -64,6 +64,30 @@ def build_datproc_command(processing_file, dataset_fname):
         return f'{quoted_processing_file} {quoted_dataset}'
 
 
+def collect_task_datasets(bids_project, task_name):
+    if (bids_project == None) or (task_name == None) or (str(task_name).strip() == ''):
+        return []
+
+    matched_datasets = []
+    for subject, bids_info in bids_project.subjects.items():
+        for dset in bids_info.meg_list:
+            if dset.task == task_name:
+                matched_datasets.append((subject, bids_info, dset))
+    return matched_datasets
+
+
+def submit_datproc_job(processing_file, dataset_fname, subject_name, task_name,
+                       log_root=None, mem=8, threads=2, time_limit='24:00:00'):
+    cmd = build_datproc_command(processing_file, dataset_fname)
+    if log_root == None:
+        log_root = os.getcwd()
+    logfile_prefix = f'datproc_{subject_name}_{task_name}'
+    return run_sbatch(cmd, mem=mem, threads=threads,
+                      time=time_limit,
+                      logdir=op.join(log_root, 'logdir'),
+                      logfile_prefix=logfile_prefix)
+
+
 class DatprocSubmissionDialog(QtWidgets.QDialog):
     def __init__(self, subject_gui):
         super().__init__(subject_gui)
@@ -186,13 +210,13 @@ class DatprocSubmissionDialog(QtWidgets.QDialog):
             return
 
         dataset = self.subject_gui.get_current_meg_dataset()
-        cmd = build_datproc_command(processing_path, dataset.rel_path)
         log_root = getattr(self.bids_info, 'bids_root', os.getcwd())
-        logfile_prefix = f'datproc_{self.bids_info.subject}_{dataset.task}'
-        outcode = run_sbatch(cmd, mem=mem, threads=threads,
-                             time=self.b_time.text().strip(),
-                             logdir=op.join(log_root, 'logdir'),
-                             logfile_prefix=logfile_prefix)
+        outcode = submit_datproc_job(processing_path, dataset.rel_path,
+                                     subject_name=self.bids_info.subject,
+                                     task_name=dataset.task,
+                                     log_root=log_root,
+                                     mem=mem, threads=threads,
+                                     time_limit=self.b_time.text().strip())
         if outcode != None:
             QMessageBox.information(self, 'Submitted',
                                     f'Submitted job for task {dataset.task}\n{str(outcode).strip()}')
@@ -200,6 +224,168 @@ class DatprocSubmissionDialog(QtWidgets.QDialog):
         else:
             QMessageBox.warning(self, 'Submission Failed',
                                 'Slurm submission failed. Check terminal output for details.')
+
+
+class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
+    def __init__(self, project_window):
+        super().__init__(project_window)
+        self.project_window = project_window
+        self.bids_project = project_window.bids_project
+        self.setWindowTitle('Submit Project Datproc Jobs')
+
+        main_layout = QVBoxLayout()
+
+        task_layout = QHBoxLayout()
+        task_layout.addWidget(QLabel('Task'))
+        self.b_task_name = QComboBox()
+        self.b_task_name.addItems(self.project_window.get_available_task_names())
+        self.b_task_name.currentIndexChanged.connect(self.refresh_matches)
+        task_layout.addWidget(self.b_task_name)
+        main_layout.addLayout(task_layout)
+
+        datproc_dir_layout = QHBoxLayout()
+        datproc_dir_layout.addWidget(QLabel('Datproc Dir'))
+        self.b_datproc_dir = QLineEdit(DATPROC_DIR)
+        datproc_dir_layout.addWidget(self.b_datproc_dir)
+        self.b_refresh = QPushButton('Refresh')
+        self.b_refresh.clicked.connect(self.refresh_matches)
+        datproc_dir_layout.addWidget(self.b_refresh)
+        main_layout.addLayout(datproc_dir_layout)
+
+        procfile_layout = QHBoxLayout()
+        procfile_layout.addWidget(QLabel('Processing File'))
+        self.b_processing_file = QComboBox()
+        self.b_processing_file.currentIndexChanged.connect(self.update_summary)
+        procfile_layout.addWidget(self.b_processing_file)
+        main_layout.addLayout(procfile_layout)
+
+        self.l_dataset_count = QLabel()
+        self.l_match_status = QLabel()
+        self.l_cmd_preview = QLabel()
+        self.l_cmd_preview.setWordWrap(True)
+        main_layout.addWidget(self.l_dataset_count)
+        main_layout.addWidget(self.l_match_status)
+
+        resources_layout = QHBoxLayout()
+        resources_layout.addWidget(QLabel('Mem(GB)'))
+        self.b_mem = QLineEdit('8')
+        resources_layout.addWidget(self.b_mem)
+        resources_layout.addWidget(QLabel('Threads'))
+        self.b_threads = QLineEdit('2')
+        resources_layout.addWidget(self.b_threads)
+        resources_layout.addWidget(QLabel('Time'))
+        self.b_time = QLineEdit('24:00:00')
+        resources_layout.addWidget(self.b_time)
+        main_layout.addLayout(resources_layout)
+
+        main_layout.addWidget(QLabel('Command Preview'))
+        main_layout.addWidget(self.l_cmd_preview)
+
+        button_layout = QHBoxLayout()
+        self.b_submit = QPushButton('Submit All')
+        self.b_submit.clicked.connect(self.submit_jobs)
+        button_layout.addWidget(self.b_submit)
+        self.b_close = QPushButton('Close')
+        self.b_close.clicked.connect(self.close)
+        button_layout.addWidget(self.b_close)
+        main_layout.addLayout(button_layout)
+
+        self.setLayout(main_layout)
+        self.refresh_matches()
+
+    def get_selected_task(self):
+        return self.b_task_name.currentText().strip()
+
+    def get_selected_processing_path(self):
+        current_file = self.b_processing_file.currentText().strip()
+        datproc_dir = self.b_datproc_dir.text().strip()
+        if (current_file == '') or (datproc_dir == ''):
+            return None
+        return op.join(datproc_dir, current_file)
+
+    def get_selected_task_datasets(self):
+        return collect_task_datasets(self.bids_project, self.get_selected_task())
+
+    def refresh_matches(self):
+        task_name = self.get_selected_task()
+        datproc_dir = self.b_datproc_dir.text().strip()
+        self.b_processing_file.clear()
+        task_files = get_task_datproc_files(task_name, datproc_dir=datproc_dir)
+        if len(task_files) > 0:
+            self.b_processing_file.addItems(task_files)
+            self.l_match_status.setText(f'Found {len(task_files)} matching processing files')
+            self.b_submit.setEnabled(True)
+        else:
+            self.l_match_status.setText(f'No processing files found in {datproc_dir}')
+            self.b_submit.setEnabled(False)
+        self.update_summary()
+
+    def update_summary(self):
+        datasets = self.get_selected_task_datasets()
+        self.l_dataset_count.setText(f'Matching datasets in project: {len(datasets)}')
+        processing_path = self.get_selected_processing_path()
+        if (processing_path == None) or (len(datasets) == 0):
+            self.l_cmd_preview.setText('No task-matched processing file selected')
+            return
+
+        _, _, dset = datasets[0]
+        self.l_cmd_preview.setText(build_datproc_command(processing_path, dset.rel_path))
+
+    def submit_jobs(self):
+        datproc_dir = self.b_datproc_dir.text().strip()
+        if not op.isdir(datproc_dir):
+            QMessageBox.warning(self, 'Datproc Not Found',
+                                f'Datproc directory does not exist:\n{datproc_dir}')
+            return
+
+        processing_path = self.get_selected_processing_path()
+        if processing_path == None:
+            QMessageBox.warning(self, 'No Processing File',
+                                'No task-matched processing file is selected')
+            return
+
+        datasets = self.get_selected_task_datasets()
+        if len(datasets) == 0:
+            QMessageBox.warning(self, 'No Matching Datasets',
+                                f'No project datasets were found for task {self.get_selected_task()}')
+            return
+
+        try:
+            mem = int(self.b_mem.text().strip())
+            threads = int(self.b_threads.text().strip())
+        except ValueError:
+            QMessageBox.warning(self, 'Invalid Resources',
+                                'Memory and threads must be integers')
+            return
+
+        log_root = getattr(self.bids_project, 'bids_root', os.getcwd())
+        submitted_jobs = []
+        failed_jobs = []
+        for subject, _, dset in datasets:
+            outcode = submit_datproc_job(processing_path, dset.rel_path,
+                                         subject_name=subject,
+                                         task_name=dset.task,
+                                         log_root=log_root,
+                                         mem=mem, threads=threads,
+                                         time_limit=self.b_time.text().strip())
+            if outcode != None:
+                submitted_jobs.append((subject, str(outcode).strip()))
+            else:
+                failed_jobs.append(subject)
+
+        if len(submitted_jobs) > 0:
+            summary = [f'Submitted {len(submitted_jobs)} datproc jobs for task {self.get_selected_task()}']
+            for subject, outcode in submitted_jobs[:5]:
+                summary.append(f'{subject}: {outcode}')
+            if len(submitted_jobs) > 5:
+                summary.append('...')
+            if len(failed_jobs) > 0:
+                summary.append(f'Failed submissions: {len(failed_jobs)}')
+            QMessageBox.information(self, 'Submitted', '\n'.join(summary))
+            self.accept()
+        else:
+            QMessageBox.warning(self, 'Submission Failed',
+                                'No slurm jobs were submitted. Check terminal output for details.')
 
 
 ## Create subject tile
@@ -565,6 +751,9 @@ class BIDS_Project_Window(QMainWindow):
         self.b_task_chooser.addItems(self.task_set)
         self.b_task_chooser.currentIndexChanged.connect(self.filter_task_qa_vis)
         top_buttons_layout.addWidget(self.b_task_chooser)
+        self.b_project_datproc = QPushButton('Batch Datproc')
+        self.b_project_datproc.clicked.connect(self.open_project_datproc_dialog)
+        top_buttons_layout.addWidget(self.b_project_datproc)
         self.b_out_project_chooser = QComboBox()
         #Add Project output directory
         # tmp_ = glob.glob('*', root_dir=op.join(self.bids_project.bids_root, 'derivatives'))
@@ -628,6 +817,9 @@ class BIDS_Project_Window(QMainWindow):
         _keysort = sorted(list(self.task_set.keys()))
         _tmp = [f'{i} : {self.task_set[i]}' for i in _keysort]
         self.task_set = _tmp
+
+    def get_available_task_names(self):
+        return [i.split(':')[0].strip() for i in self.task_set if i.split(':')[0].strip() != 'All']
         
     def filter_task_qa_vis(self):
         'Get the task from the chosen task set'
@@ -698,6 +890,10 @@ class BIDS_Project_Window(QMainWindow):
     
     def proc_megnet(self):
         pass
+
+    def open_project_datproc_dialog(self):
+        self.project_datproc_dialog = ProjectDatprocSubmissionDialog(self)
+        self.project_datproc_dialog.exec_()
         
         
     def select_bids_root(self):
@@ -780,4 +976,3 @@ if __name__ == '__main__':
 
 
     
-
