@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import asdict, dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from PyQt5 import QtWidgets
 
@@ -55,9 +56,40 @@ class BeamformerFormWindow(QtWidgets.QWidget):
         super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        self.ui.pb_OpenFileDialog.clicked.connect(self.open_dataset_directory)
 
     def entries(self) -> BeamformerFormEntries:
         return BeamformerFormEntries.from_ui(self.ui)
+
+    def _dialog_start_dir(self) -> str:
+        current_path = self.ui.lineEdit_fname.text().strip()
+        if current_path:
+            if os.path.isdir(current_path):
+                return current_path
+            parent = os.path.dirname(current_path)
+            if parent:
+                return parent
+        return os.getcwd()
+
+    def open_dataset_directory(self) -> Optional[str]:
+        dataset_dir = QtWidgets.QFileDialog.getExistingDirectory(
+            self,
+            "Select .ds dataset directory",
+            self._dialog_start_dir(),
+            QtWidgets.QFileDialog.ShowDirsOnly,
+        )
+        if not dataset_dir:
+            return None
+        if not dataset_dir.endswith(".ds"):
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Invalid dataset",
+                "Please select a directory with the .ds extension.",
+            )
+            return None
+
+        self.ui.lineEdit_fname.setText(dataset_dir)
+        return dataset_dir
 
 
 def launch_gui() -> int:
