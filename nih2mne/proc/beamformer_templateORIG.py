@@ -25,9 +25,61 @@ from mne.preprocessing import annotate_muscle_zscore
 
 n_jobs = -1
 
-#%% << INSERT GUI COMPONENTS HERE >>
+#%% Define bids_paths
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-bids_root')
+    parser.add_argument('-subject')
+    parser.add_argument('-run')
+    parser.add_argument('-session')
+    parser.add_argument('-task')
+    parser.add_argument('-project')
+    
+    args = parser.parse_args()
+    
+    bids_root = args.bids_root
+    subject = args.subject
+    run = args.run
+    ses = args.session
+    task_type = args.task
+    project = args.project
+    
+# bids_root = '/fast/KIDDER/BIDS'
+# subject = 'NT01'
+# run = '01'
+# ses = '1'
+# task_type = 'megann'
+# project = 'beamDecode'
 
+#%% Proc params 
+epo_tmin = -0.25
+epo_tmax = 0.25
+epo_baseline = None # [None,None] # [-0.1, 0] # None
+f_min = 0.5
+f_max = 110
+# resample = 600 
+er_run = '01'
 
+#Rejection Thresholds
+reject_dict = dict(mag=3e-12)
+
+cov_cv = 5
+cov_method = 'shrunk'
+
+beam_reg = 0
+beam_ori = 'max-power'
+
+#Conditions of interest - list
+conds_OI = ['locface','locscene']
+#Contrasts of interest - list - ['Cond1/Cond2']
+contrasts_OI = ['locface/locscence']
+#Contrast type : percent / logratio / ...
+contrasts_type = 'percent'
+
+overwrite_anats = False
+overwrite_preproc = False
+overwrite_beam = True
 
 #%% Define Paths
 
