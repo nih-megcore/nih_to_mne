@@ -83,7 +83,7 @@ def _task_id_from_dataset_path(dataset_path: str) -> str:
             return task_id
 
     parts = [part for part in dataset_name.split("_") if part]
-    if len(parts) > 1:
+    if len(parts) > 1 and parts[1]:
         return parts[1]
     if parts:
         return parts[0]
@@ -123,6 +123,7 @@ def build_gui_component_block(entries: BeamformerFormEntries) -> str:
         beam_reg_fraction = entries.beamformer_regularization
 
     block_lines = [
+        "# GUI entries >>",
         "#%% GUI Components",
         f"dataset_path = pathlib.Path({repr(entries.fname)})",
         "entity_map = {}",
@@ -164,6 +165,7 @@ def build_gui_component_block(entries: BeamformerFormEntries) -> str:
         f"overwrite_preproc = {repr(entries.anat_overwrite)}",
         f"overwrite_beam = {repr(entries.beamformer_overwrite)}",
         f"overwrite_contrasts = {repr(entries.contrasts_overwrite)}",
+        "# GUI entries <<",
     ]
     return "\n".join(block_lines)
 
@@ -181,7 +183,7 @@ def render_beamformer_script(
 
     before, after = template_text.split(TEMPLATE_INSERT_MARKER, 1)
     gui_block = build_gui_component_block(entries)
-    return f"{before}{TEMPLATE_INSERT_MARKER}\n\n{gui_block}\n\n{after.lstrip()}"
+    return f"{before.rstrip()}\n\n{gui_block}\n\n{after.lstrip()}"
 
 
 class BeamformerFormWindow(QtWidgets.QWidget):

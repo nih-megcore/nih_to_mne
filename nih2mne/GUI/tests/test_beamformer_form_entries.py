@@ -13,6 +13,9 @@ from nih2mne.GUI.beamformer_form_entries import (
     BeamformerFormEntries,
     BeamformerFormWindow,
     SCRIPT_DIALOG_START_DIR,
+    _default_script_name,
+    _next_script_version,
+    _task_id_from_dataset_path,
     build_gui_component_block,
     render_beamformer_script,
 )
@@ -70,10 +73,43 @@ def test_beamformer_form_entries_capture_gui_values(qapp):
     assert entries.to_dict()["beamformer_regularization"] == "5"
 
 
+def test_task_id_from_dataset_path_prefers_bids_task_token():
+    dataset_path = "/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds"
+    assert _task_id_from_dataset_path(dataset_path) == "rest"
+
+
+def test_task_id_from_dataset_path_uses_second_underscore_token_for_non_bids():
+    dataset_path = "/tmp/scan_flanker_block1.ds"
+    assert _task_id_from_dataset_path(dataset_path) == "flanker"
+
+
+def test_next_script_version_increments_from_existing_files(tmp_path):
+    (tmp_path / "rest_v1.py").write_text("", encoding="utf-8")
+    (tmp_path / "rest_v3.py").write_text("", encoding="utf-8")
+    assert _next_script_version("rest", output_dir=tmp_path) == 4
+
+
+def test_default_script_name_uses_task_id_and_version_for_bids_dataset(tmp_path):
+    (tmp_path / "rest_v1.py").write_text("", encoding="utf-8")
+    assert _default_script_name(
+        "/tmp/sub-TEST_ses-1_task-rest_run-01_meg.ds",
+        output_dir=tmp_path,
+    ) == "rest_v2.py"
+
+
+def test_default_script_name_uses_second_token_for_non_bids_dataset(tmp_path):
+    assert _default_script_name(
+        "/tmp/scan_flanker_block1.ds",
+        output_dir=tmp_path,
+    ) == "flanker_v1.py"
+
+
 def test_build_gui_component_block_contains_expected_template_values(sample_entries):
     block = build_gui_component_block(sample_entries)
 
+    assert "# GUI entries >>" in block
     assert "dataset_path = pathlib.Path('/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds')" in block
+    assert "# GUI entries <<" in block
     assert "epo_tmin = -0.25" in block
     assert "epo_tmax = 0.25" in block
     assert "f_min = 1" in block
@@ -95,7 +131,9 @@ def test_render_beamformer_script_inserts_generated_block_at_marker(sample_entri
 
     script_text = render_beamformer_script(sample_entries, template_path=template_path)
 
-    assert "before\n#%% << INSERT GUI COMPONENTS HERE >>\n\n#%% GUI Components\n" in script_text
+    assert "#%% << INSERT GUI COMPONENTS HERE >>" not in script_text
+    assert "before\n\n# GUI entries >>\n#%% GUI Components\n" in script_text
+    assert "# GUI entries <<\n\nafter\n" in script_text
     assert "epo_tmin = -0.25" in script_text
     assert script_text.endswith("after\n")
 
@@ -167,17 +205,29 @@ def test_write_script_via_dialog_writes_template_output(qapp, monkeypatch, tmp_p
     written_text = save_path.read_text(encoding="utf-8")
 
     assert written_path == str(save_path)
-    assert "#%% << INSERT GUI COMPONENTS HERE >>" in written_text
+    assert "#%% << INSERT GUI COMPONENTS HERE >>" not in written_text
+    assert "# GUI entries >>" in written_text
     assert "dataset_path = pathlib.Path('/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds')" in written_text
+    assert "# GUI entries <<" in written_text
     assert "beam_reg = 0.05" in written_text
     assert "conds_OI = ['rest', 'task']" in written_text
 
 
-def test_script_save_path_uses_megcore_dataproc_start_dir(qapp):
+def test_script_save_path_uses_megcore_datproc_start_dir_and_bids_task(qapp):
     window = BeamformerFormWindow()
     window.ui.lineEdit_fname.setText("/tmp/sub-TEST_ses-1_task-rest_run-01_meg.ds")
 
     script_path = Path(window._script_save_path())
 
     assert script_path.parent == SCRIPT_DIALOG_START_DIR
-    assert script_path.name == "sub-TEST_ses-1_task-rest_run-01_meg_beamformer.py"
+    assert script_path.name == "rest_v1.py"
+
+
+def test_script_save_path_uses_second_token_for_non_bids(qapp):
+    window = BeamformerFormWindow()
+    window.ui.lineEdit_fname.setText("/tmp/scan_flanker_block1.ds")
+
+    script_path = Path(window._script_save_path())
+
+    assert script_path.parent == SCRIPT_DIALOG_START_DIR
+    assert script_path.name == "flanker_v1.py"
