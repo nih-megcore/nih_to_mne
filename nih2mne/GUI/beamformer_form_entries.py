@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -16,7 +17,8 @@ except ImportError:
 
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "proc" / "beamformer_template.py"
 TEMPLATE_INSERT_MARKER = "#%% << INSERT GUI COMPONENTS HERE >>"
-SCRIPT_DIALOG_START_DIR = Path("~/megcore/dataproc/").expanduser()
+SCRIPT_DIALOG_START_DIR = Path("~/megcore/datproc/").expanduser()
+_VERSION_PATTERN = re.compile(r"_v(\d+)\.py$")
 
 
 @dataclass
@@ -67,14 +69,47 @@ def _split_csv_values(raw_text: str) -> List[str]:
     return [item.strip() for item in separators_normalized.split(",") if item.strip()]
 
 
-def _default_script_name(dataset_path: str) -> str:
-    """Build a default output script name from the selected dataset path."""
+def _task_id_from_dataset_path(dataset_path: str) -> str:
+    """Derive a task id from the dataset name using BIDS rules when available."""
     dataset_name = Path(dataset_path).name
     if dataset_name.endswith(".ds"):
         dataset_name = dataset_name[:-3]
     if not dataset_name:
-        return "beamformer_script.py"
-    return f"{dataset_name}_beamformer.py"
+        return "beamformer"
+
+    if "task-" in dataset_name:
+        task_id = dataset_name.split("task-", 1)[-1].split("_", 1)[0].strip()
+        if task_id:
+            return task_id
+
+    parts = [part for part in dataset_name.split("_") if part]
+    if len(parts) > 1:
+        return parts[1]
+    if parts:
+        return parts[0]
+    return "beamformer"
+
+
+def _next_script_version(task_id: str, output_dir: Path = SCRIPT_DIALOG_START_DIR) -> int:
+    """Return the next available version number for a task id in the output directory."""
+    if not output_dir.exists():
+        return 1
+
+    versions = []
+    for candidate in output_dir.glob(f"{task_id}_v*.py"):
+        match = _VERSION_PATTERN.search(candidate.name)
+        if match:
+            versions.append(int(match.group(1)))
+    if not versions:
+        return 1
+    return max(versions) + 1
+
+
+def _default_script_name(dataset_path: str, output_dir: Path = SCRIPT_DIALOG_START_DIR) -> str:
+    """Build a default versioned script name from the selected dataset path."""
+    task_id = _task_id_from_dataset_path(dataset_path)
+    version = _next_script_version(task_id, output_dir=output_dir)
+    return f"{task_id}_v{version}.py"
 
 
 def build_gui_component_block(entries: BeamformerFormEntries) -> str:
