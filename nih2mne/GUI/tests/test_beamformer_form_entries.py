@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -11,6 +12,9 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 from nih2mne.GUI.beamformer_form_entries import (
     BeamformerFormEntries,
     BeamformerFormWindow,
+    SCRIPT_DIALOG_START_DIR,
+    build_gui_component_block,
+    render_beamformer_script,
 )
 
 
@@ -20,6 +24,25 @@ def qapp():
     if app is None:
         app = QApplication([])
     return app
+
+
+@pytest.fixture
+def sample_entries():
+    return BeamformerFormEntries(
+        fname="/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds",
+        tmin="-0.25",
+        tmax="0.25",
+        fmin="1",
+        fmax="110",
+        threshold_rejection="3e-12",
+        beamformer_regularization="5",
+        megnet=True,
+        conditions_of_interest="rest, task",
+        contrast_type="percent",
+        anat_overwrite=True,
+        beamformer_overwrite=False,
+        contrasts_overwrite=True,
+    )
 
 
 def test_beamformer_form_entries_capture_gui_values(qapp):
@@ -45,6 +68,36 @@ def test_beamformer_form_entries_capture_gui_values(qapp):
     assert entries.to_dict()["fmin"] == "1"
     assert entries.to_dict()["fmax"] == "110"
     assert entries.to_dict()["beamformer_regularization"] == "5"
+
+
+def test_build_gui_component_block_contains_expected_template_values(sample_entries):
+    block = build_gui_component_block(sample_entries)
+
+    assert "dataset_path = pathlib.Path('/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds')" in block
+    assert "epo_tmin = -0.25" in block
+    assert "epo_tmax = 0.25" in block
+    assert "f_min = 1" in block
+    assert "f_max = 110" in block
+    assert "beam_reg = 0.05" in block
+    assert "conds_OI = ['rest', 'task']" in block
+    assert "contrasts_type = 'percent'" in block
+    assert "overwrite_anats = True" in block
+    assert "overwrite_beam = False" in block
+    assert "overwrite_contrasts = True" in block
+
+
+def test_render_beamformer_script_inserts_generated_block_at_marker(sample_entries, tmp_path):
+    template_path = tmp_path / "beamformer_template.py"
+    template_path.write_text(
+        "before\n#%% << INSERT GUI COMPONENTS HERE >>\nafter\n",
+        encoding="utf-8",
+    )
+
+    script_text = render_beamformer_script(sample_entries, template_path=template_path)
+
+    assert "before\n#%% << INSERT GUI COMPONENTS HERE >>\n\n#%% GUI Components\n" in script_text
+    assert "epo_tmin = -0.25" in script_text
+    assert script_text.endswith("after\n")
 
 
 def test_open_dataset_directory_sets_fname_for_ds_directory(qapp, monkeypatch, tmp_path):
@@ -84,3 +137,47 @@ def test_open_dataset_directory_rejects_non_ds_directory(qapp, monkeypatch, tmp_
     assert selected is None
     assert window.ui.lineEdit_fname.text() == ""
     assert len(warnings) == 1
+
+
+def test_write_script_via_dialog_writes_template_output(qapp, monkeypatch, tmp_path):
+    window = BeamformerFormWindow()
+    save_path = tmp_path / "generated_beamformer.py"
+
+    window.ui.lineEdit_fname.setText("/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds")
+    window.ui.lineEdit_tmin.setText("-0.25")
+    window.ui.lineEdit_tmax.setText("0.25")
+    window.ui.lineEdit_fmin.setText("1")
+    window.ui.lineEdit_fmax.setText("110")
+    window.ui.lineEdit_ThresholdRejection.setText("3e-12")
+    window.ui.lineEdit_BeamformerRegularization.setText("5")
+    window.ui.lineEdit_ConditionsOfInterest.setText("rest, task")
+    window.ui.comboBox_ContrastType.addItem("percent")
+    window.ui.comboBox_ContrastType.setCurrentText("percent")
+    window.ui.cb_MEGNET.setChecked(True)
+    window.ui.cb_AnatOverwrite.setChecked(True)
+    window.ui.cb_BeamformerOverwrite.setChecked(False)
+    window.ui.cb_ContrastsOverwrite.setChecked(True)
+
+    monkeypatch.setattr(
+        "nih2mne.GUI.beamformer_form_entries.QtWidgets.QFileDialog.getSaveFileName",
+        lambda *args, **kwargs: (str(save_path), "Python files (*.py)"),
+    )
+
+    written_path = window.write_script_via_dialog()
+    written_text = save_path.read_text(encoding="utf-8")
+
+    assert written_path == str(save_path)
+    assert "#%% << INSERT GUI COMPONENTS HERE >>" in written_text
+    assert "dataset_path = pathlib.Path('/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds')" in written_text
+    assert "beam_reg = 0.05" in written_text
+    assert "conds_OI = ['rest', 'task']" in written_text
+
+
+def test_script_save_path_uses_megcore_dataproc_start_dir(qapp):
+    window = BeamformerFormWindow()
+    window.ui.lineEdit_fname.setText("/tmp/sub-TEST_ses-1_task-rest_run-01_meg.ds")
+
+    script_path = Path(window._script_save_path())
+
+    assert script_path.parent == SCRIPT_DIALOG_START_DIR
+    assert script_path.name == "sub-TEST_ses-1_task-rest_run-01_meg_beamformer.py"

@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 import sys
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from PyQt5 import QtWidgets
 
@@ -13,8 +14,15 @@ except ImportError:
     from beamformer_maker import Ui_Form
 
 
+TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "proc" / "beamformer_template.py"
+TEMPLATE_INSERT_MARKER = "#%% << INSERT GUI COMPONENTS HERE >>"
+SCRIPT_DIALOG_START_DIR = Path("~/megcore/dataproc/").expanduser()
+
+
 @dataclass
 class BeamformerFormEntries:
+    """Container for the current beamformer GUI values."""
+
     fname: str
     tmin: str
     tmax: str
@@ -31,6 +39,7 @@ class BeamformerFormEntries:
 
     @classmethod
     def from_ui(cls, ui: Any) -> "BeamformerFormEntries":
+        """Read the current widget state from the generated Qt form."""
         return cls(
             fname=ui.lineEdit_fname.text(),
             tmin=ui.lineEdit_tmin.text(),
@@ -48,20 +57,115 @@ class BeamformerFormEntries:
         )
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return the dataclass fields as a plain dictionary."""
         return asdict(self)
 
 
+def _split_csv_values(raw_text: str) -> List[str]:
+    """Normalize comma or semicolon separated GUI text into a clean list."""
+    separators_normalized = raw_text.replace(";", ",")
+    return [item.strip() for item in separators_normalized.split(",") if item.strip()]
+
+
+def _default_script_name(dataset_path: str) -> str:
+    """Build a default output script name from the selected dataset path."""
+    dataset_name = Path(dataset_path).name
+    if dataset_name.endswith(".ds"):
+        dataset_name = dataset_name[:-3]
+    if not dataset_name:
+        return "beamformer_script.py"
+    return f"{dataset_name}_beamformer.py"
+
+
+def build_gui_component_block(entries: BeamformerFormEntries) -> str:
+    """Render the Python block inserted into the beamformer template marker."""
+    conds_oi = _split_csv_values(entries.conditions_of_interest)
+    contrasts_type = entries.contrast_type or "percent"
+
+    try:
+        beam_reg_fraction: Any = float(entries.beamformer_regularization) / 100.0
+    except ValueError:
+        beam_reg_fraction = entries.beamformer_regularization
+
+    block_lines = [
+        "#%% GUI Components",
+        f"dataset_path = pathlib.Path({repr(entries.fname)})",
+        "entity_map = {}",
+        "for part in dataset_path.stem.split('_'):",
+        "    if '-' in part:",
+        "        key, value = part.split('-', 1)",
+        "        entity_map[key] = value",
+        "",
+        "subject_dir = next((parent for parent in dataset_path.parents if parent.name.startswith('sub-')), None)",
+        "if subject_dir is None:",
+        "    raise ValueError(f'Unable to determine BIDS subject from {dataset_path}')",
+        "",
+        "bids_root = subject_dir.parent",
+        "subject = entity_map.get('sub', subject_dir.name.replace('sub-', '', 1))",
+        "run = entity_map.get('run')",
+        "ses = entity_map.get('ses')",
+        "task_type = entity_map.get('task')",
+        "project = 'beamformer'",
+        "",
+        f"epo_tmin = {entries.tmin}",
+        f"epo_tmax = {entries.tmax}",
+        "epo_baseline = None",
+        f"f_min = {entries.fmin}",
+        f"f_max = {entries.fmax}",
+        "er_run = '01'",
+        "",
+        f"reject_dict = dict(mag={entries.threshold_rejection})",
+        "cov_cv = 5",
+        "cov_method = 'shrunk'",
+        f"beam_reg = {repr(beam_reg_fraction)}",
+        "beam_ori = 'max-power'",
+        "",
+        f"conds_OI = {repr(conds_oi)}",
+        "contrasts_OI = []",
+        f"contrasts_type = {repr(contrasts_type)}",
+        "",
+        f"use_megnet_ica = {repr(entries.megnet)}",
+        f"overwrite_anats = {repr(entries.anat_overwrite)}",
+        f"overwrite_preproc = {repr(entries.anat_overwrite)}",
+        f"overwrite_beam = {repr(entries.beamformer_overwrite)}",
+        f"overwrite_contrasts = {repr(entries.contrasts_overwrite)}",
+    ]
+    return "\n".join(block_lines)
+
+
+def render_beamformer_script(
+    entries: BeamformerFormEntries,
+    template_path: Path = TEMPLATE_PATH,
+) -> str:
+    """Load the template, inject the GUI block at the marker, and return the script text."""
+    template_text = template_path.read_text(encoding="utf-8")
+    if TEMPLATE_INSERT_MARKER not in template_text:
+        raise ValueError(
+            f"Template marker {repr(TEMPLATE_INSERT_MARKER)} not found in {template_path}"
+        )
+
+    before, after = template_text.split(TEMPLATE_INSERT_MARKER, 1)
+    gui_block = build_gui_component_block(entries)
+    return f"{before}{TEMPLATE_INSERT_MARKER}\n\n{gui_block}\n\n{after.lstrip()}"
+
+
 class BeamformerFormWindow(QtWidgets.QWidget):
+    """Runtime wrapper around the generated form with file-dialog actions."""
+
     def __init__(self) -> None:
+        """Create the Qt form and connect the browse and write buttons."""
         super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         self.ui.pb_OpenFileDialog.clicked.connect(self.open_dataset_directory)
+        self.ui.pb_WriteScript.clicked.connect(self.write_script_via_dialog)
 
     def entries(self) -> BeamformerFormEntries:
+        """Return the current form values as a typed dataclass."""
         return BeamformerFormEntries.from_ui(self.ui)
 
     def _dialog_start_dir(self) -> str:
+        """Choose a reasonable starting directory for the dataset browser."""
         current_path = self.ui.lineEdit_fname.text().strip()
         if current_path:
             if os.path.isdir(current_path):
@@ -71,7 +175,14 @@ class BeamformerFormWindow(QtWidgets.QWidget):
                 return parent
         return os.getcwd()
 
+    def _script_save_path(self) -> str:
+        """Build the default save path shown in the script file dialog."""
+        current_path = self.ui.lineEdit_fname.text().strip()
+        default_name = _default_script_name(current_path)
+        return str(SCRIPT_DIALOG_START_DIR / default_name)
+
     def open_dataset_directory(self) -> Optional[str]:
+        """Open a directory picker and keep only selections ending in .ds."""
         dataset_dir = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Select .ds dataset directory",
@@ -91,8 +202,24 @@ class BeamformerFormWindow(QtWidgets.QWidget):
         self.ui.lineEdit_fname.setText(dataset_dir)
         return dataset_dir
 
+    def write_script_via_dialog(self) -> Optional[str]:
+        """Render the template from the current GUI state and save it through a file dialog."""
+        script_text = render_beamformer_script(self.entries())
+        save_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Write beamformer script",
+            self._script_save_path(),
+            "Python files (*.py)",
+        )
+        if not save_path:
+            return None
+
+        Path(save_path).write_text(script_text, encoding="utf-8")
+        return save_path
+
 
 def launch_gui() -> int:
+    """Launch the standalone beamformer form window."""
     app = QtWidgets.QApplication.instance()
     owns_app = app is None
     if app is None:
