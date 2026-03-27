@@ -154,6 +154,7 @@ full_cov_bidspath = output_path.copy().update(suffix='cov',
                                               extension='.fif',
                                               description=f'EPOf{f_min}f{f_max}'
                                               )
+full_cov_bidspath.fpath.parent.mkdir(parents=True, exist_ok=True)
 full_cov.save(full_cov_bidspath.fpath, overwrite=overwrite_beam)
 
 noise_cov = mne.compute_raw_covariance(noise_raw)

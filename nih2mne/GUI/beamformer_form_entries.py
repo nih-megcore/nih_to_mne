@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import mne
 from PyQt5 import QtWidgets
 from nih2mne import __version__ as NIH2MNE_VERSION
 
@@ -70,6 +71,72 @@ class BeamformerFormEntries:
         return asdict(self)
 
 
+class grid_selector(QtWidgets.QDialog):
+    """Popup dialog that shows a checkable grid of labels and returns selections."""
+
+    def __init__(
+        self,
+        input_list: Optional[List[str]] = None,
+        title: Optional[str] = None,
+        gridsize_row: Optional[int] = None,
+        gridsize_col: Optional[int] = None,
+        parent: Optional[QtWidgets.QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title or "Select Items")
+        self.resize(500, 500)
+        self.input_list = input_list or []
+        self.gridsize_row, self.gridsize_col = self._get_rowcol(gridsize_row, gridsize_col)
+        self._buttons: List[QtWidgets.QPushButton] = []
+        self._build_grid()
+
+    def _build_grid(self) -> None:
+        layout = QtWidgets.QVBoxLayout(self)
+        grid_layout = QtWidgets.QGridLayout()
+        total_tiles = self.gridsize_row * self.gridsize_col
+
+        for index in range(total_tiles):
+            row_idx = index // self.gridsize_col
+            col_idx = index % self.gridsize_col
+            if index >= len(self.input_list):
+                widget = QtWidgets.QLabel("")
+            else:
+                widget = QtWidgets.QPushButton(self.input_list[index])
+                widget.setCheckable(True)
+                self._buttons.append(widget)
+            grid_layout.addWidget(widget, row_idx, col_idx)
+
+        layout.addLayout(grid_layout)
+        set_button = QtWidgets.QPushButton("CLICK to set selection")
+        set_button.clicked.connect(self.accept)
+        layout.addWidget(set_button)
+
+    def _get_rowcol(
+        self,
+        gridsize_row: Optional[int],
+        gridsize_col: Optional[int],
+    ) -> tuple[int, int]:
+        if gridsize_row is not None and gridsize_col is not None:
+            return gridsize_row, gridsize_col
+
+        listlen = len(self.input_list)
+        if listlen < 4:
+            return 2, 2
+        if listlen < 16:
+            return 4, 4
+        if listlen < 32:
+            return 4, 8
+        if listlen < 64:
+            return 8, 8
+        if listlen < 117:
+            return 9, 13
+        return 12, 13
+
+    def selected_items(self) -> List[str]:
+        """Return the checked button labels in display order."""
+        return [button.text() for button in self._buttons if button.isChecked()]
+
+
 def _split_csv_values(raw_text: str) -> List[str]:
     """Normalize comma or semicolon separated GUI text into a clean list."""
     separators_normalized = raw_text.replace(";", ",")
@@ -93,18 +160,6 @@ def _normalize_contrast_type(raw_value: str) -> str:
         "percent change": "percent",
     }
     return label_map.get(normalized.lower(), normalized)
-
-
-def _muscle_detection_block(enabled: bool) -> List[str]:
-    """Render the raw-preprocessing lines for optional muscle artifact rejection."""
-    if not enabled:
-        return ["# Muscle detection disabled from GUI"]
-
-    return [
-        "_musc_annot = annotate_muscle_zscore(raw, threshold=4, ch_type='mag', min_length_good=0.1, " ,
-        "                       filter_freq=(110, 140), n_jobs=n_jobs, verbose=None)",
-        "raw.set_annotations(raw.annotations + _musc_annot[0])",
-    ]
 
 
 def _task_id_from_dataset_path(dataset_path: str) -> str:
@@ -223,16 +278,7 @@ def render_beamformer_script(
     template_text = template_text.replace(TEMPLATE_VERSION_MARKER, NIH2MNE_VERSION)
     before, after = template_text.split(TEMPLATE_INSERT_MARKER, 1)
     gui_block = build_gui_component_block(entries)
-    script_text = f"{before.rstrip()}\n\n{gui_block}\n\n{after.lstrip()}"
-
-    muscle_block = "\n".join(
-        [
-            "_musc_annot = annotate_muscle_zscore(raw, threshold=4, ch_type='mag', min_length_good=0.1, " ,
-            "                       filter_freq=(110, 140), n_jobs=n_jobs, verbose=None)",
-            "raw.set_annotations(raw.annotations + _musc_annot[0])",
-        ]
-    )
-    return script_text.replace(muscle_block, "\n".join(_muscle_detection_block(entries.muscle_detect)))
+    return f"{before.rstrip()}\n\n{gui_block}\n\n{after.lstrip()}"
 
 
 class BeamformerFormWindow(QtWidgets.QWidget):
@@ -244,6 +290,9 @@ class BeamformerFormWindow(QtWidgets.QWidget):
         self.ui = Ui_BeamformerScriptGenerator()
         self.ui.setupUi(self)
         self.ui.pb_OpenFileDialog.clicked.connect(self.open_dataset_directory)
+        self.ui.pushButton_SelectConditionsOfInterest.clicked.connect(
+            self.open_conditions_selector
+        )
         self.ui.pb_WriteScript.clicked.connect(self.write_script_via_dialog)
 
     def entries(self) -> BeamformerFormEntries:
@@ -267,6 +316,12 @@ class BeamformerFormWindow(QtWidgets.QWidget):
         default_name = _default_script_name(current_path)
         return str(SCRIPT_DIALOG_START_DIR / default_name)
 
+    def _event_id_labels(self, dataset_path: str) -> List[str]:
+        """Load the available event-id labels from the selected raw CTF dataset."""
+        raw = mne.io.read_raw_ctf(dataset_path, system_clock='ignore')
+        _, event_ids = mne.events_from_annotations(raw)
+        return sorted(event_ids.keys())
+
     def open_dataset_directory(self) -> Optional[str]:
         """Open a directory picker and keep only selections ending in .ds."""
         dataset_dir = QtWidgets.QFileDialog.getExistingDirectory(
@@ -277,7 +332,7 @@ class BeamformerFormWindow(QtWidgets.QWidget):
         )
         if not dataset_dir:
             return None
-        if not dataset_dir.endswith(".ds"):
+        if not dataset_dir.endswith('.ds'):
             QtWidgets.QMessageBox.warning(
                 self,
                 "Invalid dataset",
@@ -287,6 +342,47 @@ class BeamformerFormWindow(QtWidgets.QWidget):
 
         self.ui.lineEdit_fname.setText(dataset_dir)
         return dataset_dir
+
+    def open_conditions_selector(self) -> Optional[List[str]]:
+        """Open a grid selector populated with annotation-derived event ids."""
+        dataset_path = self.ui.lineEdit_fname.text().strip()
+        if not dataset_path:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "No dataset selected",
+                "Select a .ds dataset before choosing conditions of interest.",
+            )
+            return None
+
+        try:
+            event_labels = self._event_id_labels(dataset_path)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Unable to load events",
+                f"Could not read event labels from {dataset_path}: {exc}",
+            )
+            return None
+
+        if not event_labels:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "No events found",
+                "No annotation events were found in the selected dataset.",
+            )
+            return None
+
+        selector = grid_selector(
+            input_list=event_labels,
+            title="Select Conditions of Interest",
+            parent=self,
+        )
+        if selector.exec_() != QtWidgets.QDialog.Accepted:
+            return None
+
+        selected_items = selector.selected_items()
+        self.ui.lineEdit_ConditionsOfInterest.setText(", ".join(selected_items))
+        return selected_items
 
     def write_script_via_dialog(self) -> Optional[str]:
         """Render the template from the current GUI state and save it through a file dialog."""

@@ -7,7 +7,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtWidgets import QApplication, QDialog, QMessageBox
 from nih2mne import __version__ as NIH2MNE_VERSION
 
 from nih2mne.GUI.beamformer_form_entries import (
@@ -151,6 +151,20 @@ def test_render_beamformer_script_inserts_generated_block_at_marker(sample_entri
     assert script_text.endswith("after\n")
 
 
+def test_render_beamformer_script_preserves_template_outside_marker(sample_entries, tmp_path):
+    template_path = tmp_path / "beamformer_template.py"
+    template_path.write_text(
+        "before\n#%% << INSERT GUI COMPONENTS HERE >>\nif use_muscle_detection:\n    keep_me()\nafter\n",
+        encoding="utf-8",
+    )
+
+    entries = BeamformerFormEntries(**{**sample_entries.to_dict(), "muscle_detect": False})
+    script_text = render_beamformer_script(entries, template_path=template_path)
+
+    assert "use_muscle_detection = False" in script_text
+    assert "if use_muscle_detection:\n    keep_me()" in script_text
+
+
 def test_open_dataset_directory_sets_fname_for_ds_directory(qapp, monkeypatch, tmp_path):
     window = BeamformerFormWindow()
     dataset_dir = tmp_path / "subject01.ds"
@@ -187,6 +201,56 @@ def test_open_dataset_directory_rejects_non_ds_directory(qapp, monkeypatch, tmp_
 
     assert selected is None
     assert window.ui.lineEdit_fname.text() == ""
+    assert len(warnings) == 1
+
+
+def test_open_conditions_selector_sets_selected_events(qapp, monkeypatch):
+    window = BeamformerFormWindow()
+    window.ui.lineEdit_fname.setText("/tmp/example.ds")
+
+    monkeypatch.setattr(
+        "nih2mne.GUI.beamformer_form_entries.mne.io.read_raw_ctf",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        "nih2mne.GUI.beamformer_form_entries.mne.events_from_annotations",
+        lambda raw: (None, {"rest": 1, "task": 2, "noise": 3}),
+    )
+
+    class FakeSelector:
+        def __init__(self, input_list, title=None, parent=None, gridsize_row=None, gridsize_col=None):
+            self.input_list = input_list
+
+        def exec_(self):
+            return QDialog.Accepted
+
+        def selected_items(self):
+            return ["rest", "task"]
+
+    monkeypatch.setattr(
+        "nih2mne.GUI.beamformer_form_entries.grid_selector",
+        FakeSelector,
+    )
+
+    selected = window.open_conditions_selector()
+
+    assert selected == ["rest", "task"]
+    assert window.ui.lineEdit_ConditionsOfInterest.text() == "rest, task"
+
+
+def test_open_conditions_selector_requires_dataset(qapp, monkeypatch):
+    window = BeamformerFormWindow()
+    warnings = []
+
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda *args, **kwargs: warnings.append((args, kwargs)),
+    )
+
+    selected = window.open_conditions_selector()
+
+    assert selected is None
     assert len(warnings) == 1
 
 
@@ -227,6 +291,7 @@ def test_write_script_via_dialog_writes_template_output(qapp, monkeypatch, tmp_p
     assert "beam_reg = 0.05" in written_text
     assert "conds_OI = ['rest', 'task']" in written_text
     assert "use_muscle_detection = True" in written_text
+    assert "if use_muscle_detection:" in written_text
     assert "_musc_annot = annotate_muscle_zscore" in written_text
 
 
@@ -248,28 +313,6 @@ def test_script_save_path_uses_second_token_for_non_bids(qapp):
 
     assert script_path.parent == SCRIPT_DIALOG_START_DIR
     assert script_path.name == "flanker_v1.py"
-
-
-
-def test_render_beamformer_script_disables_muscle_detection_when_unchecked(sample_entries, tmp_path):
-    template_path = tmp_path / "beamformer_template.py"
-    template_path.write_text(
-        """before
-#%% << INSERT GUI COMPONENTS HERE >>
-_musc_annot = annotate_muscle_zscore(raw, threshold=4, ch_type='mag', min_length_good=0.1, 
-                       filter_freq=(110, 140), n_jobs=n_jobs, verbose=None)
-raw.set_annotations(raw.annotations + _musc_annot[0])
-after
-""",
-        encoding="utf-8",
-    )
-
-    entries = BeamformerFormEntries(**{**sample_entries.to_dict(), "muscle_detect": False})
-    script_text = render_beamformer_script(entries, template_path=template_path)
-
-    assert "use_muscle_detection = False" in script_text
-    assert "# Muscle detection disabled from GUI" in script_text
-    assert "raw.set_annotations(raw.annotations + _musc_annot[0])" not in script_text
 
 
 def test_build_gui_component_block_defaults_blank_project_name(sample_entries):
