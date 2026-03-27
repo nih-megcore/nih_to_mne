@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 from nih2mne.GUI.beamformer_form_entries import (
     BeamformerFormEntries,
     BeamformerFormWindow,
+    DEFAULT_PROJECT_NAME,
     SCRIPT_DIALOG_START_DIR,
     _default_script_name,
     _next_script_version,
@@ -33,6 +34,7 @@ def qapp():
 def sample_entries():
     return BeamformerFormEntries(
         fname="/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds",
+        project_name="beamformer_test",
         tmin="-0.25",
         tmax="0.25",
         fmin="1",
@@ -53,6 +55,7 @@ def test_beamformer_form_entries_capture_gui_values(qapp):
     window = BeamformerFormWindow()
     ui = window.ui
 
+    ui.lineEdit_projectName.setText("beamformer_test")
     ui.lineEdit_tmin.setText("-0.25")
     ui.lineEdit_tmax.setText("0.25")
     ui.lineEdit_fmin.setText("1")
@@ -62,6 +65,7 @@ def test_beamformer_form_entries_capture_gui_values(qapp):
 
     entries = BeamformerFormEntries.from_ui(ui)
 
+    assert entries.project_name == "beamformer_test"
     assert entries.tmin == "-0.25"
     assert entries.tmax == "0.25"
     assert entries.fmin == "1"
@@ -69,6 +73,7 @@ def test_beamformer_form_entries_capture_gui_values(qapp):
     assert entries.beamformer_regularization == "5"
     assert entries.muscle_detect is True
 
+    assert entries.to_dict()["project_name"] == "beamformer_test"
     assert entries.to_dict()["tmin"] == "-0.25"
     assert entries.to_dict()["tmax"] == "0.25"
     assert entries.to_dict()["fmin"] == "1"
@@ -114,6 +119,7 @@ def test_build_gui_component_block_contains_expected_template_values(sample_entr
     assert "# GUI entries >>" in block
     assert "dataset_path = pathlib.Path('/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds')" in block
     assert "# GUI entries <<" in block
+    assert "project = 'beamformer_test'" in block
     assert "epo_tmin = -0.25" in block
     assert "epo_tmax = 0.25" in block
     assert "f_min = 1" in block
@@ -187,6 +193,7 @@ def test_write_script_via_dialog_writes_template_output(qapp, monkeypatch, tmp_p
     save_path = tmp_path / "generated_beamformer.py"
 
     window.ui.lineEdit_fname.setText("/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds")
+    window.ui.lineEdit_projectName.setText("beamformer_test")
     window.ui.lineEdit_tmin.setText("-0.25")
     window.ui.lineEdit_tmax.setText("0.25")
     window.ui.lineEdit_fmin.setText("1")
@@ -213,6 +220,7 @@ def test_write_script_via_dialog_writes_template_output(qapp, monkeypatch, tmp_p
     assert "#%% << INSERT GUI COMPONENTS HERE >>" not in written_text
     assert "# GUI entries >>" in written_text
     assert "dataset_path = pathlib.Path('/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds')" in written_text
+    assert "project = 'beamformer_test'" in written_text
     assert "# GUI entries <<" in written_text
     assert "beam_reg = 0.05" in written_text
     assert "conds_OI = ['rest', 'task']" in written_text
@@ -260,3 +268,11 @@ after
     assert "use_muscle_detection = False" in script_text
     assert "# Muscle detection disabled from GUI" in script_text
     assert "raw.set_annotations(raw.annotations + _musc_annot[0])" not in script_text
+
+
+def test_build_gui_component_block_defaults_blank_project_name(sample_entries):
+    entries = BeamformerFormEntries(**{**sample_entries.to_dict(), "project_name": ""})
+
+    block = build_gui_component_block(entries)
+
+    assert f"project = {DEFAULT_PROJECT_NAME!r}" in block

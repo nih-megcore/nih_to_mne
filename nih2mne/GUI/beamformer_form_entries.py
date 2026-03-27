@@ -10,14 +10,15 @@ from typing import Any, Dict, List, Optional
 from PyQt5 import QtWidgets
 
 try:
-    from .beamformer_maker import Ui_Form
+    from .beamformer_maker import Ui_BeamformerScriptGenerator
 except ImportError:
-    from beamformer_maker import Ui_Form
+    from beamformer_maker import Ui_BeamformerScriptGenerator
 
 
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "proc" / "beamformer_template.py"
 TEMPLATE_INSERT_MARKER = "#%% << INSERT GUI COMPONENTS HERE >>"
 SCRIPT_DIALOG_START_DIR = Path("~/megcore/datproc/").expanduser()
+DEFAULT_PROJECT_NAME = "Analysis"
 _VERSION_PATTERN = re.compile(r"_v(\d+)\.py$")
 
 
@@ -26,6 +27,7 @@ class BeamformerFormEntries:
     """Container for the current beamformer GUI values."""
 
     fname: str
+    project_name: str
     tmin: str
     tmax: str
     fmin: str
@@ -45,6 +47,7 @@ class BeamformerFormEntries:
         """Read the current widget state from the generated Qt form."""
         return cls(
             fname=ui.lineEdit_fname.text(),
+            project_name=ui.lineEdit_projectName.text(),
             tmin=ui.lineEdit_tmin.text(),
             tmax=ui.lineEdit_tmax.text(),
             fmin=ui.lineEdit_fmin.text(),
@@ -69,6 +72,12 @@ def _split_csv_values(raw_text: str) -> List[str]:
     """Normalize comma or semicolon separated GUI text into a clean list."""
     separators_normalized = raw_text.replace(";", ",")
     return [item.strip() for item in separators_normalized.split(",") if item.strip()]
+
+
+def _project_name(raw_value: str) -> str:
+    """Return the GUI project name or the default when the field is blank."""
+    normalized = raw_value.strip()
+    return normalized or DEFAULT_PROJECT_NAME
 
 
 def _normalize_contrast_type(raw_value: str) -> str:
@@ -168,7 +177,7 @@ def build_gui_component_block(entries: BeamformerFormEntries) -> str:
         "run = entity_map.get('run')",
         "ses = entity_map.get('ses')",
         "task_type = entity_map.get('task')",
-        "project = 'beamformer'",
+        f"project = {_project_name(entries.project_name)!r}",
         "",
         f"epo_tmin = {entries.tmin}",
         f"epo_tmax = {entries.tmax}",
@@ -229,7 +238,7 @@ class BeamformerFormWindow(QtWidgets.QWidget):
     def __init__(self) -> None:
         """Create the Qt form and connect the browse and write buttons."""
         super().__init__()
-        self.ui = Ui_Form()
+        self.ui = Ui_BeamformerScriptGenerator()
         self.ui.setupUi(self)
         self.ui.pb_OpenFileDialog.clicked.connect(self.open_dataset_directory)
         self.ui.pb_WriteScript.clicked.connect(self.write_script_via_dialog)
