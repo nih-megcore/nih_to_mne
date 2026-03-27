@@ -33,6 +33,7 @@ class BeamformerFormEntries:
     threshold_rejection: str
     beamformer_regularization: str
     megnet: bool
+    muscle_detect: bool
     conditions_of_interest: str
     contrast_type: str
     anat_overwrite: bool
@@ -51,6 +52,7 @@ class BeamformerFormEntries:
             threshold_rejection=ui.lineEdit_ThresholdRejection.text(),
             beamformer_regularization=ui.lineEdit_BeamformerRegularization.text(),
             megnet=ui.cb_MEGNET.isChecked(),
+            muscle_detect=ui.cb_MuscleDetect.isChecked(),
             conditions_of_interest=ui.lineEdit_ConditionsOfInterest.text(),
             contrast_type=ui.comboBox_ContrastType.currentText(),
             anat_overwrite=ui.cb_AnatOverwrite.isChecked(),
@@ -67,6 +69,31 @@ def _split_csv_values(raw_text: str) -> List[str]:
     """Normalize comma or semicolon separated GUI text into a clean list."""
     separators_normalized = raw_text.replace(";", ",")
     return [item.strip() for item in separators_normalized.split(",") if item.strip()]
+
+
+def _normalize_contrast_type(raw_value: str) -> str:
+    """Translate GUI display labels into the script values expected downstream."""
+    normalized = raw_value.strip()
+    if not normalized:
+        return "percent"
+
+    label_map = {
+        "log10 ratio": "logratio",
+        "percent change": "percent",
+    }
+    return label_map.get(normalized.lower(), normalized)
+
+
+def _muscle_detection_block(enabled: bool) -> List[str]:
+    """Render the raw-preprocessing lines for optional muscle artifact rejection."""
+    if not enabled:
+        return ["# Muscle detection disabled from GUI"]
+
+    return [
+        "_musc_annot = annotate_muscle_zscore(raw, threshold=4, ch_type='mag', min_length_good=0.1, " ,
+        "                       filter_freq=(110, 140), n_jobs=n_jobs, verbose=None)",
+        "raw.set_annotations(raw.annotations + _musc_annot[0])",
+    ]
 
 
 def _task_id_from_dataset_path(dataset_path: str) -> str:
@@ -115,7 +142,7 @@ def _default_script_name(dataset_path: str, output_dir: Path = SCRIPT_DIALOG_STA
 def build_gui_component_block(entries: BeamformerFormEntries) -> str:
     """Render the Python block inserted into the beamformer template marker."""
     conds_oi = _split_csv_values(entries.conditions_of_interest)
-    contrasts_type = entries.contrast_type or "percent"
+    contrasts_type = _normalize_contrast_type(entries.contrast_type)
 
     try:
         beam_reg_fraction: Any = float(entries.beamformer_regularization) / 100.0
@@ -161,6 +188,7 @@ def build_gui_component_block(entries: BeamformerFormEntries) -> str:
         f"contrasts_type = {repr(contrasts_type)}",
         "",
         f"use_megnet_ica = {repr(entries.megnet)}",
+        f"use_muscle_detection = {repr(entries.muscle_detect)}",
         f"overwrite_anats = {repr(entries.anat_overwrite)}",
         f"overwrite_preproc = {repr(entries.anat_overwrite)}",
         f"overwrite_beam = {repr(entries.beamformer_overwrite)}",
@@ -183,7 +211,16 @@ def render_beamformer_script(
 
     before, after = template_text.split(TEMPLATE_INSERT_MARKER, 1)
     gui_block = build_gui_component_block(entries)
-    return f"{before.rstrip()}\n\n{gui_block}\n\n{after.lstrip()}"
+    script_text = f"{before.rstrip()}\n\n{gui_block}\n\n{after.lstrip()}"
+
+    muscle_block = "\n".join(
+        [
+            "_musc_annot = annotate_muscle_zscore(raw, threshold=4, ch_type='mag', min_length_good=0.1, " ,
+            "                       filter_freq=(110, 140), n_jobs=n_jobs, verbose=None)",
+            "raw.set_annotations(raw.annotations + _musc_annot[0])",
+        ]
+    )
+    return script_text.replace(muscle_block, "\n".join(_muscle_detection_block(entries.muscle_detect)))
 
 
 class BeamformerFormWindow(QtWidgets.QWidget):

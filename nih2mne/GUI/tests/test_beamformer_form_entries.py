@@ -40,8 +40,9 @@ def sample_entries():
         threshold_rejection="3e-12",
         beamformer_regularization="5",
         megnet=True,
+        muscle_detect=True,
         conditions_of_interest="rest, task",
-        contrast_type="percent",
+        contrast_type="Percent Change",
         anat_overwrite=True,
         beamformer_overwrite=False,
         contrasts_overwrite=True,
@@ -57,6 +58,7 @@ def test_beamformer_form_entries_capture_gui_values(qapp):
     ui.lineEdit_fmin.setText("1")
     ui.lineEdit_fmax.setText("110")
     ui.lineEdit_BeamformerRegularization.setText("5")
+    ui.cb_MuscleDetect.setChecked(True)
 
     entries = BeamformerFormEntries.from_ui(ui)
 
@@ -65,12 +67,14 @@ def test_beamformer_form_entries_capture_gui_values(qapp):
     assert entries.fmin == "1"
     assert entries.fmax == "110"
     assert entries.beamformer_regularization == "5"
+    assert entries.muscle_detect is True
 
     assert entries.to_dict()["tmin"] == "-0.25"
     assert entries.to_dict()["tmax"] == "0.25"
     assert entries.to_dict()["fmin"] == "1"
     assert entries.to_dict()["fmax"] == "110"
     assert entries.to_dict()["beamformer_regularization"] == "5"
+    assert entries.to_dict()["muscle_detect"] is True
 
 
 def test_task_id_from_dataset_path_prefers_bids_task_token():
@@ -117,6 +121,7 @@ def test_build_gui_component_block_contains_expected_template_values(sample_entr
     assert "beam_reg = 0.05" in block
     assert "conds_OI = ['rest', 'task']" in block
     assert "contrasts_type = 'percent'" in block
+    assert "use_muscle_detection = True" in block
     assert "overwrite_anats = True" in block
     assert "overwrite_beam = False" in block
     assert "overwrite_contrasts = True" in block
@@ -189,9 +194,9 @@ def test_write_script_via_dialog_writes_template_output(qapp, monkeypatch, tmp_p
     window.ui.lineEdit_ThresholdRejection.setText("3e-12")
     window.ui.lineEdit_BeamformerRegularization.setText("5")
     window.ui.lineEdit_ConditionsOfInterest.setText("rest, task")
-    window.ui.comboBox_ContrastType.addItem("percent")
-    window.ui.comboBox_ContrastType.setCurrentText("percent")
+    window.ui.comboBox_ContrastType.setCurrentText("Percent Change")
     window.ui.cb_MEGNET.setChecked(True)
+    window.ui.cb_MuscleDetect.setChecked(True)
     window.ui.cb_AnatOverwrite.setChecked(True)
     window.ui.cb_BeamformerOverwrite.setChecked(False)
     window.ui.cb_ContrastsOverwrite.setChecked(True)
@@ -211,6 +216,8 @@ def test_write_script_via_dialog_writes_template_output(qapp, monkeypatch, tmp_p
     assert "# GUI entries <<" in written_text
     assert "beam_reg = 0.05" in written_text
     assert "conds_OI = ['rest', 'task']" in written_text
+    assert "use_muscle_detection = True" in written_text
+    assert "_musc_annot = annotate_muscle_zscore" in written_text
 
 
 def test_script_save_path_uses_megcore_datproc_start_dir_and_bids_task(qapp):
@@ -231,3 +238,25 @@ def test_script_save_path_uses_second_token_for_non_bids(qapp):
 
     assert script_path.parent == SCRIPT_DIALOG_START_DIR
     assert script_path.name == "flanker_v1.py"
+
+
+
+def test_render_beamformer_script_disables_muscle_detection_when_unchecked(sample_entries, tmp_path):
+    template_path = tmp_path / "beamformer_template.py"
+    template_path.write_text(
+        """before
+#%% << INSERT GUI COMPONENTS HERE >>
+_musc_annot = annotate_muscle_zscore(raw, threshold=4, ch_type='mag', min_length_good=0.1, 
+                       filter_freq=(110, 140), n_jobs=n_jobs, verbose=None)
+raw.set_annotations(raw.annotations + _musc_annot[0])
+after
+""",
+        encoding="utf-8",
+    )
+
+    entries = BeamformerFormEntries(**{**sample_entries.to_dict(), "muscle_detect": False})
+    script_text = render_beamformer_script(entries, template_path=template_path)
+
+    assert "use_muscle_detection = False" in script_text
+    assert "# Muscle detection disabled from GUI" in script_text
+    assert "raw.set_annotations(raw.annotations + _musc_annot[0])" not in script_text
