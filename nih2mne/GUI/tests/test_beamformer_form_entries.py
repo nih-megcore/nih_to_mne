@@ -8,6 +8,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication, QMessageBox
+from nih2mne import __version__ as NIH2MNE_VERSION
 
 from nih2mne.GUI.beamformer_form_entries import (
     BeamformerFormEntries,
@@ -117,7 +118,7 @@ def test_build_gui_component_block_contains_expected_template_values(sample_entr
     block = build_gui_component_block(sample_entries)
 
     assert "# GUI entries >>" in block
-    assert "dataset_path = pathlib.Path('/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds')" in block
+    assert "dataset_path = pathlib.Path(sys.argv[1])" in block
     assert "# GUI entries <<" in block
     assert "project = 'beamformer_test'" in block
     assert "epo_tmin = -0.25" in block
@@ -136,15 +137,16 @@ def test_build_gui_component_block_contains_expected_template_values(sample_entr
 def test_render_beamformer_script_inserts_generated_block_at_marker(sample_entries, tmp_path):
     template_path = tmp_path / "beamformer_template.py"
     template_path.write_text(
-        "before\n#%% << INSERT GUI COMPONENTS HERE >>\nafter\n",
+        "before\nnih2mne version: <<VER>>\n#%% << INSERT GUI COMPONENTS HERE >>\nafter\n",
         encoding="utf-8",
     )
 
     script_text = render_beamformer_script(sample_entries, template_path=template_path)
 
     assert "#%% << INSERT GUI COMPONENTS HERE >>" not in script_text
-    assert "before\n\n# GUI entries >>\n#%% GUI Components\n" in script_text
+    assert f"before\nnih2mne version: {NIH2MNE_VERSION}\n\n# GUI entries >>\n#%% GUI Components\n" in script_text
     assert "# GUI entries <<\n\nafter\n" in script_text
+    assert f"nih2mne version: {NIH2MNE_VERSION}" in script_text
     assert "epo_tmin = -0.25" in script_text
     assert script_text.endswith("after\n")
 
@@ -219,7 +221,7 @@ def test_write_script_via_dialog_writes_template_output(qapp, monkeypatch, tmp_p
     assert written_path == str(save_path)
     assert "#%% << INSERT GUI COMPONENTS HERE >>" not in written_text
     assert "# GUI entries >>" in written_text
-    assert "dataset_path = pathlib.Path('/tmp/sub-TEST/ses-1/meg/sub-TEST_ses-1_task-rest_run-01_meg.ds')" in written_text
+    assert "dataset_path = pathlib.Path(sys.argv[1])" in written_text
     assert "project = 'beamformer_test'" in written_text
     assert "# GUI entries <<" in written_text
     assert "beam_reg = 0.05" in written_text
@@ -276,3 +278,16 @@ def test_build_gui_component_block_defaults_blank_project_name(sample_entries):
     block = build_gui_component_block(entries)
 
     assert f"project = {DEFAULT_PROJECT_NAME!r}" in block
+
+
+def test_render_beamformer_script_replaces_version_marker(sample_entries, tmp_path):
+    template_path = tmp_path / "beamformer_template.py"
+    template_path.write_text(
+        "nih2mne version: <<VER>>\n#%% << INSERT GUI COMPONENTS HERE >>\n",
+        encoding="utf-8",
+    )
+
+    script_text = render_beamformer_script(sample_entries, template_path=template_path)
+
+    assert "<<VER>>" not in script_text
+    assert f"nih2mne version: {NIH2MNE_VERSION}" in script_text

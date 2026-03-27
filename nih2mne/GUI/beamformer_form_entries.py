@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from PyQt5 import QtWidgets
+from nih2mne import __version__ as NIH2MNE_VERSION
 
 try:
     from .beamformer_maker import Ui_BeamformerScriptGenerator
@@ -17,6 +18,7 @@ except ImportError:
 
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "proc" / "beamformer_template.py"
 TEMPLATE_INSERT_MARKER = "#%% << INSERT GUI COMPONENTS HERE >>"
+TEMPLATE_VERSION_MARKER = "<<VER>>"
 SCRIPT_DIALOG_START_DIR = Path("~/megcore/datproc/").expanduser()
 DEFAULT_PROJECT_NAME = "Analysis"
 _VERSION_PATTERN = re.compile(r"_v(\d+)\.py$")
@@ -161,7 +163,7 @@ def build_gui_component_block(entries: BeamformerFormEntries) -> str:
     block_lines = [
         "# GUI entries >>",
         "#%% GUI Components",
-        f"dataset_path = pathlib.Path({repr(entries.fname)})",
+        "dataset_path = pathlib.Path(sys.argv[1])",
         "entity_map = {}",
         "for part in dataset_path.stem.split('_'):",
         "    if '-' in part:",
@@ -218,6 +220,7 @@ def render_beamformer_script(
             f"Template marker {repr(TEMPLATE_INSERT_MARKER)} not found in {template_path}"
         )
 
+    template_text = template_text.replace(TEMPLATE_VERSION_MARKER, NIH2MNE_VERSION)
     before, after = template_text.split(TEMPLATE_INSERT_MARKER, 1)
     gui_block = build_gui_component_block(entries)
     script_text = f"{before.rstrip()}\n\n{gui_block}\n\n{after.lstrip()}"
