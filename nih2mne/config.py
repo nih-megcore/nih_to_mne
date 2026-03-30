@@ -43,9 +43,11 @@ def _get_defaults_fname():
 def initialize_defaults():
     # Initialize the locations of the trigger files
     TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
+    DATPROC_FILE_LOC = op.expanduser(f'~/megcore/datproc')
     LOG_FILE_LOC = op.expanduser(f'~/megcore/logs/')
     DEFAULTS_FILE_LOC = _get_defaults_fname()
     if not op.exists(TRIG_FILE_LOC):  os.makedirs(TRIG_FILE_LOC)
+    if not op.exists(DATPROC_FILE_LOC):  os.makedirs(DATPROC_FILE_LOC)
     if not op.exists(DEFAULTS_FILE_LOC): 
         _initialize_defaults_file()
     
@@ -101,3 +103,4 @@ def _load_defaults(defaults_file=_get_defaults_fname()):
     
 DEFAULTS = initialize_defaults() 
 TRIG_FILE_LOC = op.expanduser(f'~/megcore/trigproc')
+DATPROC_FILE_LOC = op.expanduser(f'~/megcore/datproc')
