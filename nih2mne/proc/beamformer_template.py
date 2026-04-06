@@ -50,10 +50,10 @@ anat_bids_path = BIDSPath(root=bids_root, subject=subject, datatype='anat',
 deriv_path = bids_path.copy().update(root= bids_path.root / 'derivatives',
                                      check=False)
 preprocessing_path = deriv_path.copy().update(root = deriv_path.root / 'preproc')
-preprocessing_path.root.mkdir(parents=True, exist_ok=True)
+preprocessing_path.root.mkdir(exist_ok=True)
 
 output_path = deriv_path.copy().update(root = deriv_path.root / project)
-output_path.root.mkdir(parents=True, exist_ok=True)
+output_path.root.mkdir(exist_ok=True)
 
 subjects_dir = deriv_path.root / 'freesurfer' / 'subjects'
 fs_subject = 'sub-'+bids_path.subject
