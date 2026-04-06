@@ -28,7 +28,10 @@ import pathlib
 import copy
 from mne.preprocessing import annotate_muscle_zscore
 
-n_jobs = -1
+if "SLURM_JOB_ID" in os.environ:
+    n_jobs = int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))
+else:
+    n_jobs = -1
 
 #%% << INSERT GUI COMPONENTS HERE >>
 
@@ -198,4 +201,3 @@ def stc_proc(epo, taskname, filters, return_abs=False, save_ave=True,
 for cond in conds_OI:
     _ = stc_proc(epo, cond, filters, save_ave=True, save_epo=True)
     
-
