@@ -179,7 +179,7 @@ stc_basename = output_path.copy().update(extension='.stc')
                                          
 def stc_proc(epo, taskname, filters, return_abs=False, save_ave=True,
              save_epo=False, overwrite=True):
-    _tmp_stcs = apply_lcmv_epochs(epo[taskname], filters)
+    _tmp_stcs = apply_lcmv_epochs(epo[taskname], filters, return_generator=True)
     _tmp_stcs = [i.apply_baseline([None,0]) for i in _tmp_stcs]
     _ave_stcs = copy.deepcopy(_tmp_stcs[0])
     _ave_stcs._data = np.mean(np.array([i._data for i in _tmp_stcs]), axis=0)
