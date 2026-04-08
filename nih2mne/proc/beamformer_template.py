@@ -81,39 +81,61 @@ noise_raw = mne.io.read_raw_ctf(noise_fname.fpath, **raw_load_opts)
 #Add data cropping here to remove zeros
 
 
+def get_make_bem_solution(bem_fname, fs_subject, subjects_dir):
+    if not bem_fname.fpath.exists():
+        mne.bem.make_watershed_bem(fs_subject, subjects_dir=subjects_dir, overwrite=True)
+        bem = mne.make_bem_model(fs_subject, subjects_dir=subjects_dir,
+                                 conductivity=[0.3])
+        bem_sol = mne.make_bem_solution(bem)
+        mne.write_bem_solution(bem_fname.fpath, bem_sol, overwrite=True)
+    else:
+        bem_sol = mne.read_bem_solution(bem_fname)
+    return bem_sol
+
+
+def get_make_source_space(src_fname, fs_subject, subjects_dir):
+    if not src_fname.fpath.exists():
+        src = mne.setup_source_space(fs_subject, spacing='oct6', add_dist='patch',
+                                     subjects_dir=subjects_dir)
+        src.save(src_fname.fpath, overwrite=True)
+    else:
+        src = mne.read_source_spaces(src_fname.fpath)
+    return src
+
+
+def get_make_trans(trans_fname, bids_path, anat_bids_path, fs_subject, subjects_dir):
+    if not trans_fname.fpath.exists():
+        trans = mne_bids.read.get_head_mri_trans(
+            bids_path,
+            extra_params=dict(system_clock='ignore'),
+            t1_bids_path=anat_bids_path,
+            fs_subject=fs_subject,
+            fs_subjects_dir=subjects_dir,
+        )
+        mne.write_trans(trans_fname.fpath, trans, overwrite=True)
+    else:
+        trans = mne.read_trans(trans_fname.fpath)
+    return trans
+
+
+def get_make_forward_solution(fwd_fname, raw, trans, src, bem_sol, n_jobs):
+    if fwd_fname.fpath.exists():
+        fwd = mne.read_forward_solution(fwd_fname)
+    else:
+        fwd = mne.make_forward_solution(raw.info, trans, src, bem_sol, eeg=False,
+                                        n_jobs=n_jobs)
+        mne.write_forward_solution(fwd_fname.fpath, fwd, overwrite=True)
+    return fwd
+
+
 
 
 #%% Load or create any MRI related items
-if not bem_fname.fpath.exists():
-    mne.bem.make_watershed_bem(fs_subject, subjects_dir=subjects_dir, overwrite=True)
-    bem = mne.make_bem_model(fs_subject, subjects_dir=subjects_dir, 
-                             conductivity=[0.3])
-    bem_sol = mne.make_bem_solution(bem)
-    
-    mne.write_bem_solution(bem_fname.fpath, bem_sol, overwrite=True)
-else:
-    bem_sol = mne.read_bem_solution(bem_fname)
-    
-if not src_fname.fpath.exists():
-    src = mne.setup_source_space(fs_subject, spacing='oct6', add_dist='patch',
-                         subjects_dir=subjects_dir)
-    src.save(src_fname.fpath, overwrite=True)
-else:
-    src = mne.read_source_spaces(src_fname.fpath)
-
-if not trans_fname.fpath.exists():
-    trans = mne_bids.read.get_head_mri_trans(bids_path, extra_params=dict(system_clock='ignore'),
-                                        t1_bids_path=anat_bids_path, fs_subject=fs_subject, 
-                                        fs_subjects_dir=subjects_dir)
-    mne.write_trans(trans_fname.fpath, trans, overwrite=True)
-else:
-    trans = mne.read_trans(trans_fname.fpath)
-if fwd_fname.fpath.exists():
-    fwd = mne.read_forward_solution(fwd_fname)
-else:
-    fwd = mne.make_forward_solution(raw.info, trans, src, bem_sol, eeg=False, 
-                                    n_jobs=n_jobs)
-    mne.write_forward_solution(fwd_fname.fpath, fwd, overwrite=True)
+bem_sol = get_make_bem_solution(bem_fname, fs_subject, subjects_dir)
+src = get_make_source_space(src_fname, fs_subject, subjects_dir)
+trans = get_make_trans(trans_fname, bids_path, anat_bids_path, fs_subject,
+                       subjects_dir)
+fwd = get_make_forward_solution(fwd_fname, raw, trans, src, bem_sol, n_jobs)
     
 #%% Preproc Raw data
 if use_muscle_detection:
