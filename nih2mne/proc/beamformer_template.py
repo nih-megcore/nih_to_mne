@@ -11,6 +11,7 @@ Date (script gen): <<DATE>>
 """
 
 import sys
+import logging
 import mne
 import os, os.path as op
 import numpy as np
@@ -57,6 +58,19 @@ preprocessing_path.root.mkdir(exist_ok=True)
 
 output_path = deriv_path.copy().update(root = deriv_path.root / project)
 output_path.root.mkdir(exist_ok=True)
+log_dir = output_path.root / 'logging' / f'sub-{bids_path.subject}'
+log_dir.mkdir(parents=True, exist_ok=True)
+log_fname = log_dir / 'beamformer_template.log'
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.handlers.clear()
+_log_handler = logging.FileHandler(log_fname)
+_log_handler.setFormatter(
+    logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+)
+logger.addHandler(_log_handler)
+logger.propagate = False
 
 subjects_dir = deriv_path.root / 'freesurfer' / 'subjects'
 fs_subject = 'sub-'+bids_path.subject
@@ -81,61 +95,87 @@ noise_raw = mne.io.read_raw_ctf(noise_fname.fpath, **raw_load_opts)
 #Add data cropping here to remove zeros
 
 
-def get_make_bem_solution(bem_fname, fs_subject, subjects_dir):
-    if not bem_fname.fpath.exists():
-        mne.bem.make_watershed_bem(fs_subject, subjects_dir=subjects_dir, overwrite=True)
-        bem = mne.make_bem_model(fs_subject, subjects_dir=subjects_dir,
-                                 conductivity=[0.3])
-        bem_sol = mne.make_bem_solution(bem)
-        mne.write_bem_solution(bem_fname.fpath, bem_sol, overwrite=True)
-    else:
-        bem_sol = mne.read_bem_solution(bem_fname)
-    return bem_sol
+def get_make_bem_solution(bem_fname, fs_subject, subjects_dir, logger):
+    try:
+        if bem_fname.fpath.exists():
+            logger.info(f'Using previously created BEM solution: {bem_fname.fpath}')
+            bem_sol = mne.read_bem_solution(bem_fname)
+        else:
+            logger.info(f'Creating BEM solution: {bem_fname.fpath}')
+            mne.bem.make_watershed_bem(fs_subject, subjects_dir=subjects_dir, overwrite=True)
+            bem = mne.make_bem_model(fs_subject, subjects_dir=subjects_dir,
+                                     conductivity=[0.3])
+            bem_sol = mne.make_bem_solution(bem)
+            mne.write_bem_solution(bem_fname.fpath, bem_sol, overwrite=True)
+        return bem_sol
+    except Exception as err:
+        logger.exception(f'Failed to get or make BEM solution: {bem_fname.fpath}')
+        raise RuntimeError(f'Failed to get or make BEM solution: {bem_fname.fpath}') from err
 
 
-def get_make_source_space(src_fname, fs_subject, subjects_dir):
-    if not src_fname.fpath.exists():
-        src = mne.setup_source_space(fs_subject, spacing='oct6', add_dist='patch',
-                                     subjects_dir=subjects_dir)
-        src.save(src_fname.fpath, overwrite=True)
-    else:
-        src = mne.read_source_spaces(src_fname.fpath)
-    return src
+def get_make_source_space(src_fname, fs_subject, subjects_dir, logger):
+    try:
+        if src_fname.fpath.exists():
+            logger.info(f'Using previously created source space: {src_fname.fpath}')
+            src = mne.read_source_spaces(src_fname.fpath)
+        else:
+            logger.info(f'Creating source space: {src_fname.fpath}')
+            src = mne.setup_source_space(fs_subject, spacing='oct6', add_dist='patch',
+                                         subjects_dir=subjects_dir)
+            src.save(src_fname.fpath, overwrite=True)
+        return src
+    except Exception as err:
+        logger.exception(f'Failed to get or make source space: {src_fname.fpath}')
+        raise RuntimeError(f'Failed to get or make source space: {src_fname.fpath}') from err
 
 
-def get_make_trans(trans_fname, bids_path, anat_bids_path, fs_subject, subjects_dir):
-    if not trans_fname.fpath.exists():
-        trans = mne_bids.read.get_head_mri_trans(
-            bids_path,
-            extra_params=dict(system_clock='ignore'),
-            t1_bids_path=anat_bids_path,
-            fs_subject=fs_subject,
-            fs_subjects_dir=subjects_dir,
-        )
-        mne.write_trans(trans_fname.fpath, trans, overwrite=True)
-    else:
-        trans = mne.read_trans(trans_fname.fpath)
-    return trans
+def get_make_trans(trans_fname, bids_path, anat_bids_path, fs_subject, subjects_dir, logger):
+    try:
+        if trans_fname.fpath.exists():
+            logger.info(f'Using previously created transform: {trans_fname.fpath}')
+            trans = mne.read_trans(trans_fname.fpath)
+        else:
+            logger.info(f'Creating transform: {trans_fname.fpath}')
+            trans = mne_bids.read.get_head_mri_trans(
+                bids_path,
+                extra_params=dict(system_clock='ignore'),
+                t1_bids_path=anat_bids_path,
+                fs_subject=fs_subject,
+                fs_subjects_dir=subjects_dir,
+            )
+            mne.write_trans(trans_fname.fpath, trans, overwrite=True)
+        return trans
+    except Exception as err:
+        logger.exception(f'Failed to get or make transform: {trans_fname.fpath}')
+        raise RuntimeError(f'Failed to get or make transform: {trans_fname.fpath}') from err
 
 
-def get_make_forward_solution(fwd_fname, raw, trans, src, bem_sol, n_jobs):
-    if fwd_fname.fpath.exists():
-        fwd = mne.read_forward_solution(fwd_fname)
-    else:
-        fwd = mne.make_forward_solution(raw.info, trans, src, bem_sol, eeg=False,
-                                        n_jobs=n_jobs)
-        mne.write_forward_solution(fwd_fname.fpath, fwd, overwrite=True)
-    return fwd
+def get_make_forward_solution(fwd_fname, raw, trans, src, bem_sol, n_jobs, logger):
+    try:
+        if fwd_fname.fpath.exists():
+            logger.info(f'Using previously created forward solution: {fwd_fname.fpath}')
+            fwd = mne.read_forward_solution(fwd_fname)
+        else:
+            logger.info(f'Creating forward solution: {fwd_fname.fpath}')
+            fwd = mne.make_forward_solution(raw.info, trans, src, bem_sol, eeg=False,
+                                            n_jobs=n_jobs)
+            mne.write_forward_solution(fwd_fname.fpath, fwd, overwrite=True)
+        return fwd
+    except Exception as err:
+        logger.exception(f'Failed to get or make forward solution: {fwd_fname.fpath}')
+        raise RuntimeError(
+            f'Failed to get or make forward solution: {fwd_fname.fpath}'
+        ) from err
 
 
 
 
 #%% Load or create any MRI related items
-bem_sol = get_make_bem_solution(bem_fname, fs_subject, subjects_dir)
-src = get_make_source_space(src_fname, fs_subject, subjects_dir)
+bem_sol = get_make_bem_solution(bem_fname, fs_subject, subjects_dir, logger)
+src = get_make_source_space(src_fname, fs_subject, subjects_dir, logger)
 trans = get_make_trans(trans_fname, bids_path, anat_bids_path, fs_subject,
-                       subjects_dir)
-fwd = get_make_forward_solution(fwd_fname, raw, trans, src, bem_sol, n_jobs)
+                       subjects_dir, logger)
+fwd = get_make_forward_solution(fwd_fname, raw, trans, src, bem_sol, n_jobs, logger)
     
 #%% Preproc Raw data
 if use_muscle_detection:
