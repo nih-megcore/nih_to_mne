@@ -90,6 +90,8 @@ fwd_fname = preprocessing_path.copy().update(suffix='fwd', extension='.fif')
 raw_load_opts = dict(system_clock = 'ignore', clean_names =True, 
                           preload=True)
 raw = mne.io.read_raw_ctf(raw_fname.fpath, **raw_load_opts)
+if not noise_fname.fpath.exists():
+    logger.error(f'Noise file does not exist: {noise_fname.fpath}')
 noise_raw = mne.io.read_raw_ctf(noise_fname.fpath, **raw_load_opts)
 logger.info(f'Loaded raw data from: {raw_fname.fpath}')
 logger.info(f'Loaded noise data from: {noise_fname.fpath}')
