@@ -91,7 +91,8 @@ raw_load_opts = dict(system_clock = 'ignore', clean_names =True,
                           preload=True)
 raw = mne.io.read_raw_ctf(raw_fname.fpath, **raw_load_opts)
 noise_raw = mne.io.read_raw_ctf(noise_fname.fpath, **raw_load_opts)
-
+logger.info(f'Loaded raw data from: {raw_fname.fpath}')
+logger.info(f'Loaded noise data from: {noise_fname.fpath}')
 #Add data cropping here to remove zeros
 
 
@@ -221,6 +222,7 @@ full_cov_bidspath = output_path.copy().update(suffix='cov',
                                               )
 full_cov_bidspath.fpath.parent.mkdir(parents=True, exist_ok=True)
 full_cov.save(full_cov_bidspath.fpath, overwrite=overwrite_beam)
+logger.info(f'Saved full covariance to: {full_cov_bidspath.fpath}')
 
 noise_cov = mne.compute_raw_covariance(noise_raw)
 noise_cov_bidspath = output_path.copy().update(suffix='cov', 
@@ -228,6 +230,7 @@ noise_cov_bidspath = output_path.copy().update(suffix='cov',
                                               description=f'NOISEf{f_min}f{f_max}'
                                               )
 noise_cov.save(noise_cov_bidspath.fpath, overwrite=overwrite_beam)
+logger.info(f'Saved noise covariance to: {noise_cov_bidspath.fpath}')
 
 # Make wts
 filters = make_lcmv(epo.info, fwd, full_cov, noise_cov= noise_cov,
@@ -237,6 +240,7 @@ filters_bidspath = output_path.copy().update(description=f'LCMVf{f_min}f{f_max}'
                                              extension='.h5', 
                                              suffix='lcmv')
 filters.save(filters_bidspath.fpath, overwrite=overwrite_beam)
+logger.info(f'Saved LCMV filters to: {filters_bidspath.fpath}')
 # make_bids_json(filters_bidspath
 
 
@@ -257,6 +261,7 @@ def stc_proc(epo, taskname, filters, return_abs=False, save_ave=True,
         stc_bidspath = stc_basename.copy().update(description=f'{taskname}',
                                                   processing=f'f{f_min}f{f_max}')
         _ave_stcs.save(stc_bidspath)
+        logger.info(f'Saved average STC to: {stc_bidspath.fpath}')
     return _tmp_stcs, _ave_stcs
 
 
