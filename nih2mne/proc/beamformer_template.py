@@ -203,6 +203,24 @@ epo = mne.Epochs(raw,
                  event_id = evtsid, 
                  reject = reject_dict)
 
+#%% Auto reject
+
+ar = AutoReject(n_interpolate=[1, 4, 8], 
+                picks='meg', 
+                random_state=0,
+                n_jobs=n_jobs, 
+                consensus=[0.8, 0.9, 1.0], 
+                cv=5,
+                )
+cleaned_epo, reject_log = ar.fit_transform(epo, return_log=True)
+
+cleaned_epo_bidspath = preprocessing_path.copy().update(extension='.fif', 
+                                             run=run, session=session, description='arCleanedEpo')
+cleaned_epo.save(str(cleaned_epo_bidspath.fpath))
+
+epo = cleaned_epo
+
+
 
 #%% Perform the beamformer actions
 def normalize_beamfilt_ori(fwd, filters):
