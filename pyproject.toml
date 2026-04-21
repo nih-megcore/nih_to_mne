@@ -22,7 +22,7 @@ classifiers=[
     ]
 dependencies = [
 'mne', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'wget','nilearn', 'pysimplegui-4-foss', 'pyyaml', 'pyqtgraph',
-'pyctf-nihmegcore' , 'dill', 'PyQt5'
+'pyctf-nihmegcore' , 'dill', 'PyQt5', 'autoreject'
 ]
 
 [project.optional-dependencies]
