@@ -357,7 +357,8 @@ def write_mne_trans(mne_fids_path=None, dsname=None,
         raw = mne.io.read_raw_kit(dsname, preload=False)
         
     _tmp = raw.info['dig']
-    _raw_fids_order = [str(i['ident']).split('_')[-1].replace(')','') for i in _tmp]
+    _raw_fids_type = [str(i['kind']).split('_')[-1].replace(')','') for i in _tmp]
+    _raw_fids_order = [str(i['ident']).split('_')[-1].replace(')','') for n,i in enumerate(_tmp) if 'CARDINAL' in _raw_fids_type[n] ]    
     reordering=[]
     for i in _raw_fids_order:
         print(i)
