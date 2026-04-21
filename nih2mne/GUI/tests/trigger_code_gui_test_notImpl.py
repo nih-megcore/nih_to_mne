@@ -6,7 +6,7 @@ Created on Tue Feb 10 10:52:29 2026
 @author: jstout
 """
 
-from nih2mne.GUI.trigger_code_gui2 import event_coding_window
+from nih2mne.GUI.trigger_code_gui import event_coding_window
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget
 import sys
 
@@ -127,7 +127,7 @@ _widget.combo_LeadSelection.setCurrentIndex(3)
 _widget.combo_LagSelection.setCurrentIndex(5)
 
 
-win.handle_check_request(_widget)
+win.handle_check_request()#_widget)
 assert _widget.pb_Check.text() == 'N=0'
 
 
