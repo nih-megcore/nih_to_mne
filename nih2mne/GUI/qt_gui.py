@@ -1088,7 +1088,7 @@ def cmdline_main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('-bids_root', help='Path to your BIDS folder', 
-                        required=True)
+                        default=os.getcwd())
     parser.add_argument('-num_rows', help='Number of subject rows',
                         default=6, type=int)
     parser.add_argument('-num_cols', help='Number of subject columns',
