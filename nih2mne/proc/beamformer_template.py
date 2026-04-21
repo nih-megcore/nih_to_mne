@@ -28,6 +28,7 @@ from mne_bids import BIDSPath
 import pathlib
 import copy
 from mne.preprocessing import annotate_muscle_zscore
+from autoreject import AutoReject
 
 if "SLURM_JOB_ID" in os.environ:
     n_jobs = int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))
@@ -54,10 +55,10 @@ anat_bids_path = BIDSPath(root=bids_root, subject=subject, datatype='anat',
 deriv_path = bids_path.copy().update(root= bids_path.root / 'derivatives',
                                      check=False)
 preprocessing_path = deriv_path.copy().update(root = deriv_path.root / 'preproc')
-preprocessing_path.root.mkdir(exist_ok=True)
+preprocessing_path.fpath.parent.mkdir(parents=True, exist_ok=True)
 
 output_path = deriv_path.copy().update(root = deriv_path.root / project)
-output_path.root.mkdir(exist_ok=True)
+output_path.fpath.parent.mkdir(parents=True, exist_ok=True)
 log_dir = output_path.root / 'logging' / f'sub-{bids_path.subject}'
 log_dir.mkdir(parents=True, exist_ok=True)
 log_fname = log_dir / 'beamformer_template.log'
@@ -204,7 +205,8 @@ epo = mne.Epochs(raw,
                  reject = reject_dict)
 
 #%% Auto reject
-
+epo.load_data()
+epo.pick_types(meg=True, ref_meg=False)
 ar = AutoReject(n_interpolate=[1, 4, 8], 
                 picks='meg', 
                 random_state=0,
@@ -215,7 +217,7 @@ ar = AutoReject(n_interpolate=[1, 4, 8],
 cleaned_epo, reject_log = ar.fit_transform(epo, return_log=True)
 
 cleaned_epo_bidspath = preprocessing_path.copy().update(extension='.fif', 
-                                             run=run, session=session, description='arCleanedEpo')
+                                             run=run, session=ses, description='arCleanedEpo')
 cleaned_epo.save(str(cleaned_epo_bidspath.fpath))
 
 epo = cleaned_epo

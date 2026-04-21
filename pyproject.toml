@@ -44,6 +44,7 @@ testing = ['datalad','pytest','pygit2']
 "calc_hm.py"='nih2mne.utilities.calc_hm:entrypoint'
 "make_meg_bids_gui.py"='nih2mne.GUI.make_meg_bids_gui:cmdline'
 "meg_dataset_gui.py"='nih2mne.GUI.dataset_gui:main'
+"beamformer_code_generator"='nih2mne.GUI.beamformer_form_entries:launch_gui'
 
 
 [tool.setuptools.packages.find]
