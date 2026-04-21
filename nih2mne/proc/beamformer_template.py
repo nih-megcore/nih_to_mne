@@ -195,6 +195,7 @@ noise_raw.notch_filter([60,120,180], n_jobs=n_jobs)
 
 # create epochs
 evts, evtsid = mne.events_from_annotations(raw)
+evtsid = {i:j for i,j in evtsid.items() if i in conds_OI} 
 epo = mne.Epochs(raw, 
                  preload=True, 
                  tmin=epo_tmin, 
