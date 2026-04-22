@@ -50,6 +50,7 @@ def git_blob_hash(filepath: str) -> str:
 
 
 def _extract_literal_string_assignments(filepath, variable_names):
+    "Helper function to pull information out of logfile"
     try:
         tree = ast.parse(Path(filepath).read_text())
     except (OSError, SyntaxError, UnicodeDecodeError):
@@ -123,9 +124,9 @@ def get_subject_processing_status(logfile, processing_hash):
     has_start = start_marker in log_text
     has_finish = finish_marker in log_text
     if has_start and has_finish:
-        return 'SUCCESS'
+        return '(SUCCESS)'
     if has_start:
-        return 'ERROR'
+        return '(ERROR)'
     return ''
 
 

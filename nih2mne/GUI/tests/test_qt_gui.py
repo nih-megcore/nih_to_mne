@@ -251,14 +251,14 @@ def test_extract_processing_log_info_and_subject_status(tmp_path, qapp):
     assert get_subject_processing_logfile("/tmp/fake_bids", "sub-01", str(procfile)) == (
         "/tmp/fake_bids/derivatives/beamformer_test/logging/sub-01/beamformer_template.log"
     )
-    assert get_subject_processing_status(str(logfile), proc_hash) == "SUCCESS"
+    assert get_subject_processing_status(str(logfile), proc_hash) == "(SUCCESS)"
 
 
 def test_get_subject_processing_status_marks_started_without_finish_error(tmp_path):
     logfile = tmp_path / "beamformer_template.log"
     logfile.write_text("INFO START :: abc123\n")
 
-    assert get_subject_processing_status(str(logfile), "abc123") == "ERROR"
+    assert get_subject_processing_status(str(logfile), "abc123") == "(ERROR)"
     assert get_subject_processing_status(str(logfile), "different") == ""
 
 
@@ -266,15 +266,15 @@ def test_subject_selection_dialog_shows_status_labels(qapp):
     dialog = SubjectSelectionDialog(
         ["sub-01", "sub-02"],
         {"sub-01"},
-        subject_statuses={"sub-01": "SUCCESS", "sub-02": "ERROR"},
+        subject_statuses={"sub-01": "(SUCCESS)", "sub-02": "(ERROR)"},
     )
 
     labels = [label.text() for label in dialog.findChildren(qt_gui_module.QLabel)]
 
     assert "sub-01" in labels
     assert "sub-02" in labels
-    assert "SUCCESS" in labels
-    assert "ERROR" in labels
+    assert "(SUCCESS)" in labels
+    assert "(ERROR)" in labels
 
 
 def test_return_message_box_response_saves_bads_and_segments(qapp, monkeypatch):
