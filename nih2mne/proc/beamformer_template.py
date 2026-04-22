@@ -33,7 +33,7 @@ import hashlib
 
 def git_blob_hash(filepath: str) -> str:
     "Confirm the process file has not changed"
-    data = Path(filepath).read_bytes()
+    data = pathlib.Path(filepath).read_bytes()
     header = f"blob {len(data)}\0".encode()
     return hashlib.sha1(header + data).hexdigest()
 
