@@ -46,7 +46,12 @@ Subject_GUI = qt_gui_module.Subject_GUI
 Subject_Tile = qt_gui_module.Subject_Tile
 build_datproc_command = qt_gui_module.build_datproc_command
 collect_task_datasets = qt_gui_module.collect_task_datasets
+extract_processing_log_info = qt_gui_module.extract_processing_log_info
 get_task_datproc_files = qt_gui_module.get_task_datproc_files
+get_subject_processing_logfile = qt_gui_module.get_subject_processing_logfile
+get_subject_processing_status = qt_gui_module.get_subject_processing_status
+git_blob_hash = qt_gui_module.git_blob_hash
+SubjectSelectionDialog = qt_gui_module.SubjectSelectionDialog
 
 
 class FakeEventCounts:
@@ -223,6 +228,53 @@ def test_collect_task_datasets_returns_all_matching_project_datasets():
         ("sub-01", "rest", "rest.ds"),
         ("sub-02", "rest", "rest.ds"),
     ]
+
+
+def test_extract_processing_log_info_and_subject_status(tmp_path, qapp):
+    procfile = tmp_path / "rest_proc.py"
+    procfile.write_text(
+        "project = 'beamformer_test'\n"
+        "log_dir = output_path.root / 'logging' / f'sub-{bids_path.subject}'\n"
+        "log_fname = log_dir / 'beamformer_template.log'\n"
+    )
+    proc_hash = git_blob_hash(str(procfile))
+
+    subject_log = tmp_path / "fake_bids" / "derivatives" / "beamformer_test" / "logging" / "sub-01"
+    subject_log.mkdir(parents=True)
+    logfile = subject_log / "beamformer_template.log"
+    logfile.write_text(f"INFO START :: {proc_hash}\nINFO FINISHED :: {proc_hash}\n")
+
+    assert extract_processing_log_info(str(procfile)) == {
+        "project": "beamformer_test",
+        "logfile_name": "beamformer_template.log",
+    }
+    assert get_subject_processing_logfile("/tmp/fake_bids", "sub-01", str(procfile)) == (
+        "/tmp/fake_bids/derivatives/beamformer_test/logging/sub-01/beamformer_template.log"
+    )
+    assert get_subject_processing_status(str(logfile), proc_hash) == "SUCCESS"
+
+
+def test_get_subject_processing_status_marks_started_without_finish_error(tmp_path):
+    logfile = tmp_path / "beamformer_template.log"
+    logfile.write_text("INFO START :: abc123\n")
+
+    assert get_subject_processing_status(str(logfile), "abc123") == "ERROR"
+    assert get_subject_processing_status(str(logfile), "different") == ""
+
+
+def test_subject_selection_dialog_shows_status_labels(qapp):
+    dialog = SubjectSelectionDialog(
+        ["sub-01", "sub-02"],
+        {"sub-01"},
+        subject_statuses={"sub-01": "SUCCESS", "sub-02": "ERROR"},
+    )
+
+    labels = [label.text() for label in dialog.findChildren(qt_gui_module.QLabel)]
+
+    assert "sub-01" in labels
+    assert "sub-02" in labels
+    assert "SUCCESS" in labels
+    assert "ERROR" in labels
 
 
 def test_return_message_box_response_saves_bads_and_segments(qapp, monkeypatch):
