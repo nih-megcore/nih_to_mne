@@ -35,8 +35,98 @@ import glob
 import time
 from PyQt5.QtCore import QTimer
 import pandas as pd
+import hashlib
+from pathlib import Path
+import ast
 
 DATPROC_DIR = op.expanduser('~/megcore/datproc')
+
+
+def git_blob_hash(filepath: str) -> str:
+    "Confirm the process file has not changed"
+    data = Path(filepath).read_bytes()
+    header = f"blob {len(data)}\0".encode()
+    return hashlib.sha1(header + data).hexdigest()
+
+
+def _extract_literal_string_assignments(filepath, variable_names):
+    try:
+        tree = ast.parse(Path(filepath).read_text())
+    except (OSError, SyntaxError, UnicodeDecodeError):
+        return {}
+
+    assignments = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+            continue
+        target_name = node.targets[0].id
+        if target_name not in variable_names:
+            continue
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            assignments[target_name] = node.value.value
+    return assignments
+
+
+def extract_processing_log_info(filepath):
+    assignments = _extract_literal_string_assignments(filepath, {'project'})
+    project_name = assignments.get('project')
+    if project_name == None:
+        return None
+
+    try:
+        file_text = Path(filepath).read_text()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    log_name = None
+    for line in file_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith('log_fname'):
+            continue
+        quote_char = '"' if '"' in stripped else "'"
+        if quote_char not in stripped:
+            continue
+        try:
+            candidate = stripped.split(quote_char)[1]
+        except IndexError:
+            continue
+        if candidate.lower().endswith('.log'):
+            log_name = op.basename(candidate)
+            break
+    if log_name == None:
+        return None
+
+    return dict(project=project_name, logfile_name=log_name)
+
+
+def get_subject_processing_logfile(bids_root, subject_name, processing_file):
+    log_info = extract_processing_log_info(processing_file)
+    if log_info == None:
+        return None
+    subject_dirname = subject_name if str(subject_name).startswith('sub-') else f'sub-{subject_name}'
+    return op.join(bids_root, 'derivatives', log_info['project'], 'logging',
+                   subject_dirname, log_info['logfile_name'])
+
+
+def get_subject_processing_status(logfile, processing_hash):
+    if (logfile == None) or (processing_hash == None) or (not op.isfile(logfile)):
+        return ''
+    try:
+        log_text = Path(logfile).read_text()
+    except (OSError, UnicodeDecodeError):
+        return ''
+
+    start_marker = f'START :: {processing_hash}'
+    finish_marker = f'FINISHED :: {processing_hash}'
+    has_start = start_marker in log_text
+    has_finish = finish_marker in log_text
+    if has_start and has_finish:
+        return 'SUCCESS'
+    if has_start:
+        return 'ERROR'
+    return ''
 
 
 def get_task_datproc_files(task_name, datproc_dir=DATPROC_DIR):
@@ -88,10 +178,11 @@ def submit_datproc_job(processing_file, dataset_fname, subject_name, task_name,
                       logfile_prefix=logfile_prefix)
 
 class SubjectSelectionDialog(QtWidgets.QDialog):
-    def __init__(self, subjects, selected_subjects, parent=None):
+    def __init__(self, subjects, selected_subjects, subject_statuses=None, parent=None):
         super().__init__(parent)
         self.subjects = list(subjects)
         self.selected_subjects = set(selected_subjects)
+        self.subject_statuses = subject_statuses or {}
         self.setWindowTitle('Select Subjects')
         self.resize(420, 480)
 
@@ -116,6 +207,8 @@ class SubjectSelectionDialog(QtWidgets.QDialog):
         for subject in self.subjects:
             row_layout = QHBoxLayout()
             row_layout.addWidget(QLabel(subject))
+            status_label = QLabel(self.subject_statuses.get(subject, ''))
+            row_layout.addWidget(status_label)
             row_layout.addStretch()
 
             button = QPushButton()
@@ -313,6 +406,7 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
         self.bids_project = project_window.bids_project
         self.matched_subjects = []
         self.selected_subjects = set()
+        self.selected_processing_hash = None
         self.setWindowTitle('Submit Project Datproc Jobs')
 
         main_layout = QVBoxLayout()
@@ -337,7 +431,7 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
         procfile_layout = QHBoxLayout()
         procfile_layout.addWidget(QLabel('Processing File'))
         self.b_processing_file = QComboBox()
-        self.b_processing_file.currentIndexChanged.connect(self.update_summary)
+        self.b_processing_file.currentIndexChanged.connect(self.on_processing_file_changed)
         procfile_layout.addWidget(self.b_processing_file)
         main_layout.addLayout(procfile_layout)
 
@@ -409,14 +503,79 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
         datasets = self.get_selected_task_datasets()
         return [item for item in datasets if item[0] in self.selected_subjects]
 
+    def on_processing_file_changed(self):
+        self.selected_processing_hash = None
+        self.update_summary()
+
+    def capture_processing_file_hash(self):
+        processing_path = self.get_selected_processing_path()
+        if processing_path == None:
+            self.selected_processing_hash = None
+            return None
+        if not op.isfile(processing_path):
+            self.selected_processing_hash = None
+            QMessageBox.warning(self, 'Processing File Not Found',
+                                f'Processing file does not exist:\n{processing_path}')
+            return None
+        try:
+            self.selected_processing_hash = git_blob_hash(processing_path)
+        except OSError as exc:
+            self.selected_processing_hash = None
+            QMessageBox.warning(self, 'Processing File Error',
+                                f'Could not read processing file:\n{processing_path}\n\n{exc}')
+            return None
+        return self.selected_processing_hash
+
+    def confirm_processing_file_unchanged(self):
+        if self.selected_processing_hash == None:
+            return True
+        processing_path = self.get_selected_processing_path()
+        if processing_path == None or (not op.isfile(processing_path)):
+            QMessageBox.warning(self, 'Processing File Changed',
+                                'The selected processing file is no longer available. '
+                                'Re-open Select Subjects to refresh it.')
+            return False
+        try:
+            current_hash = git_blob_hash(processing_path)
+        except OSError as exc:
+            QMessageBox.warning(self, 'Processing File Error',
+                                f'Could not read processing file:\n{processing_path}\n\n{exc}')
+            return False
+        if current_hash != self.selected_processing_hash:
+            QMessageBox.warning(self, 'Processing File Changed',
+                                'The selected processing file changed after subjects were chosen. '
+                                'Re-open Select Subjects to confirm the new file contents.')
+            return False
+        return True
+
+    def get_subject_processing_statuses(self):
+        processing_path = self.get_selected_processing_path()
+        processing_hash = self.selected_processing_hash
+        if (processing_path == None) or (processing_hash == None):
+            return {}
+
+        subject_statuses = {}
+        bids_root = getattr(self.bids_project, 'bids_root', None)
+        if bids_root == None:
+            return subject_statuses
+
+        for subject in self.matched_subjects:
+            logfile = get_subject_processing_logfile(bids_root, subject, processing_path)
+            subject_statuses[subject] = get_subject_processing_status(logfile, processing_hash)
+        return subject_statuses
+
     def open_subject_selector(self):
         if len(self.matched_subjects) == 0:
             QMessageBox.information(self, 'No Matching Subjects',
                                     'No matching subjects are available for selection.')
             return
+        if self.capture_processing_file_hash() == None:
+            return
 
+        subject_statuses = self.get_subject_processing_statuses()
         dialog = SubjectSelectionDialog(self.matched_subjects,
                                         self.selected_subjects,
+                                        subject_statuses=subject_statuses,
                                         parent=self)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             self.selected_subjects = set(dialog.get_selected_subjects())
@@ -427,6 +586,7 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
         datproc_dir = self.b_datproc_dir.text().strip()
         datasets = self.get_selected_task_datasets()
         self.sync_subject_selection(self.get_matching_subjects(datasets))
+        self.selected_processing_hash = None
         self.b_processing_file.clear()
         task_files = get_task_datproc_files(task_name, datproc_dir=datproc_dir)
         if len(task_files) > 0:
@@ -471,6 +631,8 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
         if processing_path == None:
             QMessageBox.warning(self, 'No Processing File',
                                 'No task-matched processing file is selected')
+            return
+        if not self.confirm_processing_file_unchanged():
             return
 
         datasets = self.get_selected_datasets()
