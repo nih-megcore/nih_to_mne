@@ -55,10 +55,13 @@ anat_bids_path = BIDSPath(root=bids_root, subject=subject, datatype='anat',
 deriv_path = bids_path.copy().update(root= bids_path.root / 'derivatives',
                                      check=False)
 preprocessing_path = deriv_path.copy().update(root = deriv_path.root / 'preproc')
-preprocessing_path.fpath.parent.mkdir(parents=True, exist_ok=True)
+#Create temp structure to force the fpath creation (requires suffix+extension) to gen parent
+_ = preprocessing_path.copy().update(suffix='meg',extension='.ds').fpath.parent.mkdir(parents=True, exist_ok=True)
 
 output_path = deriv_path.copy().update(root = deriv_path.root / project)
-output_path.fpath.parent.mkdir(parents=True, exist_ok=True)
+#Create temp structure to force the fpath creation (requires suffix+extension) to gen parent
+_ = output_path.copy().update(suffix='meg',extension='.ds').fpath.parent.mkdir(parents=True, exist_ok=True)
+
 log_dir = output_path.root / 'logging' / f'sub-{bids_path.subject}'
 log_dir.mkdir(parents=True, exist_ok=True)
 log_fname = log_dir / 'beamformer_template.log'
