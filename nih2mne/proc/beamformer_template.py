@@ -224,6 +224,7 @@ epo = mne.Epochs(raw,
 #%% Auto reject
 epo.load_data()
 epo.pick_types(meg=True, ref_meg=False)
+logging.info('Starting Autoreject')
 ar = AutoReject(n_interpolate=[1, 4, 8], 
                 picks='meg', 
                 random_state=0,
@@ -236,7 +237,7 @@ cleaned_epo, reject_log = ar.fit_transform(epo, return_log=True)
 cleaned_epo_bidspath = output_path.copy().update(extension='.fif', 
                                              run=run, session=ses, description='arCleanedEpo')
 cleaned_epo.save(str(cleaned_epo_bidspath.fpath))
-
+logging.info(f'Saving Autoreject cleaned epochs to {str(cleaned_epo_bidspath.fpath)}')
 epo = cleaned_epo
 
 
