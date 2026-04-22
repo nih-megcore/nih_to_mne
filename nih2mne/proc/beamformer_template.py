@@ -29,6 +29,13 @@ import pathlib
 import copy
 from mne.preprocessing import annotate_muscle_zscore
 from autoreject import AutoReject
+import hashlib
+
+def git_blob_hash(filepath: str) -> str:
+    "Confirm the process file has not changed"
+    data = Path(filepath).read_bytes()
+    header = f"blob {len(data)}\0".encode()
+    return hashlib.sha1(header + data).hexdigest()
 
 if "SLURM_JOB_ID" in os.environ:
     n_jobs = int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))
@@ -75,6 +82,9 @@ _log_handler.setFormatter(
 )
 logger.addHandler(_log_handler)
 logger.propagate = False
+
+_procfile_hash = git_blob_hash(os.path.abspath(__file__))
+logger.info(f'START :: {_procfile_hash}')
 
 subjects_dir = deriv_path.root / 'freesurfer' / 'subjects'
 fs_subject = 'sub-'+bids_path.subject
@@ -294,3 +304,4 @@ def stc_proc(epo, taskname, filters, return_abs=False, save_ave=True,
 for cond in conds_OI:
     _ = stc_proc(epo, cond, filters, save_ave=True, save_epo=True)
     
+logger.info(f'FINISHED :: {_procfile_hash}')
