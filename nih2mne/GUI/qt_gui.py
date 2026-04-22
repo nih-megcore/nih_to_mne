@@ -565,6 +565,15 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
             subject_statuses[subject] = get_subject_processing_status(logfile, processing_hash)
         return subject_statuses
 
+    def get_subject_selector_initial_selection(self, subject_statuses):
+        initial_selection = set(self.selected_subjects)
+        if initial_selection != set(self.matched_subjects):
+            return initial_selection
+        return {
+            subject for subject in initial_selection
+            if subject_statuses.get(subject, '') not in {'(ERROR)', '(SUCCESS)'}
+        }
+
     def open_subject_selector(self):
         if len(self.matched_subjects) == 0:
             QMessageBox.information(self, 'No Matching Subjects',
@@ -574,8 +583,9 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
             return
 
         subject_statuses = self.get_subject_processing_statuses()
+        initial_selection = self.get_subject_selector_initial_selection(subject_statuses)
         dialog = SubjectSelectionDialog(self.matched_subjects,
-                                        self.selected_subjects,
+                                        initial_selection,
                                         subject_statuses=subject_statuses,
                                         parent=self)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:

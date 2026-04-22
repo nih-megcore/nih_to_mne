@@ -277,6 +277,35 @@ def test_subject_selection_dialog_shows_status_labels(qapp):
     assert "(ERROR)" in labels
 
 
+def test_project_datproc_default_selection_excludes_success_and_error(qapp):
+    project = FakeProject({
+        "sub-01": FakeBidsInfo(subject="sub-01"),
+        "sub-02": FakeBidsInfo(subject="sub-02"),
+        "sub-03": FakeBidsInfo(subject="sub-03"),
+    })
+    window = BIDS_Project_Window(bids_project=project, gridsize_row=1, gridsize_col=2)
+    dialog = qt_gui_module.ProjectDatprocSubmissionDialog(window)
+    dialog.matched_subjects = ["sub-01", "sub-02", "sub-03"]
+    dialog.selected_subjects = {"sub-01", "sub-02", "sub-03"}
+
+    initial_selection = dialog.get_subject_selector_initial_selection({
+        "sub-01": "(SUCCESS)",
+        "sub-02": "(ERROR)",
+        "sub-03": "",
+    })
+
+    assert initial_selection == {"sub-03"}
+
+    dialog.selected_subjects = {"sub-02"}
+    preserved_selection = dialog.get_subject_selector_initial_selection({
+        "sub-01": "(SUCCESS)",
+        "sub-02": "(ERROR)",
+        "sub-03": "",
+    })
+
+    assert preserved_selection == {"sub-02"}
+
+
 def test_return_message_box_response_saves_bads_and_segments(qapp, monkeypatch):
     gui = Subject_GUI(FakeBidsInfo())
     recorded = {}
