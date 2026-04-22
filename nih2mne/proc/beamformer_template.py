@@ -220,7 +220,7 @@ ar = AutoReject(n_interpolate=[1, 4, 8],
                 )
 cleaned_epo, reject_log = ar.fit_transform(epo, return_log=True)
 
-cleaned_epo_bidspath = preprocessing_path.copy().update(extension='.fif', 
+cleaned_epo_bidspath = output_path.copy().update(extension='.fif', 
                                              run=run, session=ses, description='arCleanedEpo')
 cleaned_epo.save(str(cleaned_epo_bidspath.fpath))
 
