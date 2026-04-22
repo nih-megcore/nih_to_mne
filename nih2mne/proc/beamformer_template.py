@@ -119,7 +119,10 @@ def get_make_bem_solution(bem_fname, fs_subject, subjects_dir, logger):
             bem_sol = mne.read_bem_solution(bem_fname)
         else:
             logger.info(f'Creating BEM solution: {bem_fname.fpath}')
-            mne.bem.make_watershed_bem(fs_subject, subjects_dir=subjects_dir, overwrite=True)
+            br_surf = op.join(subjects_dir, fs_subject, 'bem', 'brain.surf')
+            in_surf = op.join(subjects_dir, fs_subject, 'bem', 'inner_skull.surf')
+            if not op.exists(br_surf) and not op.exists(in_surf):
+                mne.bem.make_watershed_bem(fs_subject, subjects_dir=subjects_dir, overwrite=True)
             bem = mne.make_bem_model(fs_subject, subjects_dir=subjects_dir,
                                      conductivity=[0.3])
             bem_sol = mne.make_bem_solution(bem)
