@@ -30,6 +30,7 @@ import copy
 from mne.preprocessing import annotate_muscle_zscore
 from autoreject import AutoReject
 import hashlib
+import subprocess
 
 def git_blob_hash(filepath: str) -> str:
     "Confirm the process file has not changed"
@@ -37,8 +38,25 @@ def git_blob_hash(filepath: str) -> str:
     header = f"blob {len(data)}\0".encode()
     return hashlib.sha1(header + data).hexdigest()
 
+
+
+
+
+
+
 if "SLURM_JOB_ID" in os.environ:
     n_jobs = int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))
+    job_id = os.environ.get("SLURM_JOB_ID")
+    result = subprocess.run(
+        ["scontrol", "show", "job", job_id],
+        capture_output=True, text=True
+    )
+
+    # Parse StdOut from the output
+    for token in result.stdout.split():
+        if token.startswith("StdOut="):
+            slurm_logfile_path = token.split("=", 1)[1]
+            break
 else:
     n_jobs = -1
 
@@ -85,6 +103,8 @@ logger.propagate = False
 
 _procfile_hash = git_blob_hash(os.path.abspath(__file__))
 logger.info(f'START :: {_procfile_hash}')
+if "SLURM_JOB_ID" in os.environ:
+    logger.info(f'SLURM_LOGFILE_PATH :: {slurm_logfile_path}')
 
 subjects_dir = deriv_path.root / 'freesurfer' / 'subjects'
 fs_subject = 'sub-'+bids_path.subject
@@ -253,6 +273,7 @@ def normalize_beamfilt_ori(fwd, filters):
 # compute ICA 
 
 # Create cov
+## Data Covariance
 full_cov = mne.compute_covariance(epo[conds_OI], 
                                   cv=cov_cv, 
                                   method=cov_method)
@@ -262,14 +283,33 @@ full_cov_bidspath = output_path.copy().update(suffix='cov',
                                               )
 full_cov_bidspath.fpath.parent.mkdir(parents=True, exist_ok=True)
 full_cov.save(full_cov_bidspath.fpath, overwrite=overwrite_beam)
+full_cov_cond = np.linalg.cond(full_cov.data)
+logger.info(f'Data covariance condition number: {full_cov_cond}')
+if 10e5 < full_cov_cond < 10e7:
+    logger.warn(f'Data covariance has moderate condition #')
+elif 10e7 < full_cov_cond < 10e11:
+    logger.warn('Data covariance is poorly codititioned')
+elif 10e11 < full_cov_cond:
+    logger.error('Data covariance is ill-conditioned')
+    raise ValueError('Data covariance is ill-conditioned')
 logger.info(f'Saved full covariance to: {full_cov_bidspath.fpath}')
 
+## Noise Covariance
 noise_cov = mne.compute_raw_covariance(noise_raw)
 noise_cov_bidspath = output_path.copy().update(suffix='cov', 
                                               extension='.fif',
                                               description=f'NOISEf{f_min}f{f_max}'
                                               )
 noise_cov.save(noise_cov_bidspath.fpath, overwrite=overwrite_beam)
+noise_cov_cond = np.linalg.cond(noise_cov.data)
+logger.info(f'Noise covariance condition number: {noise_cov_cond}')
+if 10e5 < noise_cov_cond < 10e7:
+    logger.warn(f'Noise covariance has moderate condition #')
+elif 10e7 < noise_cov_cond < 10e11:
+    logger.warn('Noise covariance is poorly codititioned')
+elif 10e11 < noise_cov_cond:
+    logger.error('Noise covariance is ill-conditioned')
+    raise ValueError('Noise covariance is ill-conditioned')
 logger.info(f'Saved noise covariance to: {noise_cov_bidspath.fpath}')
 
 # Make wts
