@@ -291,6 +291,10 @@ if 10e5 < full_cov_cond < 10e7:
 elif 10e7 < full_cov_cond:
     logger.error('Data covariance is ill-conditioned')
     raise ValueError('Data covariance is ill-conditioned')
+    
+if np.linalg.matrix_rank(full_cov.data) > len(full_cov.ch_names):
+    logger.error('Data covariance is not full-rank')
+    raise ValueError('Data is not full-rank, add regularization')
 
 ## Noise Covariance
 noise_cov = mne.compute_raw_covariance(noise_raw)
