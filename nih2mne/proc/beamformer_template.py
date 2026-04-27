@@ -285,14 +285,12 @@ full_cov_bidspath.fpath.parent.mkdir(parents=True, exist_ok=True)
 full_cov.save(full_cov_bidspath.fpath, overwrite=overwrite_beam)
 full_cov_cond = np.linalg.cond(full_cov.data)
 logger.info(f'Data covariance condition number: {full_cov_cond}')
+logger.info(f'Saved full covariance to: {full_cov_bidspath.fpath}')
 if 10e5 < full_cov_cond < 10e7:
     logger.warn(f'Data covariance has moderate condition #')
-elif 10e7 < full_cov_cond < 10e11:
-    logger.warn('Data covariance is poorly codititioned')
-elif 10e11 < full_cov_cond:
+elif 10e7 < full_cov_cond:
     logger.error('Data covariance is ill-conditioned')
     raise ValueError('Data covariance is ill-conditioned')
-logger.info(f'Saved full covariance to: {full_cov_bidspath.fpath}')
 
 ## Noise Covariance
 noise_cov = mne.compute_raw_covariance(noise_raw)
@@ -303,14 +301,13 @@ noise_cov_bidspath = output_path.copy().update(suffix='cov',
 noise_cov.save(noise_cov_bidspath.fpath, overwrite=overwrite_beam)
 noise_cov_cond = np.linalg.cond(noise_cov.data)
 logger.info(f'Noise covariance condition number: {noise_cov_cond}')
+logger.info(f'Saved noise covariance to: {noise_cov_bidspath.fpath}')
 if 10e5 < noise_cov_cond < 10e7:
     logger.warn(f'Noise covariance has moderate condition #')
-elif 10e7 < noise_cov_cond < 10e11:
-    logger.warn('Noise covariance is poorly codititioned')
-elif 10e11 < noise_cov_cond:
+elif 10e7 < noise_cov_cond:
     logger.error('Noise covariance is ill-conditioned')
     raise ValueError('Noise covariance is ill-conditioned')
-logger.info(f'Saved noise covariance to: {noise_cov_bidspath.fpath}')
+
 
 # Make wts
 filters = make_lcmv(epo.info, fwd, full_cov, noise_cov= noise_cov,
@@ -321,8 +318,6 @@ filters_bidspath = output_path.copy().update(description=f'LCMVf{f_min}f{f_max}'
                                              suffix='lcmv')
 filters.save(filters_bidspath.fpath, overwrite=overwrite_beam)
 logger.info(f'Saved LCMV filters to: {filters_bidspath.fpath}')
-# make_bids_json(filters_bidspath
-
 
 stc_basename = output_path.copy().update(extension='.stc')
                                          
