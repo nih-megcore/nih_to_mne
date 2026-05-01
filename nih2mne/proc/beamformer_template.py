@@ -335,12 +335,27 @@ def stc_proc(epo, taskname, filters, return_abs=False, save_ave=True,
     if save_epo:
         pass  #set this up to iterate through epochs and save
     
-    
     if save_ave:
         stc_bidspath = stc_basename.copy().update(description=f'{taskname}',
                                                   processing=f'f{f_min}f{f_max}')
         _ave_stcs.save(stc_bidspath)
         logger.info(f'Saved average STC to: {stc_bidspath.fpath}')
+        
+        # Morph to fs_average
+        stc_fs = mne.compute_source_morph(stc, subject_from=subject,
+                                          subject_to='fsaverage',
+                                          subjects_dir=subjects_dir,
+                                          smooth=5,
+                                          verbose="error").apply(_ave_stcs)
+        
+        fsaverage_ss = f"{subjects_dir}/fsaverage/bem/fsaverage-ico-5-src.fif"
+        bem_ss = f"{subjects_dir}/fsaverage/bem/fsaverage-5120-5120-5120-bem-sol.fif"
+        fs_src = mne.read_source_spaces(fsaverage_ss)
+        fs_bem = mne.read_bem_solution(bem_ss)
+        
+        gifti_outname = stc_bidspath.copy(description=f'{taskname}FSAVERAGE')
+        stc_fs.save_as_surface(gifti_outname, src=fs_src)
+        
     return _tmp_stcs, _ave_stcs
 
 
@@ -348,3 +363,4 @@ for cond in conds_OI:
     _ = stc_proc(epo, cond, filters, save_ave=True, save_epo=True)
     
 logger.info(f'FINISHED :: {_procfile_hash}')
+
