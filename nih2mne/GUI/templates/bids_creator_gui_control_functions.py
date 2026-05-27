@@ -94,7 +94,10 @@ else:
     DEFAULT_BIDS_SESSION_LIST = ['1']
     DEFAULT_BIDS_SESSION = '1'
     
-    
+if BIDS_DEFAULTS['run_rank_reorder'].upper() == 'Y':
+    DEFAULT_RUN_RANK_REORDER = True
+else:
+    DEFAULT_RUN_RANK_REORDER = False
 
 #%% 
 
@@ -123,6 +126,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                          #Options
                          crop_zeros=DEFAULT_CROPZ,
                          include_empty_room=DEFAULT_EROOM,
+                         run_rank_reorder = DEFAULT_RUN_RANK_REORDER,
                          
                          )
         

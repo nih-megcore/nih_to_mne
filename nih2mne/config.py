@@ -26,7 +26,8 @@ def _get_default_options():
                 'coreg_type': 'Brainsight', 
                 'anonymize': 'N', 
                 'crop_zeros': 'N',
-                'emptyroom': 'N'
+                'emptyroom': 'N',
+                'run_rank_reorder': 'Y'
                 }
     defaults = {'BIDS_gen': BIDS_GEN}    
     return defaults
