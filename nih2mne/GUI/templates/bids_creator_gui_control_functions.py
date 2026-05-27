@@ -221,7 +221,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     
     def _action_pb_CheckOutputs(self):
         'Map the input files to output and display in filelist'
-        self._make_task_dict()  #Generates the in_out_mapping
+        self._make_task_dict(run_rank_reorder=DEFAULT_RUN_RANK_REORDER)  #Generates the in_out_mapping
         self._make_anat_dict()  #Generates anatomy anat_io_mapping
         self._set_filelist_text()
         
@@ -400,7 +400,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.anat_io_mapping[key]['type'] = 'anat'
         
 
-    def _make_task_dict(self):
+    def _make_task_dict(self, run_rank_reorder=True):
         'Add bids_path and naming for meg datasets, mapped to self.io_mapping'
         task_dict = _gen_taskrundict(self.opts['meg_dataset_list'])
         f_out_attributes = OrderedDict() #{}
@@ -408,8 +408,11 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         #Extract out the ordered runs
         for task in task_dict.keys():
             for idx, filename in enumerate(task_dict[task]):
-                run = str(idx+1)
-                if len(run)==1: run = '0'+run
+                if run_rank_reorder == True:
+                    run = str(idx+1)
+                    if len(run)==1: run = '0'+run
+                else:
+                    run = filename.replace('.ds','').split('_')[-1]
                 bpath = self._get_bids_path(task=task, run=run)
                 f_out_attributes[filename] = {'run':run,
                                                    'task':task,
