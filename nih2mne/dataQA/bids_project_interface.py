@@ -426,9 +426,9 @@ class _subject_bids_info(qa_mri_class, meglist_class):
             self.subject = 'sub-'+subject
             self.bids_id = subject
         if bids_root==None:
-            self.bids_root=os.getcwd()
+            self.bids_root = os.getcwd()
         else:
-            self.bids_root = bids_root
+            self.bids_root = op.abspath(op.expanduser(os.fspath(bids_root)))
         if deriv_project == None:
             self.deriv_project = 'nihmeg'
         else:
@@ -439,11 +439,11 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         self.qa_output_dir = op.join(self.bids_root, 'derivatives', 'megQA')
         self.qa_default_fname = op.join(self.qa_output_dir, self.subject + '.pkl')
         
-        if not op.exists(op.join(bids_root, self.subject)):
-            raise ValueError(f'Subject {self.subject} does not exist in {bids_root}')
+        if not op.exists(op.join(self.bids_root, self.subject)):
+            raise ValueError(f'Subject {self.subject} does not exist in {self.bids_root}')
         
         if subjects_dir==None:
-            self.subjects_dir = op.join(bids_root, 'derivatives','freesurfer','subjects')
+            self.subjects_dir = op.join(self.bids_root, 'derivatives','freesurfer','subjects')
         else:
             self.subjects_dir = subjects_dir
         
@@ -455,6 +455,103 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         
         # Freesurfer Component
         self.fs_recon = self.check_fs_recon()
+
+    @staticmethod
+    def _replace_bids_root(path, old_bids_root, new_bids_root):
+        """Move a stored path when it is contained by the old BIDS root."""
+        if path is None or path == 'Multiple' or old_bids_root is None:
+            return path
+        try:
+            path = os.fspath(path)
+            old_bids_root = op.abspath(
+                op.expanduser(os.fspath(old_bids_root)))
+        except TypeError:
+            return path
+
+        path_abs = op.abspath(op.expanduser(path))
+        try:
+            is_within_old_root = (
+                op.commonpath([path_abs, old_bids_root]) == old_bids_root)
+        except ValueError:
+            is_within_old_root = False
+
+        if not is_within_old_root:
+            return path
+
+        relative_path = op.relpath(path_abs, old_bids_root)
+        return op.normpath(op.join(new_bids_root, relative_path))
+
+    def update_bids_root(self, bids_root, subjects_dir=None, validate=True):
+        """Update paths after moving a BIDS project to a new root.
+
+        Parameters
+        ----------
+        bids_root : path-like
+            New location of the BIDS project.
+        subjects_dir : path-like, optional
+            New FreeSurfer subjects directory. If omitted, an existing
+            ``subjects_dir`` below the old BIDS root is moved with the project,
+            while an external directory is left unchanged.
+        validate : bool
+            Require the subject directory to exist below the new root.
+
+        Returns
+        -------
+        self
+            The updated subject object.
+        """
+        new_bids_root = op.abspath(op.expanduser(os.fspath(bids_root)))
+        old_bids_root = getattr(self, 'bids_root', None)
+        replace_path = _subject_bids_info._replace_bids_root
+
+        if validate and not op.exists(op.join(new_bids_root, self.subject)):
+            raise ValueError(
+                f'Subject {self.subject} does not exist in {new_bids_root}')
+
+        self.bids_root = new_bids_root
+        self.deriv_root = op.join(
+            self.bids_root, 'derivatives', self.deriv_project)
+        self.qa_output_dir = op.join(
+            self.bids_root, 'derivatives', 'megQA')
+        self.qa_default_fname = op.join(
+            self.qa_output_dir, self.subject + '.pkl')
+
+        if subjects_dir is not None:
+            self.subjects_dir = op.abspath(
+                op.expanduser(os.fspath(subjects_dir)))
+        elif hasattr(self, 'subjects_dir'):
+            self.subjects_dir = replace_path(
+                self.subjects_dir, old_bids_root, self.bids_root)
+        else:
+            self.subjects_dir = op.join(
+                self.bids_root, 'derivatives', 'freesurfer', 'subjects')
+
+        for meg_dset in self.meg_list:
+            meg_dset.rel_path = replace_path(
+                meg_dset.rel_path, old_bids_root, self.bids_root)
+            meg_dset.fname = op.basename(meg_dset.rel_path)
+            if hasattr(meg_dset, 'raw'):
+                del meg_dset.raw
+        self.meg_emptyroom = [
+            meg_dset for meg_dset in self.meg_list
+            if meg_dset.is_emptyroom
+        ]
+        if hasattr(self, 'current_meg_dset'):
+            del self.current_meg_dset
+
+        self.all_mris = [
+            replace_path(
+                mri, old_bids_root, self.bids_root)
+            for mri in self.all_mris
+        ]
+        self.mri = replace_path(
+            self.mri, old_bids_root, self.bids_root)
+        if self.mri not in (None, 'Multiple'):
+            self.mri_json = self._get_matching_mr_json()
+            self._valid_fids()
+
+        self.fs_recon = self.check_fs_recon()
+        return self
         
     def _reload_info(self):
         self.fs_recon = self.check_fs_recon()
@@ -653,8 +750,15 @@ def subject_bids_info( subject=None, bids_root=None, subjects_dir=None,
     if op.exists(qa_default_fname) and (force_update==False):
         with open(qa_default_fname, 'rb') as f:
             bids_info = dill.load(f)
-            
-        bids_info._reload_info()
+
+        loaded_root = op.abspath(
+            op.expanduser(os.fspath(bids_info.bids_root)))
+        requested_root = op.abspath(op.expanduser(os.fspath(bids_root)))
+        if loaded_root != requested_root or subjects_dir is not None:
+            _subject_bids_info.update_bids_root(
+                bids_info, bids_root, subjects_dir=subjects_dir)
+        else:
+            bids_info._reload_info()
         return bids_info
     else:
         tmp_ = _subject_bids_info(subject=subject, bids_root=bids_root, 
@@ -756,4 +860,3 @@ class bids_project():
         
         
         
-
