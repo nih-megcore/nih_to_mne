@@ -45,6 +45,7 @@ testing = ['datalad','pytest','pygit2']
 "make_meg_bids_gui.py"='nih2mne.GUI.make_meg_bids_gui:cmdline'
 "meg_dataset_gui.py"='nih2mne.GUI.dataset_gui:main'
 "beamformer_code_generator"='nih2mne.GUI.beamformer_form_entries:launch_gui'
+"update_megQA_files"='nih2mne.dataQA.bids_project_interface.update_meqQA_file_cmdline_interface'
 
 
 [tool.setuptools.packages.find]

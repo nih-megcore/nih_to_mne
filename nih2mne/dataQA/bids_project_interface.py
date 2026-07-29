@@ -823,7 +823,7 @@ def reinitialize_megqa_pickles(bids_root, subjects=None, subjects_dir=None,
     return rebuilt
 
 
-def update_meqQA_file():
+def update_meqQA_file_cmdline_interface():
     """Command-line interface for rebuilding megQA pickle files."""
     import argparse
 
