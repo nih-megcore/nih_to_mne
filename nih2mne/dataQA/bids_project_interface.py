@@ -767,6 +767,93 @@ def subject_bids_info( subject=None, bids_root=None, subjects_dir=None,
         tmp_.save(overwrite=True)
         return tmp_
 
+
+def reinitialize_megqa_pickles(bids_root, subjects=None, subjects_dir=None,
+                               deriv_project=None):
+    """Rebuild megQA subject pickle files from the current BIDS tree.
+
+    This discards the stored subject objects and rescans the MEG, MRI, JSON,
+    derivatives, and FreeSurfer paths below ``bids_root``.
+
+    Parameters
+    ----------
+    bids_root : path-like
+        Current location of the BIDS project.
+    subjects : str or iterable of str, optional
+        Subjects to rebuild. Values may include or omit the ``sub-`` prefix.
+        By default, every ``sub-*`` directory in ``bids_root`` is rebuilt.
+    subjects_dir : path-like, optional
+        Override for the FreeSurfer subjects directory.
+    deriv_project : str, optional
+        Project output directory name below ``derivatives``.
+
+    Returns
+    -------
+    rebuilt : OrderedDict
+        Reinitialized subject objects keyed by their ``sub-*`` IDs.
+    """
+    bids_root = op.abspath(op.expanduser(os.fspath(bids_root)))
+    if not op.isdir(bids_root):
+        raise ValueError(f'BIDS root does not exist: {bids_root}')
+
+    if subjects is None:
+        subjects = sorted(
+            entry.name for entry in os.scandir(bids_root)
+            if entry.is_dir() and entry.name.startswith('sub-')
+        )
+    elif isinstance(subjects, (str, os.PathLike)):
+        subjects = [os.fspath(subjects)]
+    else:
+        subjects = list(subjects)
+
+    if len(subjects) == 0:
+        raise ValueError(f'No subject directories found in {bids_root}')
+
+    rebuilt = OrderedDict()
+    for subject in subjects:
+        subject = op.basename(os.fspath(subject).rstrip(op.sep))
+        bids_info = subject_bids_info(
+            subject=subject,
+            bids_root=bids_root,
+            subjects_dir=subjects_dir,
+            deriv_project=deriv_project,
+            force_update=True,
+        )
+        rebuilt[bids_info.subject] = bids_info
+    return rebuilt
+
+
+def update_meqQA_file():
+    """Command-line interface for rebuilding megQA pickle files."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Rebuild megQA pickle files from the current BIDS tree.')
+    parser.add_argument(
+        'bids_root',
+        help='Current BIDS project root.')
+    parser.add_argument(
+        '--subject',
+        dest='subjects',
+        action='append',
+        help='Subject to rebuild; repeat for multiple subjects. Default: all.')
+    parser.add_argument(
+        '--subjects-dir',
+        help='Override the FreeSurfer subjects directory.')
+    parser.add_argument(
+        '--deriv-project',
+        help='Project output directory name below derivatives.')
+    args = parser.parse_args()
+
+    rebuilt = reinitialize_megqa_pickles(
+        bids_root=args.bids_root,
+        subjects=args.subjects,
+        subjects_dir=args.subjects_dir,
+        deriv_project=args.deriv_project,
+    )
+    print(f'Reinitialized {len(rebuilt)} megQA pickle file(s).')
+
+
 class _bids_subject_list():
     def __init__(self, subject_list, bids_root):
         for subject in subject_list:

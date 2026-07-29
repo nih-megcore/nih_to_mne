@@ -4,8 +4,11 @@
 import json
 import os.path as op
 
+import dill
+
 from nih2mne.dataQA.bids_project_interface import (
     _subject_bids_info,
+    reinitialize_megqa_pickles,
     subject_bids_info,
 )
 
@@ -51,3 +54,41 @@ def test_update_bids_root_after_project_move(tmp_path):
     assert bids_info.meg_list[0].rel_path == op.join(
         new_root, 'sub-01', 'meg', 'sub-01_task-rest_meg.ds')
     assert not hasattr(bids_info, 'current_meg_dset')
+
+
+def test_reinitialize_megqa_pickles_rescans_bids_tree(tmp_path):
+    bids_root = tmp_path / 'bids'
+    anat_dir = bids_root / 'sub-01' / 'anat'
+    meg_dir = bids_root / 'sub-01' / 'meg'
+    anat_dir.mkdir(parents=True)
+    meg_dir.mkdir(parents=True)
+
+    mri = anat_dir / 'sub-01_T1w.nii'
+    mri.touch()
+    mri.with_suffix('.json').write_text(json.dumps({
+        'AnatomicalLandmarkCoordinates': {
+            'LPA': [0, 0, 0],
+            'NAS': [0, 0, 0],
+            'RPA': [0, 0, 0],
+        },
+    }))
+    (meg_dir / 'sub-01_task-rest_meg.ds').mkdir()
+
+    stale_info = _subject_bids_info('01', bids_root=bids_root)
+    stale_info.save(overwrite=True)
+    (meg_dir / 'sub-01_task-noise_meg.ds').mkdir()
+
+    rebuilt = reinitialize_megqa_pickles(bids_root)
+
+    pickle_path = (
+        bids_root / 'derivatives' / 'megQA' / 'sub-01.pkl')
+    with open(pickle_path, 'rb') as fid:
+        saved_info = dill.load(fid)
+
+    assert list(rebuilt) == ['sub-01']
+    assert saved_info.bids_root == str(bids_root)
+    assert saved_info.qa_default_fname == str(pickle_path)
+    assert sorted(dset.fname for dset in saved_info.meg_list) == [
+        'sub-01_task-noise_meg.ds',
+        'sub-01_task-rest_meg.ds',
+    ]
