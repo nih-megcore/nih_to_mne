@@ -117,26 +117,29 @@ def _relocate_project_path(path: Path, old_root: object, new_root: Path) -> Path
 
 
 def load_selected_mri(context: BIDSContext) -> Path:
-    """Load the MRI selected in the subject's megQA pickle."""
+    """Load the MRI selected in the subject's megQA YAML record."""
 
-    pickle_path = (
-        context.bids_root / "derivatives" / "megQA" / f"{context.subject}.pkl"
+    qa_path = (
+        context.bids_root / "derivatives" / "megQA" / f"{context.subject}.yml"
     )
-    if not pickle_path.is_file():
-        raise PipelineError(f"megQA pickle does not exist: {pickle_path}")
 
     try:
-        import dill
+        from nih2mne.dataQA.bids_project_interface import load_megqa_file
 
-        with pickle_path.open("rb") as stream:
-            qa_record = dill.load(stream)
+        qa_record = load_megqa_file(
+            subject=context.subject,
+            bids_root=context.bids_root,
+        )
+    except FileNotFoundError as error:
+        raise PipelineError(str(error)) from error
     except Exception as error:
-        raise PipelineError(f"could not load megQA pickle {pickle_path}: {error}") from error
+        raise PipelineError(
+            f"could not load megQA file {qa_path}: {error}") from error
 
     selected = getattr(qa_record, "mri", None)
     if selected in (None, "Multiple"):
         detail = "no MRI is selected" if selected is None else "multiple MRIs are unresolved"
-        raise PipelineError(f"{detail} in {pickle_path}")
+        raise PipelineError(f"{detail} in {qa_path}")
 
     mri = Path(str(selected)).expanduser()
     if not mri.is_absolute():

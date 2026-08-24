@@ -20,8 +20,8 @@ import glob
 import subprocess
 import mne
 import numpy as np
-import pickle
 import dill
+import yaml
 from scipy.stats import zscore, trim_mean
 import pandas as pd
 import pyctf
@@ -31,6 +31,56 @@ from collections import OrderedDict
 from datetime import datetime
 
 CFG_VERSION = 1.0
+
+_YAML_TRANSIENT_ATTRIBUTES = {
+    'current_meg_dset',
+    'meg_emptyroom',
+    'psd',
+    'raw',
+}
+
+
+def _as_yaml_data(value, attribute='value'):
+    """Convert supported megQA state to data accepted by safe YAML."""
+    if isinstance(value, np.ndarray):
+        return _as_yaml_data(value.tolist(), attribute)
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, os.PathLike):
+        return os.fspath(value)
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {
+            _as_yaml_data(key, attribute): _as_yaml_data(item, attribute)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple, set)):
+        return [_as_yaml_data(item, attribute) for item in value]
+    raise TypeError(
+        f'Attribute {attribute!r} contains unsupported YAML value '
+        f'{type(value).__name__}')
+
+
+def _object_yaml_attributes(instance):
+    """Return editable attributes while omitting runtime-only objects."""
+    return {
+        key: _as_yaml_data(value, key)
+        for key, value in instance.__dict__.items()
+        if key not in _YAML_TRANSIENT_ATTRIBUTES and key != 'meg_list'
+    }
+
+
+def _apply_yaml_attributes(instance, data, skip=()):
+    """Apply editable fields without allowing Python internals to be replaced."""
+    for key, value in data.items():
+        if key in skip:
+            continue
+        if not isinstance(key, str):
+            raise ValueError('megQA YAML attribute names must be strings')
+        if key.startswith('__') and key.endswith('__'):
+            raise ValueError(f'megQA YAML cannot set internal attribute {key!r}')
+        setattr(instance, key, value)
 
 jump_thresh = 1.5e-07 #Abs value thresh
 
@@ -113,6 +163,29 @@ class qa_megraw_object:
         self.BADS = {}
         if run_qa==True:
             self.qa_dset()
+
+    def to_dict(self):
+        """Return the persistent, text-editable state for this dataset."""
+        return _object_yaml_attributes(self)
+
+    @classmethod
+    def from_dict(cls, data):
+        """Rebuild a MEG dataset record from safe YAML data."""
+        if not isinstance(data, dict):
+            raise ValueError('Each meg_list entry must be a mapping')
+        rel_path = data.get('rel_path')
+        if not isinstance(rel_path, str) or not rel_path:
+            raise ValueError('Each meg_list entry requires a non-empty rel_path')
+
+        instance = cls(rel_path)
+        _apply_yaml_attributes(instance, data)
+
+        if hasattr(instance, 'chan_power'):
+            instance.chan_power = np.asarray(instance.chan_power)
+        jumps = getattr(instance, 'BADS', {}).get('JUMPS')
+        if isinstance(jumps, dict) and 'TSTEP' in jumps:
+            jumps['TSTEP'] = np.asarray(jumps['TSTEP'])
+        return instance
         
         
     def qa_dset(self):
@@ -433,11 +506,7 @@ class _subject_bids_info(qa_mri_class, meglist_class):
             self.deriv_project = 'nihmeg'
         else:
             self.deriv_project = deriv_project
-        self.deriv_root = op.join(self.bids_root, 'derivatives', self.deriv_project)
-        
-        # Save variables
-        self.qa_output_dir = op.join(self.bids_root, 'derivatives', 'megQA')
-        self.qa_default_fname = op.join(self.qa_output_dir, self.subject + '.pkl')
+        self._set_project_paths()
         
         if not op.exists(op.join(self.bids_root, self.subject)):
             raise ValueError(f'Subject {self.subject} does not exist in {self.bids_root}')
@@ -455,6 +524,82 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         
         # Freesurfer Component
         self.fs_recon = self.check_fs_recon()
+
+    def _set_project_paths(self):
+        """Set paths derived from the current BIDS root and project name."""
+        self.deriv_root = op.join(
+            self.bids_root, 'derivatives', self.deriv_project)
+        self.qa_output_dir = op.join(
+            self.bids_root, 'derivatives', 'megQA')
+        self.qa_default_fname = op.join(
+            self.qa_output_dir, self.subject + '.yml')
+
+    def to_dict(self):
+        """Return a versioned safe-YAML representation of this subject."""
+        data = {'schema_version': CFG_VERSION}
+        data.update(_object_yaml_attributes(self))
+        data['meg_list'] = [meg_dset.to_dict() for meg_dset in self.meg_list]
+        return data
+
+    @classmethod
+    def from_dict(cls, data, bids_root=None, subjects_dir=None):
+        """Build a subject object from a versioned YAML mapping."""
+        if not isinstance(data, dict):
+            raise ValueError('megQA YAML must contain a mapping at the top level')
+        schema_version = data.get('schema_version')
+        if schema_version is None:
+            raise ValueError('megQA YAML is missing schema_version')
+        try:
+            schema_version = float(schema_version)
+        except (TypeError, ValueError) as error:
+            raise ValueError('megQA schema_version must be numeric') from error
+        if schema_version > CFG_VERSION:
+            raise ValueError(
+                f'megQA schema version {schema_version} is newer than the '
+                f'supported version {CFG_VERSION}')
+
+        subject = data.get('subject')
+        stored_root = data.get('bids_root')
+        requested_root = bids_root if bids_root is not None else stored_root
+        if not isinstance(subject, str) or not subject:
+            raise ValueError('megQA YAML requires a non-empty subject')
+        if requested_root is None:
+            raise ValueError('megQA YAML requires bids_root')
+
+        instance = cls(
+            subject=subject,
+            bids_root=requested_root,
+            subjects_dir=subjects_dir,
+            deriv_project=data.get('deriv_project'),
+        )
+        meg_data = data.get('meg_list', [])
+        if not isinstance(meg_data, list):
+            raise ValueError('megQA YAML meg_list must be a list')
+
+        _apply_yaml_attributes(
+            instance, data,
+            skip={'schema_version', 'meg_list', 'meg_emptyroom'})
+        instance.meg_list = [
+            qa_megraw_object.from_dict(item) for item in meg_data
+        ]
+        instance.meg_emptyroom = [
+            item for item in instance.meg_list if item.is_emptyroom
+        ]
+
+        requested_root = op.abspath(
+            op.expanduser(os.fspath(requested_root)))
+        loaded_root = op.abspath(op.expanduser(os.fspath(instance.bids_root)))
+        if loaded_root != requested_root or subjects_dir is not None:
+            instance.update_bids_root(
+                requested_root, subjects_dir=subjects_dir)
+        else:
+            instance.bids_root = requested_root
+            instance._set_project_paths()
+            if instance.mri not in (None, 'Multiple'):
+                instance.mri_json = instance._get_matching_mr_json()
+                instance._valid_fids()
+            instance._reload_info()
+        return instance
 
     @staticmethod
     def _replace_bids_root(path, old_bids_root, new_bids_root):
@@ -509,12 +654,7 @@ class _subject_bids_info(qa_mri_class, meglist_class):
                 f'Subject {self.subject} does not exist in {new_bids_root}')
 
         self.bids_root = new_bids_root
-        self.deriv_root = op.join(
-            self.bids_root, 'derivatives', self.deriv_project)
-        self.qa_output_dir = op.join(
-            self.bids_root, 'derivatives', 'megQA')
-        self.qa_default_fname = op.join(
-            self.qa_output_dir, self.subject + '.pkl')
+        self._set_project_paths()
 
         if subjects_dir is not None:
             self.subjects_dir = op.abspath(
@@ -709,8 +849,10 @@ class _subject_bids_info(qa_mri_class, meglist_class):
                 return
             
         if (fname_exists==False) or (overwrite==True):
-            with open(fname, 'wb') as f:
-                dill.dump(self, f)
+            with open(fname, 'w', encoding='utf-8') as f:
+                yaml.safe_dump(
+                    self.to_dict(), f, sort_keys=False,
+                    default_flow_style=False)
             if overwrite==True:
                 print(f'Overwrote: {fname}')
     
@@ -718,8 +860,106 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         
 
 
-def subject_bids_info( subject=None, bids_root=None, subjects_dir=None, 
-                              deriv_project=None, force_update=False):
+def _megqa_filenames(subject, bids_root):
+    qa_dir = op.join(bids_root, 'derivatives', 'megQA')
+    return (
+        op.join(qa_dir, subject + '.yml'),
+        op.join(qa_dir, subject + '.pkl'),
+    )
+
+
+def _normalize_loaded_subject(bids_info, subject, bids_root,
+                              subjects_dir=None, deriv_project=None):
+    """Normalize current paths and fill defaults on a loaded subject."""
+    requested_root = op.abspath(op.expanduser(os.fspath(bids_root)))
+    if not isinstance(bids_info, _subject_bids_info):
+        loaded_attributes = getattr(bids_info, '__dict__', None)
+        if not isinstance(loaded_attributes, dict):
+            raise ValueError('legacy megQA pickle does not contain an object')
+        current = _subject_bids_info(
+            subject=subject,
+            bids_root=requested_root,
+            subjects_dir=subjects_dir,
+            deriv_project=deriv_project,
+        )
+        for key, value in loaded_attributes.items():
+            if key not in _YAML_TRANSIENT_ATTRIBUTES:
+                setattr(current, key, value)
+        bids_info = current
+
+    bids_info.subject = subject
+    bids_info.bids_id = subject[4:]
+    if not hasattr(bids_info, 'deriv_project'):
+        bids_info.deriv_project = deriv_project or 'nihmeg'
+    if not hasattr(bids_info, 'meg_list'):
+        bids_info.meg_list = []
+
+    loaded_root = op.abspath(op.expanduser(os.fspath(
+        getattr(bids_info, 'bids_root', requested_root))))
+    if loaded_root != requested_root or subjects_dir is not None:
+        bids_info.update_bids_root(
+            requested_root, subjects_dir=subjects_dir)
+    else:
+        bids_info.bids_root = requested_root
+        bids_info._set_project_paths()
+        bids_info.meg_emptyroom = [
+            item for item in bids_info.meg_list if item.is_emptyroom
+        ]
+        if hasattr(bids_info, 'current_meg_dset'):
+            del bids_info.current_meg_dset
+        if bids_info.mri not in (None, 'Multiple'):
+            bids_info.mri_json = bids_info._get_matching_mr_json()
+            bids_info._valid_fids()
+        bids_info._reload_info()
+    return bids_info
+
+
+def load_megqa_file(subject, bids_root, subjects_dir=None,
+                    deriv_project=None):
+    """Load a subject megQA YAML file, migrating a legacy pickle if needed."""
+    if subject[0:4] != 'sub-':
+        subject = 'sub-' + subject
+    bids_root = op.abspath(op.expanduser(os.fspath(bids_root)))
+    yaml_fname, pickle_fname = _megqa_filenames(subject, bids_root)
+
+    if op.exists(yaml_fname):
+        try:
+            with open(yaml_fname, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+            if isinstance(data, dict) and data.get('subject') != subject:
+                raise ValueError(
+                    f'YAML subject {data.get("subject")!r} does not match '
+                    f'filename subject {subject!r}')
+            return _subject_bids_info.from_dict(
+                data, bids_root=bids_root, subjects_dir=subjects_dir)
+        except Exception as error:
+            raise ValueError(
+                f'Could not load megQA YAML {yaml_fname}: {error}') from error
+
+    if op.exists(pickle_fname):
+        try:
+            with open(pickle_fname, 'rb') as f:
+                bids_info = dill.load(f)
+            bids_info = _normalize_loaded_subject(
+                bids_info,
+                subject=subject,
+                bids_root=bids_root,
+                subjects_dir=subjects_dir,
+                deriv_project=deriv_project,
+            )
+            bids_info.save()
+            return bids_info
+        except Exception as error:
+            raise ValueError(
+                f'Could not migrate legacy megQA pickle '
+                f'{pickle_fname}: {error}') from error
+
+    raise FileNotFoundError(
+        f'megQA file does not exist: {yaml_fname}')
+
+
+def subject_bids_info(subject=None, bids_root=None, subjects_dir=None,
+                      deriv_project=None, force_update=False):
     '''
     Main entrypoint for subject bids infor (Factory method) to initialize 
     subject_bids_info class. This is necessary to be able to preload 
@@ -746,31 +986,29 @@ def subject_bids_info( subject=None, bids_root=None, subjects_dir=None,
     '''
     if subject[0:4]!='sub-':
         subject = 'sub-'+subject
-    qa_default_fname = op.join(bids_root, 'derivatives', 'megQA', subject+'.pkl')
-    if op.exists(qa_default_fname) and (force_update==False):
-        with open(qa_default_fname, 'rb') as f:
-            bids_info = dill.load(f)
+    yaml_fname, pickle_fname = _megqa_filenames(subject, bids_root)
+    if not force_update and (
+            op.exists(yaml_fname) or op.exists(pickle_fname)):
+        return load_megqa_file(
+            subject=subject,
+            bids_root=bids_root,
+            subjects_dir=subjects_dir,
+            deriv_project=deriv_project,
+        )
 
-        loaded_root = op.abspath(
-            op.expanduser(os.fspath(bids_info.bids_root)))
-        requested_root = op.abspath(op.expanduser(os.fspath(bids_root)))
-        if loaded_root != requested_root or subjects_dir is not None:
-            _subject_bids_info.update_bids_root(
-                bids_info, bids_root, subjects_dir=subjects_dir)
-        else:
-            bids_info._reload_info()
-        return bids_info
-    else:
-        tmp_ = _subject_bids_info(subject=subject, bids_root=bids_root, 
-                          subjects_dir=subjects_dir,
-                          deriv_project=deriv_project)
-        tmp_.save(overwrite=True)
-        return tmp_
+    bids_info = _subject_bids_info(
+        subject=subject,
+        bids_root=bids_root,
+        subjects_dir=subjects_dir,
+        deriv_project=deriv_project,
+    )
+    bids_info.save(overwrite=True)
+    return bids_info
 
 
-def reinitialize_megqa_pickles(bids_root, subjects=None, subjects_dir=None,
-                               deriv_project=None):
-    """Rebuild megQA subject pickle files from the current BIDS tree.
+def reinitialize_megqa_files(bids_root, subjects=None, subjects_dir=None,
+                             deriv_project=None):
+    """Rebuild megQA subject YAML files from the current BIDS tree.
 
     This discards the stored subject objects and rescans the MEG, MRI, JSON,
     derivatives, and FreeSurfer paths below ``bids_root``.
@@ -823,12 +1061,23 @@ def reinitialize_megqa_pickles(bids_root, subjects=None, subjects_dir=None,
     return rebuilt
 
 
+def reinitialize_megqa_pickles(bids_root, subjects=None, subjects_dir=None,
+                               deriv_project=None):
+    """Compatibility alias for :func:`reinitialize_megqa_files`."""
+    return reinitialize_megqa_files(
+        bids_root=bids_root,
+        subjects=subjects,
+        subjects_dir=subjects_dir,
+        deriv_project=deriv_project,
+    )
+
+
 def update_meqQA_file_cmdline_interface():
-    """Command-line interface for rebuilding megQA pickle files."""
+    """Command-line interface for rebuilding megQA YAML files."""
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Rebuild megQA pickle files from the current BIDS tree.')
+        description='Rebuild megQA YAML files from the current BIDS tree.')
     parser.add_argument(
         'bids_root',
         help='Current BIDS project root.')
@@ -845,13 +1094,13 @@ def update_meqQA_file_cmdline_interface():
         help='Project output directory name below derivatives.')
     args = parser.parse_args()
 
-    rebuilt = reinitialize_megqa_pickles(
+    rebuilt = reinitialize_megqa_files(
         bids_root=args.bids_root,
         subjects=args.subjects,
         subjects_dir=args.subjects_dir,
         deriv_project=args.deriv_project,
     )
-    print(f'Reinitialized {len(rebuilt)} megQA pickle file(s).')
+    print(f'Reinitialized {len(rebuilt)} megQA YAML file(s).')
 
 
 class _bids_subject_list():

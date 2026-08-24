@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import dill
 import pytest
+import yaml
 
 from nih2mne.proc import sam_bids_pipeline as pipeline
 
@@ -25,7 +26,7 @@ def _dataset(tmp_path: Path, *, session="01", run="02") -> tuple[Path, Path]:
     return bids_root, dataset
 
 
-def _mri_and_pickle(bids_root: Path) -> Path:
+def _mri_and_megqa(bids_root: Path) -> Path:
     mri = bids_root / "sub-01" / "anat" / "sub-01_T1w.nii.gz"
     mri.parent.mkdir(parents=True, exist_ok=True)
     mri.touch()
@@ -40,10 +41,15 @@ def _mri_and_pickle(bids_root: Path) -> Path:
             }
         )
     )
-    qa_path = bids_root / "derivatives" / "megQA" / "sub-01.pkl"
+    qa_path = bids_root / "derivatives" / "megQA" / "sub-01.yml"
     qa_path.parent.mkdir(parents=True)
-    with qa_path.open("wb") as stream:
-        dill.dump(SimpleNamespace(mri=str(mri), bids_root=str(bids_root)), stream)
+    qa_path.write_text(yaml.safe_dump({
+        "schema_version": 1.0,
+        "subject": "sub-01",
+        "bids_root": str(bids_root),
+        "mri": str(mri),
+        "meg_list": [],
+    }, sort_keys=False))
     return mri
 
 
@@ -77,7 +83,7 @@ def test_parse_bids_dataset_rejects_relative_and_inconsistent_paths(tmp_path):
 
 def test_pipeline_runs_expected_commands_and_paths(tmp_path):
     bids_root, dataset = _dataset(tmp_path)
-    mri = _mri_and_pickle(bids_root)
+    mri = _mri_and_megqa(bids_root)
     parameter = tmp_path / "analysis.param"
     parameter.write_text("CovBand 5 70\n")
     calls = []
@@ -121,7 +127,7 @@ def test_pipeline_runs_expected_commands_and_paths(tmp_path):
 
 def test_pipeline_reuses_hull_and_supports_custom_project(tmp_path):
     bids_root, dataset = _dataset(tmp_path, session=None, run=None)
-    _mri_and_pickle(bids_root)
+    _mri_and_megqa(bids_root)
     parameter = tmp_path / "analysis.param"
     parameter.touch()
     hull = (
@@ -152,7 +158,7 @@ def test_pipeline_reuses_hull_and_supports_custom_project(tmp_path):
 
 def test_force_orthohull_regenerates_existing_hull(tmp_path):
     bids_root, dataset = _dataset(tmp_path)
-    _mri_and_pickle(bids_root)
+    _mri_and_megqa(bids_root)
     parameter = tmp_path / "analysis.param"
     parameter.touch()
     hull = (
@@ -185,7 +191,7 @@ def test_force_orthohull_regenerates_existing_hull(tmp_path):
 
 def test_pipeline_preflights_required_commands(tmp_path):
     bids_root, dataset = _dataset(tmp_path)
-    _mri_and_pickle(bids_root)
+    _mri_and_megqa(bids_root)
     parameter = tmp_path / "analysis.param"
     parameter.touch()
 
@@ -200,7 +206,7 @@ def test_pipeline_preflights_required_commands(tmp_path):
 
 def test_invalid_project_fails_before_creating_ortho_directory(tmp_path):
     bids_root, dataset = _dataset(tmp_path)
-    _mri_and_pickle(bids_root)
+    _mri_and_megqa(bids_root)
     parameter = tmp_path / "analysis.param"
     parameter.touch()
 
@@ -211,7 +217,7 @@ def test_invalid_project_fails_before_creating_ortho_directory(tmp_path):
 
 def test_pipeline_stops_when_orthohull_does_not_create_hull(tmp_path):
     bids_root, dataset = _dataset(tmp_path)
-    _mri_and_pickle(bids_root)
+    _mri_and_megqa(bids_root)
     parameter = tmp_path / "analysis.param"
     parameter.touch()
     calls = []
@@ -232,10 +238,15 @@ def test_pipeline_stops_when_orthohull_does_not_create_hull(tmp_path):
 @pytest.mark.parametrize("selected", [None, "Multiple"])
 def test_selected_mri_must_be_resolved(tmp_path, selected):
     bids_root, dataset = _dataset(tmp_path)
-    qa_path = bids_root / "derivatives" / "megQA" / "sub-01.pkl"
+    qa_path = bids_root / "derivatives" / "megQA" / "sub-01.yml"
     qa_path.parent.mkdir(parents=True)
-    with qa_path.open("wb") as stream:
-        dill.dump(SimpleNamespace(mri=selected, bids_root=str(bids_root)), stream)
+    qa_path.write_text(yaml.safe_dump({
+        "schema_version": 1.0,
+        "subject": "sub-01",
+        "bids_root": str(bids_root),
+        "mri": selected,
+        "meg_list": [],
+    }, sort_keys=False))
 
     with pytest.raises(pipeline.PipelineError, match="MRI|MRIs"):
         pipeline.load_selected_mri(pipeline.parse_bids_dataset(dataset))
@@ -243,7 +254,7 @@ def test_selected_mri_must_be_resolved(tmp_path, selected):
 
 def test_selected_mri_is_relocated_with_moved_bids_project(tmp_path):
     old_root, dataset = _dataset(tmp_path / "old")
-    _mri_and_pickle(old_root)
+    _mri_and_megqa(old_root)
     new_root = tmp_path / "new" / "bids"
     new_root.parent.mkdir(parents=True)
     old_root.rename(new_root)
@@ -253,9 +264,28 @@ def test_selected_mri_is_relocated_with_moved_bids_project(tmp_path):
     assert mri == new_root / "sub-01" / "anat" / "sub-01_T1w.nii.gz"
 
 
+def test_pipeline_migrates_legacy_megqa_pickle(tmp_path):
+    bids_root, dataset = _dataset(tmp_path)
+    mri = _mri_and_megqa(bids_root)
+    yaml_path = bids_root / "derivatives" / "megQA" / "sub-01.yml"
+    yaml_path.unlink()
+    pickle_path = yaml_path.with_suffix(".pkl")
+    with pickle_path.open("wb") as stream:
+        dill.dump(
+            SimpleNamespace(mri=str(mri), bids_root=str(bids_root)),
+            stream,
+        )
+
+    selected = pipeline.load_selected_mri(pipeline.parse_bids_dataset(dataset))
+
+    assert selected == mri
+    assert yaml_path.is_file()
+    assert pickle_path.is_file()
+
+
 def test_selected_mri_requires_valid_fiducial_coordinates(tmp_path):
     bids_root, dataset = _dataset(tmp_path)
-    mri = _mri_and_pickle(bids_root)
+    mri = _mri_and_megqa(bids_root)
     mri.with_name("sub-01_T1w.json").write_text(
         json.dumps({"AnatomicalLandmarkCoordinates": {"NAS": [1, 2, 3]}})
     )
