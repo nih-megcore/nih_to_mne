@@ -47,6 +47,7 @@ testing = ['datalad','pytest','pygit2']
 "beamformer_code_generator"='nih2mne.GUI.beamformer_form_entries:launch_gui'
 "update_megQA_files"='nih2mne.dataQA.bids_project_interface:update_meqQA_file_cmdline_interface'
 "sam_bids_pipeline"='nih2mne.proc.sam_bids_pipeline:main'
+"link_bids_dir.py"='nih2mne.utilities.link_bids_dir:main'
 
 
 [tool.setuptools.packages.find]
