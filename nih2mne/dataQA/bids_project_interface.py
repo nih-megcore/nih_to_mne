@@ -715,12 +715,18 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         dset = self._pick_meg_from_list(choice_quote='Enter the number associated with the MEG dataset to plot coreg: \n',
                                         idx=idx)
         dset.load()
-        bids_path = mne_bids.get_bids_path_from_fname(dset.fname)
-        t1_bids_path = mne_bids.get_bids_path_from_fname(self.mri, check=False)
+        # Resolve paths before asking MNE-BIDS to locate sidecars. Linked BIDS
+        # roots use a sub-* directory symlink, which recursive sidecar searches
+        # do not reliably traverse across supported Python/MNE-BIDS versions.
+        meg_path = op.realpath(dset.rel_path)
+        mri_path = op.realpath(self.mri)
+        bids_path = mne_bids.get_bids_path_from_fname(meg_path, check=False)
+        t1_bids_path = mne_bids.get_bids_path_from_fname(mri_path, check=False)
         trans = mne_bids.get_head_mri_trans(bids_path, t1_bids_path=t1_bids_path, 
                                             extra_params=dict(system_clock='ignore'),
                                             fs_subject=self.subject, fs_subjects_dir=self.subjects_dir)
-        fids_path = f'{bids_path.root}/derivatives/freesurfer/subjects/{self.subject}/bem/{self.subject}-fiducials.fif'
+        fids_path = op.join(self.subjects_dir, self.subject, 'bem',
+                            f'{self.subject}-fiducials.fif')
         if op.exists(fids_path):
             _mrifidval=True
         else:

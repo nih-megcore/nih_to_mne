@@ -285,6 +285,31 @@ def test_plot_3d_coreg_reports_surface_generation_failure(qapp, monkeypatch):
     ) in FakeStatusMessage.events
 
 
+def test_plot_3d_coreg_reports_plotting_failure(qapp, monkeypatch):
+    bids_info = FakeBidsInfo()
+    gui = Subject_GUI(bids_info)
+    FakeStatusMessage.events = []
+    monkeypatch.setattr(qt_gui_module, "QMessageBox", FakeStatusMessage)
+    monkeypatch.setattr(
+        qt_gui_module,
+        "find_head_surface",
+        lambda subject, subjects_dir: "/tmp/outer_skin.surf",
+    )
+
+    def fail_plot(idx):
+        raise RuntimeError("synthetic plotting failure")
+
+    bids_info.plot_3D_coreg = fail_plot
+
+    gui.plot_3d_coreg()
+
+    assert (
+        "critical",
+        "3D Coregistration Failed",
+        "synthetic plotting failure",
+    ) in FakeStatusMessage.events
+
+
 def test_get_task_datproc_files_filters_by_task_prefix(tmp_path):
     (tmp_path / "rest_v2.py").write_text("")
     (tmp_path / "rest_v1.sh").write_text("")

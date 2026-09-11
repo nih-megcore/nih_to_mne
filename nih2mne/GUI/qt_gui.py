@@ -1024,7 +1024,14 @@ class Subject_GUI(QWidget):
                     str(generation_error),
                 )
                 return
-        self.bids_info.plot_3D_coreg(idx=idx)
+        try:
+            self.bids_info.plot_3D_coreg(idx=idx)
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                '3D Coregistration Failed',
+                str(error),
+            )
         
     def save(self):
         self.bids_info.save(overwrite=True)

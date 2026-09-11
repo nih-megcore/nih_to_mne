@@ -3,12 +3,14 @@
 
 import json
 import os.path as op
+from types import SimpleNamespace
 
 import dill
 import numpy as np
 import pytest
 import yaml
 
+import nih2mne.dataQA.bids_project_interface as bids_interface
 from nih2mne.dataQA.bids_project_interface import (
     _subject_bids_info,
     load_megqa_file,
@@ -16,6 +18,69 @@ from nih2mne.dataQA.bids_project_interface import (
     reinitialize_megqa_pickles,
     subject_bids_info,
 )
+
+
+def test_plot_3d_coreg_resolves_linked_bids_paths(tmp_path, monkeypatch):
+    source_root = tmp_path / 'source'
+    source_subject = source_root / 'sub-01'
+    source_mri = source_subject / 'anat' / 'sub-01_T1w.nii.gz'
+    source_meg = source_subject / 'meg' / 'sub-01_task-rest_meg.ds'
+    source_mri.parent.mkdir(parents=True)
+    source_meg.mkdir(parents=True)
+    source_mri.touch()
+    source_mri.with_suffix('').with_suffix('.json').write_text('{}')
+
+    linked_root = tmp_path / 'linked'
+    linked_root.mkdir()
+    (linked_root / 'sub-01').symlink_to(source_subject, target_is_directory=True)
+    linked_mri = linked_root / 'sub-01' / 'anat' / source_mri.name
+    linked_meg = linked_root / 'sub-01' / 'meg' / source_meg.name
+
+    class FakeDataset:
+        fname = source_meg.name
+        rel_path = str(linked_meg)
+        raw = SimpleNamespace(info={'test': 'info'})
+
+        def load(self):
+            return None
+
+    bids_info = _subject_bids_info.__new__(_subject_bids_info)
+    bids_info.subject = 'sub-01'
+    bids_info.subjects_dir = str(tmp_path / 'subjects')
+    bids_info.mri = str(linked_mri)
+    bids_info.meg_list = [FakeDataset()]
+
+    parsed_paths = []
+    get_trans_calls = []
+    plot_calls = []
+
+    def fake_get_bids_path(path, check=False):
+        parsed_paths.append((path, check))
+        return path
+
+    def fake_get_trans(bids_path, **kwargs):
+        get_trans_calls.append((bids_path, kwargs))
+        return 'head-mri-trans'
+
+    monkeypatch.setattr(
+        bids_interface.mne_bids, 'get_bids_path_from_fname', fake_get_bids_path)
+    monkeypatch.setattr(
+        bids_interface.mne_bids, 'get_head_mri_trans', fake_get_trans)
+    monkeypatch.setattr(
+        bids_interface.mne.viz,
+        'plot_alignment',
+        lambda *args, **kwargs: plot_calls.append((args, kwargs)),
+    )
+
+    bids_info.plot_3D_coreg(idx=0)
+
+    assert parsed_paths == [
+        (str(source_meg.resolve()), False),
+        (str(source_mri.resolve()), False),
+    ]
+    assert get_trans_calls[0][0] == str(source_meg.resolve())
+    assert get_trans_calls[0][1]['t1_bids_path'] == str(source_mri.resolve())
+    assert plot_calls[0][1]['trans'] == 'head-mri-trans'
 
 
 def test_update_bids_root_after_project_move(tmp_path):
