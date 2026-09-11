@@ -84,6 +84,7 @@ class FakeBidsInfo:
         self.mri = mri
         self.mri_json_qa = mri_json_qa
         self.bids_root = "/tmp/fake_bids"
+        self.subjects_dir = "/tmp/fake_bids/derivatives/freesurfer/subjects"
         self.all_mris = ["/tmp/mri_a.nii.gz", "/tmp/mri_b.nii.gz"]
         self.current_meg_dset = SimpleNamespace(
             info={"bads": ["MEG 001"]},
@@ -169,9 +170,14 @@ def test_subject_gui_get_meg_events_formats_series_repr(qapp):
     assert gui.get_meg_events() == "stim    2\n"
 
 
-def test_subject_gui_plot_save_and_override_actions(qapp):
+def test_subject_gui_plot_save_and_override_actions(qapp, monkeypatch):
     bids_info = FakeBidsInfo(mri="Multiple")
     gui = Subject_GUI(bids_info)
+    monkeypatch.setattr(
+        qt_gui_module,
+        "find_head_surface",
+        lambda subject, subjects_dir: "/tmp/outer_skin.surf",
+    )
 
     gui.b_fmin.setText("1.5")
     gui.b_fmax.setText("40")
@@ -196,6 +202,87 @@ def test_subject_gui_plot_save_and_override_actions(qapp):
     assert bids_info.plot_3d_coreg_calls == [0]
     assert bids_info.saved is True
     assert bids_info.override_calls == ["/tmp/mri_b.nii.gz"]
+
+
+class FakeStatusMessage:
+    NoButton = 0
+    events = []
+
+    def __init__(self, parent=None):
+        self.parent = parent
+        self.events.append(("created", parent))
+
+    def setWindowTitle(self, title):
+        self.events.append(("title", title))
+
+    def setText(self, message):
+        self.events.append(("text", message))
+
+    def setStandardButtons(self, buttons):
+        self.events.append(("buttons", buttons))
+
+    def setModal(self, modal):
+        self.events.append(("modal", modal))
+
+    def show(self):
+        self.events.append(("show", None))
+
+    def close(self):
+        self.events.append(("close", None))
+
+    @classmethod
+    def critical(cls, parent, title, message):
+        cls.events.append(("critical", title, message))
+
+
+def test_plot_3d_coreg_generates_missing_head_surface(qapp, monkeypatch):
+    bids_info = FakeBidsInfo()
+    gui = Subject_GUI(bids_info)
+    generation_calls = []
+    FakeStatusMessage.events = []
+    monkeypatch.setattr(qt_gui_module, "QMessageBox", FakeStatusMessage)
+    monkeypatch.setattr(
+        qt_gui_module, "find_head_surface", lambda subject, subjects_dir: None
+    )
+    monkeypatch.setattr(
+        qt_gui_module,
+        "make_fast_head_surface",
+        lambda subject, subjects_dir: generation_calls.append((subject, subjects_dir)),
+    )
+
+    gui.plot_3d_coreg()
+
+    assert generation_calls == [(bids_info.subject, bids_info.subjects_dir)]
+    assert ("text", "Generating head surface, may take a minute.") in (
+        FakeStatusMessage.events
+    )
+    assert ("show", None) in FakeStatusMessage.events
+    assert ("close", None) in FakeStatusMessage.events
+    assert bids_info.plot_3d_coreg_calls == [0]
+
+
+def test_plot_3d_coreg_reports_surface_generation_failure(qapp, monkeypatch):
+    bids_info = FakeBidsInfo()
+    gui = Subject_GUI(bids_info)
+    FakeStatusMessage.events = []
+    monkeypatch.setattr(qt_gui_module, "QMessageBox", FakeStatusMessage)
+    monkeypatch.setattr(
+        qt_gui_module, "find_head_surface", lambda subject, subjects_dir: None
+    )
+
+    def fail_generation(subject, subjects_dir):
+        raise RuntimeError("synthetic generation failure")
+
+    monkeypatch.setattr(qt_gui_module, "make_fast_head_surface", fail_generation)
+
+    gui.plot_3d_coreg()
+
+    assert bids_info.plot_3d_coreg_calls == []
+    assert (
+        "critical",
+        "Head Surface Generation Failed",
+        "synthetic generation failure",
+    ) in FakeStatusMessage.events
 
 
 def test_get_task_datproc_files_filters_by_task_prefix(tmp_path):

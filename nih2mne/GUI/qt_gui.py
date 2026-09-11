@@ -30,6 +30,10 @@ from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_projec
 import os, os.path as op
 import numpy as np
 from nih2mne.utilities.montages import montages
+from nih2mne.utilities.fast_head_surface import (
+    find_head_surface,
+    make_fast_head_surface,
+)
 from nih2mne.dataQA.qa_config_reader import qa_dataset, read_yml
 import glob
 import time
@@ -987,6 +991,39 @@ class Subject_GUI(QWidget):
     
     def plot_3d_coreg(self):
         idx = self.b_chooser_meg.currentIndex()
+        head_surface = find_head_surface(
+            self.bids_info.subject,
+            self.bids_info.subjects_dir,
+        )
+        if head_surface is None:
+            status = QMessageBox(self)
+            status.setWindowTitle('Generating Head Surface')
+            status.setText('Generating head surface, may take a minute.')
+            status.setStandardButtons(QMessageBox.NoButton)
+            status.setModal(False)
+            status.show()
+            QApplication.processEvents()
+            self.b_plot_3Dcoreg.setEnabled(False)
+
+            generation_error = None
+            try:
+                make_fast_head_surface(
+                    self.bids_info.subject,
+                    self.bids_info.subjects_dir,
+                )
+            except Exception as error:
+                generation_error = error
+            finally:
+                status.close()
+                self.b_plot_3Dcoreg.setEnabled(True)
+
+            if generation_error is not None:
+                QMessageBox.critical(
+                    self,
+                    'Head Surface Generation Failed',
+                    str(generation_error),
+                )
+                return
         self.bids_info.plot_3D_coreg(idx=idx)
         
     def save(self):
