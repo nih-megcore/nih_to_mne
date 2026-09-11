@@ -716,7 +716,7 @@ class _subject_bids_info(qa_mri_class, meglist_class):
                                         idx=idx)
         dset.load()
         bids_path = mne_bids.get_bids_path_from_fname(dset.fname)
-        t1_bids_path = mne_bids.get_bids_path_from_fname(self.mri)
+        t1_bids_path = mne_bids.get_bids_path_from_fname(self.mri, check=False)
         trans = mne_bids.get_head_mri_trans(bids_path, t1_bids_path=t1_bids_path, 
                                             extra_params=dict(system_clock='ignore'),
                                             fs_subject=self.subject, fs_subjects_dir=self.subjects_dir)
@@ -810,7 +810,7 @@ class _subject_bids_info(qa_mri_class, meglist_class):
                 deriv_path =  bids_path_meg.copy().update(root=self.deriv_root, check=False)
                 deriv_path.directory.mkdir(parents=True, exist_ok=True)
                 mripreproc(bids_path=bids_path_meg,
-                           t1_bids_path= mne_bids.get_bids_path_from_fname(self.mri),
+                           t1_bids_path= mne_bids.get_bids_path_from_fname(self.mri, check=False),
                            deriv_path = deriv_path, 
                            surf=surf, subjects_dir=self.subjects_dir)
             except BaseException as e:
