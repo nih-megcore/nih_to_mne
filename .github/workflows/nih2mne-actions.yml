@@ -23,9 +23,9 @@ jobs:
         run: $CONDA/bin/conda install --name test --strict-channel-priority --override-channels --channel=conda-forge 'python=${{ matrix.python-version }}' pytest 'mne=${{ matrix.mne-version }}'
       - name: Install Git
         run: sudo apt install git -y
-      - name: Pip Install nih2mne
+      - name: Install checked-out nih2mne
         shell: bash -el {0}
-        run: $CONDA/envs/test/bin/pip  install git+https://github.com/nih-megcore/nih_to_mne.git
+        run: $CONDA/envs/test/bin/pip install .
       - name: Download test data
         shell: bash -el {0}
         run: make get_data
