@@ -22,8 +22,10 @@ jobs:
       - name: Install MNE
         shell: bash -el {0}
         run: $CONDA/bin/conda install --name test --strict-channel-priority --override-channels --channel=conda-forge 'python=${{ matrix.python-version }}' pytest 'mne=${{ matrix.mne-version }}'
-      - name: Install Git
-        run: sudo apt install git -y
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes git libegl1
       - name: Install checked-out nih2mne
         shell: bash -el {0}
         run: $CONDA/envs/test/bin/pip install .
