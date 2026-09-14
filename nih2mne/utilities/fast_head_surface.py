@@ -9,6 +9,13 @@ from pathlib import Path
 import numpy as np
 
 
+# Use a narrow windowed-sinc pass band to suppress stair-stepping from 1 mm
+# anatomical voxels. The smoothing preset uses 40 iterations and a 1/25 pass
+# band.
+_SMOOTHING_ITERATIONS = 40
+_SMOOTHING_PASS_BAND = 1 / 25
+
+
 def _subject_directory(subject: str, subjects_dir: os.PathLike | str) -> Path:
     """Return a validated FreeSurfer subject directory."""
     subject = os.fspath(subject)
@@ -85,6 +92,28 @@ def _orient_faces_outward(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray
     return faces
 
 
+def _smooth_surface(vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    """Suppress voxel-scale jaggedness without Laplacian mesh shrinkage."""
+    import pyvista as pv
+
+    vtk_faces = np.column_stack(
+        (np.full(len(faces), 3, dtype=np.int32), faces)
+    ).ravel()
+    mesh = pv.PolyData(vertices, vtk_faces)
+    smoothed = mesh.smooth_taubin(
+        n_iter=_SMOOTHING_ITERATIONS,
+        pass_band=_SMOOTHING_PASS_BAND,
+        feature_smoothing=False,
+        normalize_coordinates=True,
+    )
+    smoothed_vertices = np.asarray(smoothed.points)
+    if smoothed_vertices.shape != vertices.shape:
+        raise RuntimeError("Surface smoothing unexpectedly changed mesh topology")
+    if not np.isfinite(smoothed_vertices).all():
+        raise RuntimeError("Surface smoothing produced non-finite vertices")
+    return smoothed_vertices.astype(np.float32, copy=False)
+
+
 def make_fast_head_surface(
     subject: str,
     subjects_dir: os.PathLike | str,
@@ -96,7 +125,8 @@ def make_fast_head_surface(
     """Create a lightweight ``outer_skin.surf`` from FreeSurfer ``T1.mgz``.
 
     This surface is intended for visual inspection of MEG/MRI coregistration,
-    not for high-accuracy BEM modeling.
+    not for high-accuracy BEM modeling. A shrinkage-resistant windowed-sinc
+    filter smooths voxel-scale artifacts from the marching-cubes mesh.
 
     Parameters
     ----------
@@ -151,10 +181,11 @@ def make_fast_head_surface(
     vertices = nib.affines.apply_affine(
         image.header.get_vox2ras_tkr(), vertices
     ).astype(np.float32, copy=False)
-    faces = _orient_faces_outward(vertices, faces).astype(np.int32, copy=False)
-
     if len(vertices) == 0 or len(faces) == 0 or not np.isfinite(vertices).all():
         raise RuntimeError("Marching cubes did not produce a valid head surface")
+    faces = faces.astype(np.int32, copy=False)
+    vertices = _smooth_surface(vertices, faces)
+    faces = _orient_faces_outward(vertices, faces)
 
     bem_dir = subject_dir / "bem"
     output = bem_dir / "outer_skin.surf"
