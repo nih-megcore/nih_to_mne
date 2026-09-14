@@ -40,6 +40,12 @@ _YAML_TRANSIENT_ATTRIBUTES = {
 }
 
 
+def _resolve_linked_bids_path(path):
+    """Resolve parent directory links while preserving the BIDS basename."""
+    path = op.abspath(os.fspath(path))
+    return op.join(op.realpath(op.dirname(path)), op.basename(path))
+
+
 def _as_yaml_data(value, attribute='value'):
     """Convert supported megQA state to data accepted by safe YAML."""
     if isinstance(value, np.ndarray):
@@ -715,11 +721,11 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         dset = self._pick_meg_from_list(choice_quote='Enter the number associated with the MEG dataset to plot coreg: \n',
                                         idx=idx)
         dset.load()
-        # Resolve paths before asking MNE-BIDS to locate sidecars. Linked BIDS
-        # roots use a sub-* directory symlink, which recursive sidecar searches
-        # do not reliably traverse across supported Python/MNE-BIDS versions.
-        meg_path = op.realpath(dset.rel_path)
-        mri_path = op.realpath(self.mri)
+        # Resolve linked BIDS directories before asking MNE-BIDS to locate
+        # sidecars, but preserve the final filename because DataLad files may
+        # themselves be symlinks to non-BIDS-named git-annex objects.
+        meg_path = _resolve_linked_bids_path(dset.rel_path)
+        mri_path = _resolve_linked_bids_path(self.mri)
         bids_path = mne_bids.get_bids_path_from_fname(meg_path, check=False)
         t1_bids_path = mne_bids.get_bids_path_from_fname(mri_path, check=False)
         trans = mne_bids.get_head_mri_trans(bids_path, t1_bids_path=t1_bids_path, 

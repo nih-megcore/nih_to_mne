@@ -27,7 +27,18 @@ def test_plot_3d_coreg_resolves_linked_bids_paths(tmp_path, monkeypatch):
     source_meg = source_subject / 'meg' / 'sub-01_task-rest_meg.ds'
     source_mri.parent.mkdir(parents=True)
     source_meg.mkdir(parents=True)
-    source_mri.touch()
+    annex_key = (
+        'SHA256E-s6458244--'
+        '76dae4b73d485fc57f1a1ae55eaf3d28a9614d45183403f8076960d88076a097'
+        '.nii.gz'
+    )
+    annex_object = (
+        source_root / '.git' / 'annex' / 'objects' / 'ab' / 'cd' /
+        annex_key / annex_key
+    )
+    annex_object.parent.mkdir(parents=True)
+    annex_object.touch()
+    source_mri.symlink_to(op.relpath(annex_object, source_mri.parent))
     source_mri.with_suffix('').with_suffix('.json').write_text('{}')
 
     linked_root = tmp_path / 'linked'
@@ -74,12 +85,13 @@ def test_plot_3d_coreg_resolves_linked_bids_paths(tmp_path, monkeypatch):
 
     bids_info.plot_3D_coreg(idx=0)
 
+    assert source_mri.resolve() == annex_object
     assert parsed_paths == [
         (str(source_meg.resolve()), False),
-        (str(source_mri.resolve()), False),
+        (str(source_mri), False),
     ]
     assert get_trans_calls[0][0] == str(source_meg.resolve())
-    assert get_trans_calls[0][1]['t1_bids_path'] == str(source_mri.resolve())
+    assert get_trans_calls[0][1]['t1_bids_path'] == str(source_mri)
     assert plot_calls[0][1]['trans'] == 'head-mri-trans'
 
 
