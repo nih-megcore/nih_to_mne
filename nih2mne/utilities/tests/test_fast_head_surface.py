@@ -17,11 +17,11 @@ def _write_synthetic_t1(tmp_path: Path, subject: str = "sub-01"):
     mri_dir = subject_dir / "mri"
     mri_dir.mkdir(parents=True)
 
-    shape = (40, 42, 44)
-    center = np.array((20, 21, 22))
+    shape = (72, 74, 76)
+    center = np.array((36, 37, 38))
     coordinates = np.indices(shape).transpose(1, 2, 3, 0)
     data = np.zeros(shape, dtype=np.float32)
-    data[np.linalg.norm(coordinates - center, axis=-1) <= 10] = 100
+    data[np.linalg.norm(coordinates - center, axis=-1) <= 30] = 100
     data[2:4, 2:4, 2:4] = 100  # disconnected noise to be discarded
 
     image = nib.MGHImage(data, np.eye(4))
@@ -77,23 +77,26 @@ def test_surface_smoothing_reduces_jaggedness_without_shrinkage():
     assert volume_change < 0.05
 
 
-def test_make_fast_head_surface_writes_mne_surface(tmp_path):
+def test_make_fast_head_surface_writes_head_fif(tmp_path):
     subjects_dir, subject, center, vox2ras_tkr = _write_synthetic_t1(tmp_path)
 
     output = make_fast_head_surface(subject, subjects_dir)
 
-    assert output == subjects_dir / subject / "bem" / "outer_skin.surf"
+    assert output == subjects_dir / subject / "bem" / f"{subject}-head.fif"
     assert find_head_surface(subject, subjects_dir) == output
-    vertices, faces = mne.read_surface(output)
+    assert not (subjects_dir / subject / "bem" / "outer_skin.surf").exists()
+    surface = mne.read_bem_surfaces(output)[0]
+    vertices = surface["rr"]
+    faces = surface["tris"]
     assert vertices.shape[1] == 3
     assert faces.shape[1] == 3
     assert len(vertices) > 100
     assert len(faces) > 100
 
-    surface_center = nib.affines.apply_affine(vox2ras_tkr, center)
+    surface_center = nib.affines.apply_affine(vox2ras_tkr, center) / 1000.0
     distances = np.linalg.norm(vertices - surface_center, axis=1)
-    assert distances.max() < 13
-    assert distances.min() > 7
+    assert distances.max() < 0.033
+    assert distances.min() > 0.027
 
     assert _signed_volume(vertices, faces) > 0
 
