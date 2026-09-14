@@ -1014,8 +1014,13 @@ class Subject_GUI(QWidget):
             except Exception as error:
                 generation_error = error
             finally:
-                status.close()
+                # A buttonless QMessageBox can ignore close(). Accept it as a
+                # dialog, then process the hide/delete events before opening
+                # the 3D renderer.
+                status.accept()
+                status.deleteLater()
                 self.b_plot_3Dcoreg.setEnabled(True)
+                QApplication.processEvents()
 
             if generation_error is not None:
                 QMessageBox.critical(

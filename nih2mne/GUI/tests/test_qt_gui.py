@@ -227,8 +227,11 @@ class FakeStatusMessage:
     def show(self):
         self.events.append(("show", None))
 
-    def close(self):
-        self.events.append(("close", None))
+    def accept(self):
+        self.events.append(("accept", None))
+
+    def deleteLater(self):
+        self.events.append(("deleteLater", None))
 
     @classmethod
     def critical(cls, parent, title, message):
@@ -257,7 +260,8 @@ def test_plot_3d_coreg_generates_missing_head_surface(qapp, monkeypatch):
         FakeStatusMessage.events
     )
     assert ("show", None) in FakeStatusMessage.events
-    assert ("close", None) in FakeStatusMessage.events
+    assert ("accept", None) in FakeStatusMessage.events
+    assert ("deleteLater", None) in FakeStatusMessage.events
     assert bids_info.plot_3d_coreg_calls == [0]
 
 
@@ -283,6 +287,8 @@ def test_plot_3d_coreg_reports_surface_generation_failure(qapp, monkeypatch):
         "Head Surface Generation Failed",
         "synthetic generation failure",
     ) in FakeStatusMessage.events
+    assert ("accept", None) in FakeStatusMessage.events
+    assert ("deleteLater", None) in FakeStatusMessage.events
 
 
 def test_plot_3d_coreg_reports_plotting_failure(qapp, monkeypatch):
