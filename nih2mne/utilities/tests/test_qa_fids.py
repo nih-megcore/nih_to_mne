@@ -48,6 +48,17 @@ def test_normalize_constant_head_displays_foreground():
     assert np.all(normalized[~head] == 0)
 
 
+def test_normalize_squeezes_trailing_singleton_dimension():
+    image, data, _ = _synthetic_head_image()
+    singleton_4d = nib.Nifti1Image(data[..., np.newaxis], image.affine)
+
+    normalized = qa_fids._normalize_mri_for_display(singleton_4d)
+
+    assert singleton_4d.shape == (12, 12, 12, 1)
+    assert normalized.shape == (12, 12, 12)
+    assert normalized.get_fdata().max() == 128
+
+
 def test_normalize_empty_image_fails_clearly():
     image = nib.Nifti1Image(np.zeros((8, 8, 8), dtype=np.float32), np.eye(4))
 
@@ -66,7 +77,11 @@ def test_plot_fids_uses_normalized_volume_for_all_panels(
     anat_dir.mkdir(parents=True)
     t1_path = anat_dir / "sub-01_T1w.nii.gz"
     image, _, _ = _synthetic_head_image()
-    nib.save(image, t1_path)
+    singleton_4d = nib.Nifti1Image(
+        image.get_fdata(dtype=np.float32)[..., np.newaxis],
+        image.affine,
+    )
+    nib.save(singleton_4d, t1_path)
     t1_path.with_name("sub-01_T1w.json").write_text(
         json.dumps(
             {
@@ -108,6 +123,7 @@ def test_plot_fids_uses_normalized_volume_for_all_panels(
 
     assert len(plot_calls) == 3
     assert all(call[0] is plot_calls[0][0] for call in plot_calls)
+    assert plot_calls[0][0].shape == (12, 12, 12)
     assert [call[1]["axes"] for call in plot_calls] == axes
     assert [call[1]["title"] for call in plot_calls] == ["LPA", "NAS", "RPA"]
     for _, kwargs in plot_calls:

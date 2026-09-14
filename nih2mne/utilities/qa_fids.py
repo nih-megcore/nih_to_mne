@@ -20,6 +20,7 @@ _FIDS_DISPLAY_MAX = 128.0
 
 def _normalize_mri_for_display(mri):
     """Scale the connected head foreground for consistent FIDS display."""
+    mri = nib.funcs.squeeze_image(mri)
     data = mri.get_fdata(dtype=np.float32)
     head_mask = np.asarray(
         compute_background_mask(
