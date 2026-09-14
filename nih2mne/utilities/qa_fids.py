@@ -6,11 +6,50 @@ import os.path as op
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from nilearn.masking import compute_background_mask
 from nilearn.plotting import plot_anat
 import mne_bids
 import glob
 import json
 import nibabel as nib
+
+
+_FIDS_DISPLAY_PERCENTILES = (5.0, 95.0)
+_FIDS_DISPLAY_MAX = 128.0
+
+
+def _normalize_mri_for_display(mri):
+    """Scale the connected head foreground for consistent FIDS display."""
+    data = mri.get_fdata(dtype=np.float32)
+    head_mask = np.asarray(
+        compute_background_mask(
+            mri,
+            connected=True,
+            opening=False,
+        ).dataobj,
+        dtype=bool,
+    )
+    finite_head = head_mask & np.isfinite(data)
+    head_values = data[finite_head]
+    if head_values.size == 0:
+        raise ValueError("Could not identify finite head intensities in the MRI")
+
+    lower, upper = np.percentile(head_values, _FIDS_DISPLAY_PERCENTILES)
+    if upper <= lower:
+        lower = head_values.min()
+        upper = head_values.max()
+
+    normalized = np.zeros(data.shape, dtype=np.float32)
+    if upper > lower:
+        scaled = (head_values - lower) * (_FIDS_DISPLAY_MAX / (upper - lower))
+        normalized[finite_head] = np.clip(scaled, 0, _FIDS_DISPLAY_MAX)
+    else:
+        normalized[finite_head] = _FIDS_DISPLAY_MAX
+
+    header = mri.header.copy()
+    header.set_data_dtype(np.float32)
+    return mri.__class__(normalized, mri.affine, header=header)
+
 
 def plot_fids_qa(subjid=None, bids_root=None, outfile=None, block=False, 
                  mri_override=None):
@@ -50,6 +89,7 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None, block=False,
     jsonfile = str(t1w_bids_path.copy().update(extension='.json'))
     
     mr = nib.load(t1w_bids_path)
+    display_mr = _normalize_mri_for_display(mr)
     
     with open(jsonfile, 'r') as f:
         json_out = json.load(f)
@@ -68,11 +108,13 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None, block=False,
         fig, axs = plt.subplots(3, 1, figsize=(7, 7), facecolor="k")
         for point_idx, label in enumerate(("LPA", "NAS", "RPA")):
             plot_anat(
-                str(t1w_bids_path),
+                display_mr,
                 axes=axs[point_idx],
                 cut_coords=mri_pos[label],#, :],
                 title=label,
-                vmax=160,
+                vmin=0,
+                vmax=_FIDS_DISPLAY_MAX,
+                dim=0,
                 output_file = outfile
             )
         plt.show()
@@ -80,11 +122,13 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None, block=False,
         fig, axs = plt.subplots(3, 1, figsize=(7, 7), facecolor="k")
         for point_idx, label in enumerate(("LPA", "NAS", "RPA")):
             plot_anat(
-                str(t1w_bids_path),
+                display_mr,
                 axes=axs[point_idx],
                 cut_coords=mri_pos[label],#, :],
                 title=label,
-                vmax=160,
+                vmin=0,
+                vmax=_FIDS_DISPLAY_MAX,
+                dim=0,
             )
         plt.show(block=True)
 
@@ -129,5 +173,4 @@ def main():
                 print(f'Failed to create QA image for {subject}')
                          
 if __name__ == '__main__':
-    main()    
-    
+    main()
