@@ -32,6 +32,8 @@ from datetime import datetime
 
 CFG_VERSION = 1.0
 
+_YAML_SAFE_LOADER = getattr(yaml, 'CSafeLoader', yaml.SafeLoader)
+
 _YAML_TRANSIENT_ATTRIBUTES = {
     'current_meg_dset',
     'meg_emptyroom',
@@ -87,6 +89,28 @@ def _apply_yaml_attributes(instance, data, skip=()):
         if key.startswith('__') and key.endswith('__'):
             raise ValueError(f'megQA YAML cannot set internal attribute {key!r}')
         setattr(instance, key, value)
+
+
+def _read_last_line(fname, block_size=4096):
+    """Read the final line without loading an entire potentially large log."""
+    with open(fname, 'rb') as stream:
+        stream.seek(0, os.SEEK_END)
+        position = stream.tell()
+        buffer = b''
+
+        while position > 0:
+            read_size = min(block_size, position)
+            position -= read_size
+            stream.seek(position)
+            buffer = stream.read(read_size) + buffer
+            stripped = buffer.rstrip(b'\r\n')
+            if position == 0 or b'\n' in stripped or b'\r' in stripped:
+                lines = stripped.splitlines()
+                if len(lines) == 0:
+                    return ''
+                return lines[-1].decode('utf-8', errors='replace')
+        return ''
+
 
 jump_thresh = 1.5e-07 #Abs value thresh
 
@@ -476,11 +500,10 @@ class qa_mri_class:
         if not op.exists(logfile):
             finished = False
             started = False
-            fs_success_line=[]
+            fs_success_line = ''
         else:
             started = True
-            with open(logfile) as f:
-                fs_success_line = f.readlines()[-1]
+            fs_success_line = _read_last_line(logfile)
         if 'finished without error' in fs_success_line:
             finished = True
         else:
@@ -572,15 +595,32 @@ class _subject_bids_info(qa_mri_class, meglist_class):
         if requested_root is None:
             raise ValueError('megQA YAML requires bids_root')
 
-        instance = cls(
-            subject=subject,
-            bids_root=requested_root,
-            subjects_dir=subjects_dir,
-            deriv_project=data.get('deriv_project'),
-        )
         meg_data = data.get('meg_list', [])
         if not isinstance(meg_data, list):
             raise ValueError('megQA YAML meg_list must be a list')
+
+        requested_root = op.abspath(
+            op.expanduser(os.fspath(requested_root)))
+        if not op.exists(op.join(requested_root, subject)):
+            raise ValueError(
+                f'Subject {subject} does not exist in {requested_root}')
+
+        # Loading persisted state should not call __init__: that constructor
+        # deliberately scans the BIDS tree and is reserved for creating or
+        # explicitly rebuilding megQA records.
+        instance = cls.__new__(cls)
+        hydration_root = (
+            stored_root if stored_root is not None else requested_root)
+        instance.subject = subject
+        instance.bids_id = (
+            subject[4:] if subject.startswith('sub-') else subject)
+        instance.bids_root = hydration_root
+        instance.deriv_project = data.get('deriv_project') or 'nihmeg'
+        instance.subjects_dir = data.get('subjects_dir') or op.join(
+            hydration_root, 'derivatives', 'freesurfer', 'subjects')
+        instance.all_mris = []
+        instance.mri = None
+        instance.mri_json_qa = 'No MRIs'
 
         _apply_yaml_attributes(
             instance, data,
@@ -592,8 +632,6 @@ class _subject_bids_info(qa_mri_class, meglist_class):
             item for item in instance.meg_list if item.is_emptyroom
         ]
 
-        requested_root = op.abspath(
-            op.expanduser(os.fspath(requested_root)))
         loaded_root = op.abspath(op.expanduser(os.fspath(instance.bids_root)))
         if loaded_root != requested_root or subjects_dir is not None:
             instance.update_bids_root(
@@ -937,7 +975,7 @@ def load_megqa_file(subject, bids_root, subjects_dir=None,
     if op.exists(yaml_fname):
         try:
             with open(yaml_fname, 'r', encoding='utf-8') as f:
-                data = yaml.safe_load(f)
+                data = yaml.load(f, Loader=_YAML_SAFE_LOADER)
             if isinstance(data, dict) and data.get('subject') != subject:
                 raise ValueError(
                     f'YAML subject {data.get("subject")!r} does not match '

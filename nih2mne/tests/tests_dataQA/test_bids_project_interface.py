@@ -218,6 +218,50 @@ def test_yaml_round_trip_preserves_editable_and_extension_fields(tmp_path):
     assert resaved['deriv_project'] == 'nihmeg'
 
 
+def test_yaml_load_does_not_rescan_subject_tree(tmp_path, monkeypatch):
+    bids_root = tmp_path / 'bids'
+    meg_dir = bids_root / 'sub-01' / 'meg'
+    meg_dir.mkdir(parents=True)
+    (meg_dir / 'sub-01_task-rest_meg.ds').mkdir()
+
+    subject_bids_info('01', bids_root=bids_root)
+
+    def fail_if_initialized(*args, **kwargs):
+        raise AssertionError('YAML loading must not rescan the BIDS tree')
+
+    monkeypatch.setattr(_subject_bids_info, '__init__', fail_if_initialized)
+    loaded = subject_bids_info('01', bids_root=bids_root)
+
+    assert loaded.subject == 'sub-01'
+    assert [item.fname for item in loaded.meg_list] == [
+        'sub-01_task-rest_meg.ds']
+
+
+def test_megqa_yaml_loader_is_safe(tmp_path):
+    bids_root = tmp_path / 'bids'
+    (bids_root / 'sub-01').mkdir(parents=True)
+    yaml_path = bids_root / 'derivatives' / 'megQA' / 'sub-01.yml'
+    yaml_path.parent.mkdir(parents=True)
+    yaml_path.write_text(
+        '!!python/object/apply:builtins.str [unsafe]\n')
+
+    with pytest.raises(ValueError, match=r'sub-01\.yml'):
+        subject_bids_info('01', bids_root=bids_root)
+
+
+def test_megqa_yaml_loader_falls_back_to_python_loader(
+        tmp_path, monkeypatch):
+    bids_root = tmp_path / 'bids'
+    (bids_root / 'sub-01').mkdir(parents=True)
+    subject_bids_info('01', bids_root=bids_root)
+    monkeypatch.setattr(
+        bids_interface, '_YAML_SAFE_LOADER', yaml.SafeLoader)
+
+    loaded = subject_bids_info('01', bids_root=bids_root)
+
+    assert loaded.subject == 'sub-01'
+
+
 def test_hand_edited_mri_selection_refreshes_derived_fields(tmp_path):
     bids_root = tmp_path / 'bids'
     anat_dir = bids_root / 'sub-01' / 'anat'
@@ -293,3 +337,46 @@ def test_invalid_yaml_reports_its_filename(tmp_path):
 
     with pytest.raises(ValueError, match=r'sub-01\.yml'):
         subject_bids_info('01', bids_root=bids_root)
+
+
+@pytest.mark.parametrize(
+    ('contents', 'expected'),
+    [
+        (b'', ''),
+        (b'only line', 'only line'),
+        (b'first line\nlast line\n', 'last line'),
+        (b'first line\r\nlast line\r\n', 'last line'),
+        (b'x' * 5000 + b'\nfinal line', 'final line'),
+        (b'x\n' + b'y' * 5000, 'y' * 5000),
+    ],
+)
+def test_read_last_line(tmp_path, contents, expected):
+    logfile = tmp_path / 'recon-all.log'
+    logfile.write_bytes(contents)
+
+    assert bids_interface._read_last_line(logfile) == expected
+
+
+@pytest.mark.parametrize(
+    ('last_line', 'expected_success'),
+    [
+        ('recon-all finished without error', True),
+        ('recon-all failed', False),
+    ],
+)
+def test_fs_recon_status_uses_last_log_line(
+        tmp_path, last_line, expected_success):
+    subjects_dir = tmp_path / 'subjects'
+    scripts_dir = subjects_dir / 'sub-01' / 'scripts'
+    scripts_dir.mkdir(parents=True)
+    logfile = scripts_dir / 'recon-all.log'
+    logfile.write_text(('earlier output\n' * 10000) + last_line + '\n')
+
+    bids_info = _subject_bids_info.__new__(_subject_bids_info)
+    bids_info.subject = 'sub-01'
+    bids_info.subjects_dir = str(subjects_dir)
+
+    status = bids_info.check_fs_recon()
+
+    assert status['fs_started'] is True
+    assert status['fs_success'] is expected_success
