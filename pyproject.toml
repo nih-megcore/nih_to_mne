@@ -21,7 +21,7 @@ classifiers=[
         "Operating System :: POSIX",
     ]
 dependencies = [
-'mne', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'wget','nilearn', 'scikit-image', 'pysimplegui-4-foss', 'pyyaml', 'pyqtgraph', 'pyvista',
+'mne', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'wget','nilearn', 'scikit-image', 'pysimplegui-4-foss', 'pyyaml', 'pyqtgraph', 'pyvista>=0.45',
 'pyctf-nihmegcore' , 'dill', 'PyQt5', 'autoreject', 'importlib-metadata'
 ]
 
