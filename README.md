@@ -20,6 +20,17 @@ Set up MNE environment (conda can be substituted for mamba below if it doesn't w
 Install nih_to_mne<br>
 ```pip install git+https://github.com/nih-megcore/nih_to_mne```
 
+PyQt6 is the default Qt binding used by the GUI applications. Managed
+environments that still provide PyQt5 5.15 can select the compatibility path
+before launching a GUI:
+
+```bash
+QT_API=pyqt5 bids_qa_gui.py
+```
+
+Developers can regenerate the checked-in Qt Designer forms with PyQt6 by
+running `python tools/regenerate_qt_ui.py` from the repository root.
+
 ## GUI Components For Creating and QA-ing BIDS data
 Overview Here: https://megcore.nih.gov/index.php/BIDS_GUIs
 Include: Trigger Parsing, BIDS creation, and BIDS QA

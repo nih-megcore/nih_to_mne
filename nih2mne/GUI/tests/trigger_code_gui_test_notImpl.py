@@ -7,7 +7,11 @@ Created on Tue Feb 10 10:52:29 2026
 """
 
 from nih2mne.GUI.trigger_code_gui import event_coding_window
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget
+from nih2mne.GUI.qt_compat import QtCore, QtWidgets
+
+QApplication = QtWidgets.QApplication
+QMainWindow = QtWidgets.QMainWindow
+QWidget = QtWidgets.QWidget
 import sys
 
 
@@ -15,7 +19,7 @@ import sys
 # app = QApplication(sys.argv)
 # win = event_coding_window() 
 # win.show()
-# #sys.exit(app.exec_())
+# #sys.exit(app.exec())
 
 
 
@@ -145,7 +149,7 @@ for i, tile in win.tile_dict.items():
         markname = tile.te_EvtName.text()
         if markname == '':
             continue
-        invert_val = tile.cb_Down.checkState() == 2
+        invert_val = tile.cb_Down.checkState() == QtCore.Qt.CheckState.Checked
         tmp_dframe = threshold_detect(dsname=win.meg_fname, 
                                      channel=i, 
                                      mark=markname, 
@@ -195,11 +199,11 @@ widget.pb_Check.setText(f"N={event_count}")
 # _widget = win.ui.list_ParseMarks.itemWidget(_item)
 # #Lead Combo
 # # _widget.combo_LeadSelection.setReadOnly(True)
-# _widget.combo_LeadSelection.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-# _widget.combo_LeadSelection.setFocusPolicy(Qt.NoFocus)
+# _widget.combo_LeadSelection.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+# _widget.combo_LeadSelection.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 # #Lag Combo
 # # _widget.combo_LagSelection.setReadOnly(True)
-# _widget.combo_LagSelection.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-# _widget.combo_LagSelection.setFocusPolicy(Qt.NoFocus)
+# _widget.combo_LagSelection.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+# _widget.combo_LagSelection.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
 # _widget.te_MrkName.setReadOnly(True)

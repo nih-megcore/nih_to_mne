@@ -10,14 +10,15 @@ import pytest
 import os, os.path as op
 import nih2mne
 import sys
-#from PyQt5 import QtWidgets
-#from PyQt5.QtWidgets import QApplication
-#from nih2mne.GUI.trigger_code_gui import event_coding_Window
 
-@pytest.mark.skip(reason="Pyqt import lib issue")
+@pytest.mark.skip(reason="requires the external CTF test dataset")
 def test_window():
-    from PyQt5.QtTest import QTest
-    from PyQt5.QtCore import Qt
+    from nih2mne.GUI.qt_compat import QtCore, QtTest, QtWidgets
+    from nih2mne.GUI.trigger_code_gui import event_coding_window
+
+    QApplication = QtWidgets.QApplication
+    QTest = QtTest.QTest
+    Qt = QtCore.Qt
     raw_fname = op.join(nih2mne.__path__[0], 'test_data','20010101','ABABABAB_haririhammer_20010101_002.ds')
     app = QApplication(sys.argv)
     win = event_coding_Window(cmdline_meg_fname=raw_fname)
@@ -33,7 +34,7 @@ def test_window():
     tmp_events_to_write = ['evt_UADC016','evt_UPPT001_11', 'evt_parse_test2', 'evt_parse_test3']
     
     # Press the Update event names to initialize parse marks panel
-    QTest.mouseClick(self.b_update_event_names, Qt.LeftButton)
+    QTest.mouseClick(self.b_update_event_names, Qt.MouseButton.LeftButton)
     
     # Set parse marks test event names
     tmp_parsemarks_set_names = ['evt_parse_test1', 'evt_parse_test2', 'evt_parse_test3']
@@ -56,12 +57,12 @@ def test_window():
             test_parse_marks_tile.b_mark_on_lead.setChecked(True)
         else:
             test_parse_marks_tile.b_mark_on_lag.setChecked(True)
-            QTest.mouseClick(test_parse_marks_tile.b_mark_on_lag, Qt.LeftButton)
+            QTest.mouseClick(test_parse_marks_tile.b_mark_on_lag, Qt.MouseButton.LeftButton)
         
         # The last item is the parsemarks event name
         evt_name_idx = self.parsemarks_full_layout_list[-1].layout().count() - 1
         widg = self.parsemarks_full_layout_list[-1].itemAt(evt_name_idx).widget()
-        QTest.mouseClick(widg, Qt.LeftButton)
+        QTest.mouseClick(widg, Qt.MouseButton.LeftButton)
     
     ## Test that the parsemarks names have been set correctly
     assert len(self.parsemarks_tile_list) == len(tmp_parsemarks_set_names) + 1
@@ -81,7 +82,7 @@ def test_window():
         print(f'Count {i}: {evt_name}')
         if evt_name in tmp_events_to_write:
             tmp=self.keep_events_layout.layout().itemAt(i).widget()
-            QTest.mouseClick(tmp, Qt.LeftButton)
+            QTest.mouseClick(tmp, Qt.MouseButton.LeftButton)
             try:
                 assert tmp.isChecked()
             except:

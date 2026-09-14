@@ -9,7 +9,9 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtWidgets import QApplication
+from nih2mne.GUI.qt_compat import QtWidgets
+
+QApplication = QtWidgets.QApplication
 
 _MODULE_NAMES = [
     "nih2mne.dataQA.bids_project_interface",
@@ -205,7 +207,9 @@ def test_subject_gui_plot_save_and_override_actions(qapp, monkeypatch):
 
 
 class FakeStatusMessage:
-    NoButton = 0
+    class StandardButton:
+        NoButton = 0
+
     events = []
 
     def __init__(self, parent=None):

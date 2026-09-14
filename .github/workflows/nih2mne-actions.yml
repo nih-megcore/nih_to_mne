@@ -10,6 +10,7 @@ jobs:
         os: ["ubuntu-latest"]
         python-version: ["3.11"]
         mne-version: ["1.10"]
+        qt-api: ["pyqt6", "pyqt5"]
     steps:
       - uses: conda-incubator/setup-miniconda@v3
       - uses: actions/checkout@v4
@@ -26,10 +27,17 @@ jobs:
       - name: Install checked-out nih2mne
         shell: bash -el {0}
         run: $CONDA/envs/test/bin/pip install .
+      - name: Install PyQt5 compatibility binding
+        if: matrix.qt-api == 'pyqt5'
+        shell: bash -el {0}
+        run: $CONDA/envs/test/bin/pip install 'PyQt5>=5.15'
       - name: Download test data
         shell: bash -el {0}
         run: make get_data
       - name: Pytest
         shell: bash -el {0}
+        env:
+          QT_API: ${{ matrix.qt-api }}
+          QT_QPA_PLATFORM: offscreen
         run: $CONDA/envs/test/bin/pytest
   

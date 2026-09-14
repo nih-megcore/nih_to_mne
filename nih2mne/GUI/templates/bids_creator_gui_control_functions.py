@@ -28,8 +28,9 @@ pb_run  #Run operation
 **pb_check_inpout #pushbutton to read current bids config, update run outputs, in -->> out naming in list
 
 """
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication
+from nih2mne.GUI.qt_compat import QtCore, QtGui, QtWidgets
+
+QApplication = QtWidgets.QApplication
 from nih2mne.GUI.templates.BIDS_creator_gui import Ui_MainWindow
 import sys
 import os, os.path as op
@@ -159,8 +160,10 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.cb_emptyroom.stateChanged.connect(self._action_cb_emptyroom)
         
         ### Initialize w/ DEFAULTS
-        if self.opts['include_empty_room']: self.ui.cb_emptyroom.setCheckState(2)
-        if self.opts['crop_zeros']: self.ui.cb_crop_zeros.setCheckState(2)
+        if self.opts['include_empty_room']:
+            self.ui.cb_emptyroom.setCheckState(QtCore.Qt.CheckState.Checked)
+        if self.opts['crop_zeros']:
+            self.ui.cb_crop_zeros.setCheckState(QtCore.Qt.CheckState.Checked)
         if self.opts['anonymize']: 
             if shutil.which('newDs'):
                 self.ui.pb_Anonymize.setText('Anonymize: Y')
@@ -281,13 +284,13 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.opts['bids_dir'] = directory
         
     def _action_cb_emptyroom(self):
-        if self.ui.cb_emptyroom.checkState() == 2:
+        if self.ui.cb_emptyroom.checkState() == QtCore.Qt.CheckState.Checked:
             self.opts['include_empty_room'] = True
         else:
             self.opts['include_empty_room'] = False
 
     def _action_cb_crop_zeros(self):
-        if self.ui.cb_crop_zeros.checkState() == 2:
+        if self.ui.cb_crop_zeros.checkState() == QtCore.Qt.CheckState.Checked:
             self.opts['crop_zeros'] = True
         else:
             self.opts['crop_zeros'] = False
@@ -341,7 +344,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     
     def open_file_dialog(self, file_filters='*', default_dir=os.getcwd()):
         # Open file dialog
-        options = QtWidgets.QFileDialog.Options()
+        options = QtWidgets.QFileDialog.Option()
         fileName, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
             "Select File",  # Dialog title
@@ -352,7 +355,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         return fileName
     
     def open_folder_dialog(self, default_dir=os.getcwd()):
-        options = QtWidgets.QFileDialog.Options()
+        options = QtWidgets.QFileDialog.Option()
         directory = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Select Directory",  # Dialog title

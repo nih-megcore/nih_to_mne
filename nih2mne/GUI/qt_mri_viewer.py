@@ -6,18 +6,27 @@ Created on Sun Oct 27 11:51:20 2024
 @author: jstout
 """
 
+from nih2mne.GUI.qt_compat import QtCore, QtWidgets
+
+QApplication = QtWidgets.QApplication
+QMainWindow = QtWidgets.QMainWindow
+QWidget = QtWidgets.QWidget
+QGridLayout = QtWidgets.QGridLayout
+QHBoxLayout = QtWidgets.QHBoxLayout
+QVBoxLayout = QtWidgets.QVBoxLayout
+QPushButton = QtWidgets.QPushButton
+QLabel = QtWidgets.QLabel
+QComboBox = QtWidgets.QComboBox
+QLineEdit = QtWidgets.QLineEdit
+QSlider = QtWidgets.QSlider
+Qt = QtCore.Qt
+
 import matplotlib.pyplot as plt
 import numpy as np
 import os, os.path as op
 import nibabel as nib
 import glob, sys
 import pyqtgraph as pg
-
-from PyQt5 import QtWidgets, Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
-    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit
-from PyQt5.QtWidgets import QSlider
-from PyQt5.QtCore import Qt  
 
 
 bids_root = '/fast2/BIDS'
@@ -55,7 +64,7 @@ def window(img_dict=None, num_rows=6, num_cols=4):
     app = QApplication(sys.argv)
     win = image_plot_grid(img_dict, gridsize_row=num_rows, gridsize_col=num_cols)
     win.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 #%%
 #FIX !!!!!!  Set panel title -- will not update on second panel
@@ -79,7 +88,7 @@ class image_plot_grid(QMainWindow):
         subject_slider_layout = QHBoxLayout()
         self.image_grid_layout = self.init_subject_image_layout()
         subject_slider_layout.addLayout(self.image_grid_layout)
-        self.b_slice_adjuster = QSlider(Qt.Vertical)
+        self.b_slice_adjuster = QSlider(Qt.Orientation.Vertical)
         self.b_slice_adjuster.valueChanged.connect(self.slice_change)
         self.b_slice_adjuster.setMinimum(0)
         self.b_slice_adjuster.setMaximum(self.data_dict[self.subject_keys[0]].shape[cut_axis]-1)
@@ -144,4 +153,3 @@ class image_plot_grid(QMainWindow):
 
 if __name__ == "__main__":
     window(img_dict)
-

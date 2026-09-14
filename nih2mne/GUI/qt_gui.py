@@ -20,9 +20,20 @@ Layout:
 
 """
 
-from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
-    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QMessageBox, QCheckBox
+from nih2mne.GUI.qt_compat import QtCore, QtWidgets
+
+QApplication = QtWidgets.QApplication
+QMainWindow = QtWidgets.QMainWindow
+QWidget = QtWidgets.QWidget
+QGridLayout = QtWidgets.QGridLayout
+QHBoxLayout = QtWidgets.QHBoxLayout
+QVBoxLayout = QtWidgets.QVBoxLayout
+QPushButton = QtWidgets.QPushButton
+QLabel = QtWidgets.QLabel
+QComboBox = QtWidgets.QComboBox
+QLineEdit = QtWidgets.QLineEdit
+QMessageBox = QtWidgets.QMessageBox
+QCheckBox = QtWidgets.QCheckBox
 
 import sys
 import shlex
@@ -37,7 +48,7 @@ from nih2mne.utilities.fast_head_surface import (
 from nih2mne.dataQA.qa_config_reader import qa_dataset, read_yml
 import glob
 import time
-from PyQt5.QtCore import QTimer
+QTimer = QtCore.QTimer
 import pandas as pd
 import hashlib
 from pathlib import Path
@@ -592,7 +603,7 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
                                         initial_selection,
                                         subject_statuses=subject_statuses,
                                         parent=self)
-        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             self.selected_subjects = set(dialog.get_selected_subjects())
             self.update_summary()
 
@@ -844,7 +855,7 @@ class Subject_GUI(QWidget):
         meg_display_layout.addWidget(self.b_fmax)
         meg_display_layout.addWidget(QLabel('notch'))
         self.b_f_mains = QCheckBox()
-        self.b_f_mains.setCheckState(2)
+        self.b_f_mains.setCheckState(QtCore.Qt.CheckState.Checked)
         meg_display_layout.addWidget(self.b_f_mains)
         self.b_plot_montage = QComboBox()
         self.b_plot_montage.addItems(montages.keys())
@@ -931,10 +942,10 @@ class Subject_GUI(QWidget):
         
         #Bad epochs and channels are written after confirmation response        
         msg.setDetailedText(f'filename: {self.bids_info.meg_list[idx].fname}\n Bad Chans {_bads}\n Bad Epochs {len(_bad_epochs)}')
-        msg.setStandardButtons(QMessageBox.No | QMessageBox.Save)
-        msg.setDefaultButton(QMessageBox.No)
+        msg.setStandardButtons(QMessageBox.StandardButton.No | QMessageBox.StandardButton.Save)
+        msg.setDefaultButton(QMessageBox.StandardButton.No)
         msg.buttonClicked.connect(self.return_message_box_response)
-        msg.exec_()
+        msg.exec()
     
     def return_message_box_response(self, i):
         idx = self.b_chooser_meg.currentIndex()
@@ -999,7 +1010,7 @@ class Subject_GUI(QWidget):
             status = QMessageBox(self)
             status.setWindowTitle('Generating Head Surface')
             status.setText('Generating head surface, may take a minute.')
-            status.setStandardButtons(QMessageBox.NoButton)
+            status.setStandardButtons(QMessageBox.StandardButton.NoButton)
             status.setModal(False)
             status.show()
             QApplication.processEvents()
@@ -1048,7 +1059,7 @@ class Subject_GUI(QWidget):
 
     def open_datproc_dialog(self):
         self.datproc_dialog = DatprocSubmissionDialog(self)
-        self.datproc_dialog.exec_()
+        self.datproc_dialog.exec()
         
         
                               
@@ -1243,7 +1254,7 @@ class BIDS_Project_Window(QMainWindow):
 
     def open_project_datproc_dialog(self):
         self.project_datproc_dialog = ProjectDatprocSubmissionDialog(self)
-        self.project_datproc_dialog.exec_()
+        self.project_datproc_dialog.exec()
         
         
     def select_bids_root(self):
@@ -1294,7 +1305,7 @@ class BIDS_Project_Window(QMainWindow):
 #app = QApplication(sys.argv)
 #win = BIDS_Project_Window(bids_project = bids_pro) 
 #win.show()
-#sys.exit(app.exec_())
+#sys.exit(app.exec())
 
 #%%
 
@@ -1304,7 +1315,7 @@ def window(bids_project=None, num_rows=6, num_cols=4):
     win = BIDS_Project_Window(bids_project = bids_project, 
                               gridsize_row=num_rows, gridsize_col=num_cols)
     win.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
     
 def cmdline_main():
     import argparse

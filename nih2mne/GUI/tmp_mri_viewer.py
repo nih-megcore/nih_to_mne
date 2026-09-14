@@ -14,9 +14,10 @@ import os, os.path as op
 import nibabel as nib
 import glob
 
-# from PyQt5 import QtWidgets
-# from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
-#     QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit
+# from nih2mne.GUI.qt_compat import QtWidgets
+# QApplication = QtWidgets.QApplication
+# QMainWindow = QtWidgets.QMainWindow
+# QWidget = QtWidgets.QWidget
 
 
 bids_root = '/fast2/BIDS'

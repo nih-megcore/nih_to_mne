@@ -7,7 +7,11 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtWidgets import QApplication, QDialog, QMessageBox
+from nih2mne.GUI.qt_compat import QtWidgets
+
+QApplication = QtWidgets.QApplication
+QDialog = QtWidgets.QDialog
+QMessageBox = QtWidgets.QMessageBox
 from nih2mne import __version__ as NIH2MNE_VERSION
 
 from nih2mne.GUI.beamformer_form_entries import (
@@ -221,8 +225,8 @@ def test_open_conditions_selector_sets_selected_events(qapp, monkeypatch):
         def __init__(self, input_list, title=None, parent=None, gridsize_row=None, gridsize_col=None):
             self.input_list = input_list
 
-        def exec_(self):
-            return QDialog.Accepted
+        def exec(self):
+            return QDialog.DialogCode.Accepted
 
         def selected_items(self):
             return ["rest", "task"]

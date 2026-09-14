@@ -27,8 +27,9 @@ from nih2mne.GUI.templates.input_error_dset_tile_listWidgetBase import \
 
 from nih2mne.config import TRIG_FILE_LOC
 
-from PyQt5 import QtWidgets, QtCore, QtGui
-from PyQt5.QtCore import pyqtSignal
+from nih2mne.GUI.qt_compat import QtCore, QtGui, QtWidgets
+
+pyqtSignal = QtCore.pyqtSignal
 import os, os.path as op
 import mne
 import glob
@@ -476,9 +477,8 @@ def main():
     
     MainWindow = GUI_MainWindow() 
     MainWindow.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
     main()
-

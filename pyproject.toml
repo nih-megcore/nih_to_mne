@@ -22,7 +22,7 @@ classifiers=[
     ]
 dependencies = [
 'mne', 'numpy', 'pytest', 'joblib', 'nibabel','mne_bids','pandas', 'wget','nilearn', 'scikit-image', 'pysimplegui-4-foss', 'pyyaml', 'pyqtgraph', 'pyvista>=0.45',
-'pyctf-nihmegcore' , 'dill', 'PyQt5', 'autoreject', 'importlib-metadata'
+'pyctf-nihmegcore' , 'dill', 'PyQt6!=6.6.0', 'PyQt6-Qt6!=6.6.0,!=6.7.0', 'autoreject', 'importlib-metadata'
 ]
 
 [project.optional-dependencies]

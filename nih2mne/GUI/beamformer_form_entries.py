@@ -7,8 +7,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from nih2mne.GUI.qt_compat import QtWidgets
+
 import mne
-from PyQt5 import QtWidgets
 from nih2mne import __version__ as NIH2MNE_VERSION
 
 try:
@@ -328,7 +329,7 @@ class BeamformerFormWindow(QtWidgets.QWidget):
             self,
             "Select .ds dataset directory",
             self._dialog_start_dir(),
-            QtWidgets.QFileDialog.ShowDirsOnly,
+            QtWidgets.QFileDialog.Option.ShowDirsOnly,
         )
         if not dataset_dir:
             return None
@@ -377,7 +378,7 @@ class BeamformerFormWindow(QtWidgets.QWidget):
             title="Select Conditions of Interest",
             parent=self,
         )
-        if selector.exec_() != QtWidgets.QDialog.Accepted:
+        if selector.exec() != QtWidgets.QDialog.DialogCode.Accepted:
             return None
 
         selected_items = selector.selected_items()
@@ -411,7 +412,7 @@ def launch_gui() -> int:
     window.show()
 
     if owns_app:
-        return app.exec_()
+        return app.exec()
     return 0
 
 

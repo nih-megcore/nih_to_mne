@@ -34,13 +34,26 @@ list_SelectOutputEvents
 
 
 import glob
+from nih2mne.GUI.qt_compat import QtCore, QtGui, QtWidgets
+
+QApplication = QtWidgets.QApplication
+QMainWindow = QtWidgets.QMainWindow
+QWidget = QtWidgets.QWidget
+QGridLayout = QtWidgets.QGridLayout
+QHBoxLayout = QtWidgets.QHBoxLayout
+QVBoxLayout = QtWidgets.QVBoxLayout
+QPushButton = QtWidgets.QPushButton
+QLabel = QtWidgets.QLabel
+QComboBox = QtWidgets.QComboBox
+QLineEdit = QtWidgets.QLineEdit
+QCheckBox = QtWidgets.QCheckBox
+QFileDialog = QtWidgets.QFileDialog
+QDialog = QtWidgets.QDialog
+QListWidgetItem = QtWidgets.QListWidgetItem
+Qt = QtCore.Qt
+pyqtSignal = QtCore.pyqtSignal
+
 import mne
-from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QGridLayout, \
-    QHBoxLayout, QVBoxLayout, QPushButton, QLabel,  QComboBox, QLineEdit, QCheckBox, \
-    QFileDialog, QDialog, QListWidgetItem
-    
-from PyQt5 import QtGui
 import sys
 import os, os.path as op
 import numpy as np
@@ -49,7 +62,6 @@ from nih2mne.utilities.trigger_utilities import (parse_marks, detect_digital,
                                                  append_conditions, correct_to_projector, 
                                                  add_event_offset)
 from collections import OrderedDict
-from PyQt5.QtCore import Qt, pyqtSignal
 from nih2mne import config
 from nih2mne.GUI.templates.trigger_processing_gui import Ui_MainWindow as trigUi_mw
 import pandas as pd
@@ -68,10 +80,10 @@ class trig_tile(QWidget, trig_singleline_UiForm):
         self.trig_type = chan_name[1:4]
         self.ch_name = chan_name 
         self.lbl_ChannelName.setText(f'{chan_name} :')
-        self.cb_Up.setCheckState(2)
+        self.cb_Up.setCheckState(Qt.CheckState.Checked)
         self.trigger_polarity = 'up' #Initialize to up
         self.cb_Up.clicked.connect(self.set_up_trigger_polarity)
-        self.cb_Down.setCheckState(0)
+        self.cb_Down.setCheckState(Qt.CheckState.Unchecked)
         self.cb_Down.clicked.connect(self.set_down_trigger_polarity)
         self.cb_HistUp.setVisible(False)
 
@@ -87,11 +99,11 @@ class trig_tile(QWidget, trig_singleline_UiForm):
         
     def set_up_trigger_polarity(self):
         self.trigger_polarity = 'up'
-        self.cb_Down.setCheckState(0)
+        self.cb_Down.setCheckState(Qt.CheckState.Unchecked)
     
     def set_down_trigger_polarity(self):
         self.trigger_polarity = 'down'
-        self.cb_Up.setCheckState(0)
+        self.cb_Up.setCheckState(Qt.CheckState.Unchecked)
 
 ## ParseMarks Tiles
 from nih2mne.GUI.templates.parse_marks_single_line import Ui_Form as parse_marks_singleline_UiForm
@@ -112,18 +124,18 @@ class parse_marks_tile(QWidget, parse_marks_singleline_UiForm):
         self.cb_OnLead.clicked.connect(self.set_onlead_selection)
         self.cb_OnLag.clicked.connect(self.set_onlag_selection)
         # Assign Default to OnLead
-        self.cb_OnLead.setCheckState(2)
+        self.cb_OnLead.setCheckState(Qt.CheckState.Checked)
         
         # Handle tile deletion
         self.pb_DeleteLine.clicked.connect(lambda: self.close_clicked.emit(self))
         
     def set_onlead_selection(self):
         self.mark_on = 'lead'
-        self.cb_OnLag.setCheckState(0) #Cross toggle on lag button
+        self.cb_OnLag.setCheckState(Qt.CheckState.Unchecked) #Cross toggle on lag button
         
     def set_onlag_selection(self):
         self.mark_on = 'lag'
-        self.cb_OnLead.setCheckState(0) #Cross toggle on lead button
+        self.cb_OnLead.setCheckState(Qt.CheckState.Unchecked) #Cross toggle on lead button
     
     def fill_lead_combobox(self):  #May need to cross reference lead/lag to prevent doubles
         _tmp =  [self.possible_items[i]['name'] for i in self.possible_items.keys()]   
@@ -135,9 +147,9 @@ class parse_marks_tile(QWidget, parse_marks_singleline_UiForm):
     
     def get_outputs(self):
         outputs = {}
-        if self.cb_OnLead.checkState()==2:
+        if self.cb_OnLead.checkState() == Qt.CheckState.Checked:
             outputs['mark_on'] = 'lead'
-        elif self.cb_OnLag.checkState()==2:
+        elif self.cb_OnLag.checkState() == Qt.CheckState.Checked:
             outputs['mark_on'] = 'lag'
         
         outputs['lead_evt'] = self.combo_LeadSelection.currentText()
@@ -149,21 +161,21 @@ class parse_marks_tile(QWidget, parse_marks_singleline_UiForm):
     
     def _disable(self):
         #Lead Combo 
-        self.combo_LeadSelection.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.combo_LeadSelection.setFocusPolicy(Qt.NoFocus)
+        self.combo_LeadSelection.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.combo_LeadSelection.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         #Lag Combo
-        self.combo_LagSelection.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.combo_LagSelection.setFocusPolicy(Qt.NoFocus)
+        self.combo_LagSelection.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.combo_LagSelection.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         #MarkerName
         self.te_MrkName.setReadOnly(True)
     
     def _enable(self):
         #Lead Combo 
-        self.combo_LeadSelection.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-        self.combo_LeadSelection.setFocusPolicy(Qt.StrongFocus)
+        self.combo_LeadSelection.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.combo_LeadSelection.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         #Lag Combo
-        self.combo_LagSelection.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-        self.combo_LagSelection.setFocusPolicy(Qt.StrongFocus)
+        self.combo_LagSelection.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.combo_LagSelection.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         #MarkerName
         self.te_MrkName.setReadOnly(False)
 
@@ -441,11 +453,11 @@ class event_coding_window(QMainWindow):
                     markname = tile.te_EvtName.text()
                     if markname == '':
                         continue
-                    invert_val = tile.cb_Down.checkState() == 2
+                    invert_val = tile.cb_Down.checkState() == Qt.CheckState.Checked
                     # Make projector case
                     if i.startswith('UADC016'):
                         btn_invert_val = invert_val
-                        if tile.cb_HistUp.checkState() == 2:
+                        if tile.cb_HistUp.checkState() == Qt.CheckState.Checked:
                             invert_val = check_analog_inverted(fname=self.meg_fname, ch_name='UADC016')
                             if btn_invert_val:
                                 invert_val = not invert_val
@@ -683,7 +695,7 @@ class event_coding_window(QMainWindow):
                 markname = tile.te_EvtName.text()
                 if markname == '':
                     continue
-                if tile.cb_Down.checkState()==2:
+                if tile.cb_Down.checkState() == Qt.CheckState.Checked:
                     invert_val = True
                 else:
                     invert_val = False
@@ -692,7 +704,7 @@ class event_coding_window(QMainWindow):
                 ana_trig_code.append(tmp_code)
                 
                 if i.startswith('UADC016'):
-                    if tile.cb_HistUp.checkState()==2:
+                    if tile.cb_HistUp.checkState() == Qt.CheckState.Checked:
                         tmp_code = f"invert_val = check_analog_inverted(fname=meg_fname, ch_name='UADC016')"
                         ana_trig_code.append(tmp_code)
                         if invert_val == True:
@@ -863,15 +875,13 @@ def window():
     
     win = event_coding_window() 
     win.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
     
 def cmdline_main():
     window()
 
 if __name__ == '__main__':
     cmdline_main()
-
-
 
 
 
