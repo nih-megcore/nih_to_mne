@@ -74,6 +74,7 @@ def _derivative_entries(
     *,
     freesurfer: bool,
     preproc: bool,
+    megqa: bool,
     extra_derivatives: Sequence[str],
 ) -> list[Path]:
     """Select immediate child directories from the source derivatives folder."""
@@ -96,6 +97,9 @@ def _derivative_entries(
         if not preproc_matches:
             print(f"No preproc* derivative directories found in {derivatives}; skipping")
 
+    if megqa:
+        requested.append("megQA")
+
     requested.extend(extra_derivatives)
     requested = list(dict.fromkeys(requested))
 
@@ -115,14 +119,16 @@ def link_bids_dir(
     *,
     freesurfer: bool = True,
     preproc: bool = True,
+    megqa: bool = True,
     extra_derivatives: Optional[Iterable[str]] = None,
     derivative_mode: str = "symlink",
 ) -> Path:
     """Create a BIDS root containing links to selected source content.
 
     Raw ``sub-*`` directories and top-level files are always symlinked. The
-    selected derivative directories are either symlinked or recursively copied
-    according to ``derivative_mode``.
+    ``megQA`` derivative is recursively copied so it can be modified
+    independently. Other selected derivative directories are either symlinked
+    or recursively copied according to ``derivative_mode``.
 
     Parameters
     ----------
@@ -134,10 +140,13 @@ def link_bids_dir(
         Include ``derivatives/freesurfer`` when it exists.
     preproc
         Include all immediate derivative directories beginning with ``preproc``.
+    megqa
+        Include and recursively copy ``derivatives/megQA`` when it exists.
     extra_derivatives
         Exact basenames of additional immediate derivative directories.
     derivative_mode
-        Either ``"symlink"`` or ``"copy"`` for all selected derivatives.
+        Either ``"symlink"`` or ``"copy"`` for selected derivatives other
+        than ``megQA``, which is always copied.
     """
     if derivative_mode not in DERIVATIVE_MODES:
         choices = ", ".join(DERIVATIVE_MODES)
@@ -150,6 +159,7 @@ def link_bids_dir(
         source,
         freesurfer=freesurfer,
         preproc=preproc,
+        megqa=megqa,
         extra_derivatives=extras,
     )
 
@@ -162,16 +172,21 @@ def link_bids_dir(
             entry.resolve(), target_is_directory=entry.is_dir()
         )
 
+    copied_derivatives = 0
+    symlinked_derivatives = 0
     for entry in derivative_entries:
         output = destination_derivatives / entry.name
-        if derivative_mode == "symlink":
-            output.symlink_to(entry.resolve(), target_is_directory=True)
-        else:
+        if entry.name == "megQA" or derivative_mode == "copy":
             shutil.copytree(entry, output)
+            copied_derivatives += 1
+        else:
+            output.symlink_to(entry.resolve(), target_is_directory=True)
+            symlinked_derivatives += 1
 
     print(
         f"Created {destination} with {len(raw_entries)} raw BIDS links and "
-        f"{len(derivative_entries)} {derivative_mode} derivative directories"
+        f"{len(derivative_entries)} derivative directories "
+        f"({symlinked_derivatives} symlinked, {copied_derivatives} copied)"
     )
     return destination
 
@@ -203,6 +218,13 @@ def _get_parser() -> argparse.ArgumentParser:
         help="Include derivative directories beginning with preproc (default: enabled)",
     )
     parser.add_argument(
+        "-megqa",
+        "--megqa",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include and copy the megQA derivative directory (default: enabled)",
+    )
+    parser.add_argument(
         "-extra_derivatives",
         nargs="+",
         default=None,
@@ -213,7 +235,10 @@ def _get_parser() -> argparse.ArgumentParser:
         "-derivative_mode",
         choices=DERIVATIVE_MODES,
         default="symlink",
-        help="Transfer selected derivatives by symlink or recursive copy",
+        help=(
+            "Transfer selected derivatives by symlink or recursive copy "
+            "(megQA is always copied)"
+        ),
     )
     return parser
 
@@ -226,6 +251,7 @@ def main(argv: Optional[Sequence[str]] = None) -> Path:
         new_root_dir=args.new_root_dir,
         freesurfer=args.freesurfer,
         preproc=args.preproc,
+        megqa=args.megqa,
         extra_derivatives=args.extra_derivatives,
         derivative_mode=args.derivative_mode,
     )

@@ -24,14 +24,14 @@ def _make_source(tmp_path: Path) -> Path:
     return source
 
 
-def test_default_links_and_extra_derivatives(tmp_path, capsys):
+def test_default_links_copy_megqa_and_include_extra_derivatives(tmp_path, capsys):
     source = _make_source(tmp_path)
     destination = tmp_path / "linked"
 
     result = link_bids_dir(
         source,
         destination,
-        extra_derivatives=["megQA", "missing", "freesurfer"],
+        extra_derivatives=["missing", "freesurfer"],
     )
 
     assert result == destination
@@ -45,10 +45,39 @@ def test_default_links_and_extra_derivatives(tmp_path, capsys):
 
     expected = {"freesurfer", "preprocessing", "preproc-clean", "megQA"}
     assert {entry.name for entry in (destination / "derivatives").iterdir()} == expected
+    symlinked = expected - {"megQA"}
     assert all(
-        (destination / "derivatives" / name).is_symlink() for name in expected
+        (destination / "derivatives" / name).is_symlink() for name in symlinked
     )
-    assert "skipping: missing" in capsys.readouterr().out
+    copied_megqa = destination / "derivatives" / "megQA"
+    assert copied_megqa.is_dir()
+    assert not copied_megqa.is_symlink()
+    assert (copied_megqa / "result.txt").read_text() == "megQA"
+
+    (source / "derivatives" / "megQA" / "result.txt").write_text("changed")
+    assert (copied_megqa / "result.txt").read_text() == "megQA"
+    output = capsys.readouterr().out
+    assert "skipping: missing" in output
+    assert "3 symlinked, 1 copied" in output
+
+
+def test_explicit_megqa_is_copied_when_automatic_selection_is_disabled(tmp_path):
+    source = _make_source(tmp_path)
+    destination = tmp_path / "linked"
+
+    link_bids_dir(
+        source,
+        destination,
+        freesurfer=False,
+        preproc=False,
+        megqa=False,
+        extra_derivatives=["megQA"],
+    )
+
+    copied = destination / "derivatives" / "megQA"
+    assert copied.is_dir()
+    assert not copied.is_symlink()
+    assert (copied / "result.txt").read_text() == "megQA"
 
 
 def test_copy_mode_and_disabled_automatic_derivatives(tmp_path):
@@ -60,6 +89,7 @@ def test_copy_mode_and_disabled_automatic_derivatives(tmp_path):
         destination,
         freesurfer=False,
         preproc=False,
+        megqa=False,
         extra_derivatives=["megQA"],
         derivative_mode="copy",
     )
@@ -87,6 +117,7 @@ def test_missing_derivatives_are_reported_and_skipped(tmp_path, capsys):
     output = capsys.readouterr().out
     assert "No preproc* derivative directories" in output
     assert "skipping: freesurfer" in output
+    assert "skipping: megQA" in output
 
 
 def test_existing_destination_fails_without_changes(tmp_path):
@@ -134,7 +165,13 @@ def test_cli_defaults_to_pwd_bids_and_accepts_no_flags(tmp_path, monkeypatch):
     monkeypatch.chdir(working_directory)
 
     result = main(
-        ["-bids_root", str(source), "--no-freesurfer", "--no-preproc"]
+        [
+            "-bids_root",
+            str(source),
+            "--no-freesurfer",
+            "--no-preproc",
+            "--no-megqa",
+        ]
     )
 
     assert result == working_directory / "BIDS"
