@@ -25,12 +25,14 @@ from nih2mne.GUI.templates.input_meg_dset_tile_listWidgetBase import \
 from nih2mne.GUI.templates.input_error_dset_tile_listWidgetBase import \
     Ui_ErrorDatasetTile
 
-from nih2mne.config import TRIG_FILE_LOC
-
 from nih2mne.GUI.qt_compat import QtCore, QtGui, QtWidgets
 
 pyqtSignal = QtCore.pyqtSignal
+import argparse
+import importlib
 import os, os.path as op
+from pathlib import Path
+import sys
 import mne
 import glob
 import pandas as pd
@@ -39,8 +41,131 @@ from nih2mne.utilities.data_crop_wrapper import get_term_time
 import shutil
 import copy
 import numpy as np
-from nih2mne.GUI.templates.bids_creator_gui_control_functions \
-    import BIDS_MainWindow as BIDS_Ui_MainWindow
+
+
+class _ConfigCreationDeclined(Exception):
+    """Raised when the user declines to create a requested config file."""
+
+
+def _get_parser():
+    parser = argparse.ArgumentParser(
+        description='Open the NIH MEG dataset staging GUI.'
+    )
+    parser.add_argument(
+        '-config',
+        metavar='PATH',
+        help=(
+            'Defaults YAML file. This takes precedence over '
+            'MEGCORE_DEFAULTS_FNAME.'
+        ),
+    )
+    parser.add_argument(
+        '-bids_root',
+        metavar='PATH',
+        help='BIDS root to use when opening the BIDS creator.',
+    )
+    return parser
+
+
+def _confirm_config_creation(config_path, input_func=None):
+    if input_func is None:
+        input_func = input
+
+    prompt = (
+        f'No config file exists at {config_path}. '
+        'Create a default config file there? [y/N] '
+    )
+    while True:
+        try:
+            response = input_func(prompt).strip().lower()
+        except EOFError:
+            response = ''
+
+        if response in ('y', 'yes'):
+            return True
+        if response in ('', 'n', 'no'):
+            return False
+        print("Please answer 'yes' or 'no'.")
+
+
+def _initialize_config(config_fname=None, input_func=None):
+    """Select and initialize the defaults file before dependent imports."""
+    if config_fname is not None:
+        config_path = Path(config_fname).expanduser().resolve()
+        if config_path.exists():
+            if not config_path.is_file():
+                raise ValueError(
+                    f'Config path exists but is not a file: {config_path}'
+                )
+        else:
+            if not _confirm_config_creation(config_path, input_func=input_func):
+                raise _ConfigCreationDeclined
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # nih2mne.config resolves this variable during import. Setting it here
+        # makes the command-line value take precedence over an existing value.
+        os.environ['MEGCORE_DEFAULTS_FNAME'] = str(config_path)
+
+    return importlib.import_module('nih2mne.config')
+
+
+def _confirm_bids_root_action(config_bids_root, command_bids_root,
+                              input_func=None):
+    if input_func is None:
+        input_func = input
+
+    prompt = (
+        'Both -config and -bids_root were provided.\n'
+        f'Config bids_root: {config_bids_root}\n'
+        f'Command-line bids_root: {command_bids_root}\n'
+        'Write the command-line value into the config, or use the config '
+        'value? [w/C] '
+    )
+    while True:
+        try:
+            response = input_func(prompt).strip().lower()
+        except EOFError:
+            response = ''
+
+        if response in ('w', 'write'):
+            return True
+        if response in ('', 'c', 'config'):
+            return False
+        print("Please answer 'write' or 'config'.")
+
+
+def _configure_bids_root(config, bids_root=None, config_fname=None,
+                         input_func=None):
+    """Apply a session BIDS root or persist it when explicitly requested."""
+    if bids_root is None:
+        return
+
+    command_bids_root = str(Path(bids_root).expanduser().resolve())
+    bids_defaults = config.DEFAULTS['BIDS_gen']
+
+    if config_fname is None:
+        bids_defaults['bids_root'] = command_bids_root
+        return
+
+    should_write = _confirm_bids_root_action(
+        config_bids_root=bids_defaults['bids_root'],
+        command_bids_root=command_bids_root,
+        input_func=input_func,
+    )
+    if not should_write:
+        return
+
+    import yaml
+
+    bids_defaults['bids_root'] = command_bids_root
+    defaults_fname = config._get_defaults_fname()
+    with open(defaults_fname, 'w') as defaults_file:
+        yaml.dump(
+            config.DEFAULTS,
+            defaults_file,
+            sort_keys=False,
+            default_flow_style=False,
+        )
 
 
 class GUI_MainWindow(QtWidgets.QMainWindow):
@@ -134,6 +259,9 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
     
     def _bids_window_open(self, meg_dsets=None):
         '''Implement the logic to create and maintain a second main window'''
+        from nih2mne.GUI.templates.bids_creator_gui_control_functions import \
+            BIDS_MainWindow as BIDS_Ui_MainWindow
+
         self.bids_gui = BIDS_Ui_MainWindow(meg_dsets=meg_dsets)
         self.bids_gui.show()
         
@@ -341,6 +469,8 @@ class InputDatasetTile(QtWidgets.QWidget):
         del tmp_, psd_
     
     def fill_procfile_list(self):
+        from nih2mne.config import TRIG_FILE_LOC
+
         if op.exists(TRIG_FILE_LOC):
             self.trigfile_dir = TRIG_FILE_LOC
         else:
@@ -468,9 +598,26 @@ def _can_load(fname):
         
 
 
-def main():
-    import sys
-    app = QtWidgets.QApplication(sys.argv)
+def main(argv=None):
+    parser = _get_parser()
+    args = parser.parse_args(argv)
+
+    try:
+        config = _initialize_config(args.config)
+    except _ConfigCreationDeclined:
+        parser.exit(1, 'Config file was not created; exiting.\n')
+    except ValueError as error:
+        parser.error(str(error))
+
+    _configure_bids_root(
+        config=config,
+        bids_root=args.bids_root,
+        config_fname=args.config,
+    )
+
+    # All supported command-line arguments have already been consumed. Avoid
+    # forwarding ``-config`` to Qt's independent argument parser.
+    app = QtWidgets.QApplication([sys.argv[0]])
     # Add App Icon
     icon_img = op.join(op.dirname(__file__), 'templates', 'opposum_squid_icon.png')
     if op.exists(icon_img): app.setWindowIcon(QtGui.QIcon(icon_img))
