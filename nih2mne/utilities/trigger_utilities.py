@@ -178,10 +178,11 @@ def return_edge_timing(ppt_vector, positive_edge=True):
 
 def samples_to_trig_timing(ds,digital_vector):
     '''Return the times and values of the of parrallel port positive transitions'''
-    sample_idx=np.argwhere(digital_vector>0)
-    values=digital_vector[digital_vector>0]
-    times=[ds.getTimePt(i) for i in sample_idx]
-    return np.array([times, values]).T
+    digital_vector = np.asarray(digital_vector)
+    sample_idx = np.flatnonzero(digital_vector > 0)
+    values = digital_vector[sample_idx]
+    times = [ds.getTimePt(int(i)) for i in sample_idx]
+    return np.column_stack([times, values])
 
 def return_ch_pattern(ds, pattern):
     '''Return the the channel name and index for channels present with the

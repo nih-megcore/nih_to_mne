@@ -296,6 +296,7 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         self.ui.FileDrop.dragEnterEvent = self.dragEnterEvent
         self.ui.FileDrop.dropEvent = self.dropEvent
         self.ui.pb_DeleteAllEntries.clicked.connect(self.clear_all_entries)
+        self.ui.pb_CheckData.clicked.connect(self.encode_and_qa_all)
         self.ui.pb_LaunchBidsCreator.clicked.connect(self.open_bids_creator)
 
         #### <<< 
@@ -352,7 +353,24 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
             itemWidget = listwidget.itemWidget(item)
             fname_list.append(itemWidget.fname)
         return fname_list
-    
+
+    def encode_and_qa_all(self):
+        '''Run trigger processing for every processable dataset tile.'''
+        listwidget = self.ui.scrollAreaWidgetContents
+        for i in range(listwidget.count()):
+            item = listwidget.item(i)
+            tile = listwidget.itemWidget(item)
+            trigprocess = getattr(tile, 'trigprocess', None)
+            if not callable(trigprocess):
+                continue
+            try:
+                trigprocess()
+            except Exception:
+                logger.exception(
+                    'Encode+QA failed for dataset %s',
+                    getattr(tile, 'fname', '<unknown>'),
+                )
+
     def open_bids_creator(self):
         '''Open second window and populate the dataset list'''
         fnames = self.get_fnames_from_list()

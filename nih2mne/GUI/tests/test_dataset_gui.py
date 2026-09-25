@@ -693,6 +693,55 @@ def test_log_path_is_propagated_to_bids_creator(
         parent.close()
 
 
+def test_encode_and_qa_all_processes_tiles_in_order_and_skips_errors(
+        qapp, caplog):
+    parent = dataset_gui.GUI_MainWindow()
+    calls = []
+
+    def add_tile(name, processor=None):
+        tile = dataset_gui.QtWidgets.QWidget()
+        tile.fname = name
+        if processor is not None:
+            tile.trigprocess = processor
+        item = dataset_gui.QtWidgets.QListWidgetItem()
+        parent.ui.scrollAreaWidgetContents.addItem(item)
+        parent.ui.scrollAreaWidgetContents.setItemWidget(item, tile)
+
+    add_tile('first.ds', lambda: calls.append('first'))
+    add_tile('error.ds')
+
+    def fail_processing():
+        calls.append('failed')
+        raise RuntimeError('trigger processing failed')
+
+    add_tile('failed.ds', fail_processing)
+    add_tile('last.ds', lambda: calls.append('last'))
+
+    try:
+        with caplog.at_level(logging.ERROR, logger=dataset_gui.logger.name):
+            parent.ui.pb_CheckData.click()
+
+        assert parent.ui.pb_CheckData.text() == 'Encode+QA All'
+        assert parent.ui.pb_CheckData.toolTip() == (
+            'Run trigger processing and refresh QA status for all loaded '
+            'datasets'
+        )
+        assert calls == ['first', 'failed', 'last']
+        assert 'Encode+QA failed for dataset failed.ds' in caplog.text
+    finally:
+        parent.close()
+
+
+def test_encode_and_qa_all_accepts_empty_tile_list(qapp):
+    parent = dataset_gui.GUI_MainWindow()
+
+    try:
+        parent.ui.pb_CheckData.click()
+        assert parent.ui.scrollAreaWidgetContents.count() == 0
+    finally:
+        parent.close()
+
+
 def test_review_errors_uses_only_latest_failed_run_log_range(
         tmp_path, monkeypatch, qapp):
     bids_creator = _load_bids_creator(tmp_path, monkeypatch)

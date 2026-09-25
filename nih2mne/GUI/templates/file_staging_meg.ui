@@ -76,10 +76,10 @@
              <item>
               <widget class="QPushButton" name="pb_CheckData">
                <property name="toolTip">
-                <string>Runs Minimal Checks on the Data</string>
+                <string>Run trigger processing and refresh QA status for all loaded datasets</string>
                </property>
                <property name="text">
-                <string>Check Data</string>
+                <string>Encode+QA All</string>
                </property>
               </widget>
              </item>

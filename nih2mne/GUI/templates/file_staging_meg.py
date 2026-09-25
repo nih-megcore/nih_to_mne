@@ -106,8 +106,8 @@ class Ui_MainWindow(object):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
         self.FileDrop.setTitle(_translate("MainWindow", "Drag/Drop Files"))
-        self.pb_CheckData.setToolTip(_translate("MainWindow", "Runs Minimal Checks on the Data"))
-        self.pb_CheckData.setText(_translate("MainWindow", "Check Data"))
+        self.pb_CheckData.setToolTip(_translate("MainWindow", "Run trigger processing and refresh QA status for all loaded datasets"))
+        self.pb_CheckData.setText(_translate("MainWindow", "Encode+QA All"))
         self.pb_LaunchBidsCreator.setText(_translate("MainWindow", "Open BIDS creator"))
         self.pb_DeleteAllEntries.setText(_translate("MainWindow", "Clear All Entries"))
 
