@@ -41,7 +41,13 @@ from nih2mne.calc_mnetrans import coords_from_oblique_afni
 from nih2mne.config import DEFAULTS
 import shutil
 from mne_bids import BIDSPath
-from nih2mne.make_meg_bids import _gen_taskrundict, _proc_meg_bids, _proc_mri_bids
+from nih2mne.make_meg_bids import (
+    _format_bids_entity,
+    _gen_taskrundict,
+    _get_bids_zfill,
+    _proc_meg_bids,
+    _proc_mri_bids,
+)
 from collections import OrderedDict
 import logging
 from nih2mne.utilities.make_bids_log_reader import (
@@ -70,6 +76,9 @@ def _extract_error_log_blocks(log_text):
 
 #%% Setup Defaults for GUI browse functions
 BIDS_DEFAULTS = DEFAULTS['BIDS_gen']
+BIDS_ZFILL = _get_bids_zfill()
+DEFAULT_ZFILL_RUN = BIDS_ZFILL['zfill_run']
+DEFAULT_ZFILL_SES = BIDS_ZFILL['zfill_ses']
 NULL_VALS = ['', None, 'None', []]
 if BIDS_DEFAULTS['bids_root'] not in NULL_VALS:
     DEFAULT_BIDS_ROOT = BIDS_DEFAULTS['bids_root']
@@ -621,10 +630,16 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     def _get_bids_path(self, task=None, run=None):
         'Create the MEG bids path'
         try:
+            session = _format_bids_entity(
+                self.opts['bids_session'],
+                DEFAULT_ZFILL_SES,
+            )
+            run = _format_bids_entity(run, DEFAULT_ZFILL_RUN)
             bids_path = BIDSPath(subject=self.opts['bids_id'],
-                                 session=self.opts['bids_session'], 
+                                 session=session,
                                  task=task,
-                                 run=run, 
+                                 run=run,
+                                 datatype='meg',
                                  root=self.opts['bids_dir'], 
                                  suffix='meg', 
                                  extension='.ds')
@@ -645,10 +660,15 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
             return
         
         self.anat_io_mapping[key] = {}
+        session = _format_bids_entity(
+            self.opts['bids_session'],
+            DEFAULT_ZFILL_SES,
+        )
+        run = _format_bids_entity(1, DEFAULT_ZFILL_RUN)
         t1_bids_path = BIDSPath(subject=self.opts['bids_id'],
-                             session=self.opts['bids_session'], 
+                             session=session,
                              datatype='anat',
-                             run='01',   #Hard-code the MRI run
+                             run=run,
                              root=self.opts['bids_dir'], 
                              suffix='T1w', 
                              extension='.nii.gz')
@@ -667,10 +687,10 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         for task in task_dict.keys():
             for idx, filename in enumerate(task_dict[task]):
                 if run_rank_reorder == True:
-                    run = str(idx+1)
-                    if len(run)==1: run = '0'+run
+                    run = idx + 1
                 else:
                     run = filename.replace('.ds','').split('_')[-1]
+                run = _format_bids_entity(run, DEFAULT_ZFILL_RUN)
                 bpath = self._get_bids_path(task=task, run=run)
                 f_out_attributes[filename] = {'run':run,
                                                    'task':task,

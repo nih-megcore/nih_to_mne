@@ -48,7 +48,7 @@ def qapp():
     return app
 
 
-def _write_defaults(path, bids_root):
+def _write_defaults(path, bids_root, zfill_run=2, zfill_ses=2):
     defaults = {
         'BIDS_gen': {
             'bids_root': bids_root,
@@ -61,6 +61,8 @@ def _write_defaults(path, bids_root):
             'crop_zeros': 'N',
             'emptyroom': 'N',
             'run_rank_reorder': 'Y',
+            'zfill_run': zfill_run,
+            'zfill_ses': zfill_ses,
         }
     }
     path.write_text(yaml.safe_dump(defaults), encoding='utf-8')
@@ -87,9 +89,15 @@ def _run_dict():
     }
 
 
-def _load_bids_creator(tmp_path, monkeypatch):
+def _load_bids_creator(
+        tmp_path, monkeypatch, zfill_run=2, zfill_ses=2):
     config_path = tmp_path / 'defaults.yml'
-    _write_defaults(config_path, '/config/bids')
+    _write_defaults(
+        config_path,
+        '/config/bids',
+        zfill_run=zfill_run,
+        zfill_ses=zfill_ses,
+    )
     monkeypatch.setenv('HOME', str(tmp_path))
     dataset_gui._initialize_config(config_path)
     sys.modules.pop(BIDS_CREATOR_MODULE, None)
@@ -420,6 +428,44 @@ def test_bids_creator_dialogs_use_qt_default_options(
     assert directory == '/data/bids'
     assert calls['file'][1] == {}
     assert calls['directory'][1] == {}
+
+
+def test_bids_creator_uses_configured_session_and_run_padding(
+        tmp_path, monkeypatch, qapp):
+    bids_creator = _load_bids_creator(
+        tmp_path,
+        monkeypatch,
+        zfill_run=4,
+        zfill_ses=3,
+    )
+    meg_fname = '/tmp/MEGHASH_test_20260101_01.ds'
+    window = bids_creator.BIDS_MainWindow(meg_dsets=[meg_fname])
+    window.opts.update(
+        bids_id='01',
+        bids_dir='/tmp/bids',
+        bids_session='03',
+        mri_bsight='/tmp/mri.nii.gz',
+        mri_brik=False,
+    )
+
+    try:
+        window._make_task_dict(run_rank_reorder=True)
+        window._make_anat_dict()
+
+        assert window.io_mapping[meg_fname]['run'] == '0001'
+        assert str(window.io_mapping[meg_fname]['bidspath'].fpath) == (
+            '/tmp/bids/sub-01/ses-003/meg/'
+            'sub-01_ses-003_task-test_run-0001_meg.ds'
+        )
+        assert str(
+            window.anat_io_mapping['/tmp/mri.nii.gz']['bidspath'].fpath
+        ) == (
+            '/tmp/bids/sub-01/ses-003/anat/'
+            'sub-01_ses-003_run-0001_T1w.nii.gz'
+        )
+        assert window.opts['bids_session'] == '03'
+    finally:
+        window.close()
 
 
 def test_rundict_round_trip_accepts_full_log_line(tmp_path, monkeypatch):

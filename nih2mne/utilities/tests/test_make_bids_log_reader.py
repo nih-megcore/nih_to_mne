@@ -47,8 +47,8 @@ def _entry_lines(timestamp, run_dict, include_outputs=True):
     if include_outputs:
         for index, input_path in enumerate(run_dict['meg_dataset_list'], start=1):
             output = (
-                f'{run_dict["bids_dir"]}/sub-{run_dict["bids_id"]}/ses-1/meg/'
-                f'sub-{run_dict["bids_id"]}_ses-1_task-test_run-0{index}_meg.ds'
+                f'{run_dict["bids_dir"]}/sub-{run_dict["bids_id"]}/ses-01/meg/'
+                f'sub-{run_dict["bids_id"]}_ses-01_task-test_run-0{index}_meg.ds'
             )
             lines.append(_log_line(
                 timestamp,
@@ -56,8 +56,8 @@ def _entry_lines(timestamp, run_dict, include_outputs=True):
             ))
         if run_dict['mri_bsight']:
             output = (
-                f'{run_dict["bids_dir"]}/sub-{run_dict["bids_id"]}/ses-1/anat/'
-                f'sub-{run_dict["bids_id"]}_ses-1_run-01_T1w.nii.gz'
+                f'{run_dict["bids_dir"]}/sub-{run_dict["bids_id"]}/ses-01/anat/'
+                f'sub-{run_dict["bids_id"]}_ses-01_run-01_T1w.nii.gz'
             )
             lines.append(_log_line(
                 timestamp,

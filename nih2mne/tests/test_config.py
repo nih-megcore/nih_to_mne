@@ -23,4 +23,26 @@ def test_initialize_defaults_creates_megcore_directories(tmp_path, monkeypatch):
     saved_defaults = yaml.safe_load(
         (megcore_dir / 'defaults.yml').read_text(encoding='utf-8')
     )
+    assert saved_defaults['BIDS_gen']['zfill_run'] == 2
+    assert saved_defaults['BIDS_gen']['zfill_ses'] == 2
     assert saved_defaults['logging'] == {'meg_dataset_gui': None}
+
+
+def test_existing_defaults_are_synchronized_with_padding_options(
+        tmp_path, monkeypatch):
+    config_path = tmp_path / 'defaults.yml'
+    config_path.write_text(
+        yaml.safe_dump({'BIDS_gen': {'bids_root': '/tmp/bids'}}),
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('MEGCORE_DEFAULTS_FNAME', str(config_path))
+    monkeypatch.setenv('HOME', str(tmp_path))
+    sys.modules.pop('nih2mne.config', None)
+
+    config = importlib.import_module('nih2mne.config')
+
+    assert config.DEFAULTS['BIDS_gen']['zfill_run'] == 2
+    assert config.DEFAULTS['BIDS_gen']['zfill_ses'] == 2
+    saved_defaults = yaml.safe_load(config_path.read_text(encoding='utf-8'))
+    assert saved_defaults['BIDS_gen']['zfill_run'] == 2
+    assert saved_defaults['BIDS_gen']['zfill_ses'] == 2

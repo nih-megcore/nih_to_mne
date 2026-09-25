@@ -2,6 +2,11 @@
 
 from ..make_meg_bids import sessdir2taskrundict
 from ..make_meg_bids import _check_multiple_subjects
+from ..make_meg_bids import (
+    _format_bids_entity,
+    _get_bids_zfill,
+    _get_conversion_dict,
+)
 from ..make_meg_bids import get_subj_logger, _input_checks, process_mri_bids, process_mri_json
 from ..make_meg_bids import convert_brik, make_bids, _gen_taskrundict  
 import logging 
@@ -19,6 +24,9 @@ data_path = op.join(code_path, 'test_data')
 import numpy as np 
 import json
 import shutil
+from types import SimpleNamespace
+
+import nih2mne.make_meg_bids as make_meg_bids_module
 
 from ..make_meg_bids import _read_electrodes_file
 from ..make_meg_bids import _extract_fidname
@@ -28,6 +36,100 @@ assert nih2mne.test_data().is_present()
 
 global logger
 logger = get_subj_logger('TEST', log_dir='/tmp', loglevel=logging.WARN)
+
+
+def test_get_bids_zfill_reads_configured_widths(monkeypatch):
+    config = SimpleNamespace(DEFAULTS={
+        'BIDS_gen': {'zfill_run': '4', 'zfill_ses': 3},
+    })
+    monkeypatch.setattr(
+        make_meg_bids_module.importlib,
+        'import_module',
+        lambda _module_name: config,
+    )
+
+    assert _get_bids_zfill() == {'zfill_run': 4, 'zfill_ses': 3}
+
+
+@pytest.mark.parametrize(
+    'bids_defaults',
+    [
+        {},
+        {'zfill_run': 0, 'zfill_ses': -1},
+        {'zfill_run': True, 'zfill_ses': 'invalid'},
+    ],
+)
+def test_get_bids_zfill_falls_back_for_missing_or_invalid_values(
+        monkeypatch, bids_defaults):
+    config = SimpleNamespace(DEFAULTS={'BIDS_gen': bids_defaults})
+    monkeypatch.setattr(
+        make_meg_bids_module.importlib,
+        'import_module',
+        lambda _module_name: config,
+    )
+
+    assert _get_bids_zfill() == {'zfill_run': 2, 'zfill_ses': 2}
+
+
+def test_get_bids_zfill_falls_back_independently(monkeypatch):
+    config = SimpleNamespace(DEFAULTS={
+        'BIDS_gen': {'zfill_run': 4},
+    })
+    monkeypatch.setattr(
+        make_meg_bids_module.importlib,
+        'import_module',
+        lambda _module_name: config,
+    )
+
+    assert _get_bids_zfill() == {'zfill_run': 4, 'zfill_ses': 2}
+
+
+def test_get_bids_zfill_falls_back_when_config_cannot_be_read(monkeypatch):
+    def fail_import(_module_name):
+        raise OSError('defaults.yml is unreadable')
+
+    monkeypatch.setattr(
+        make_meg_bids_module.importlib,
+        'import_module',
+        fail_import,
+    )
+
+    assert _get_bids_zfill() == {'zfill_run': 2, 'zfill_ses': 2}
+
+
+@pytest.mark.parametrize(
+    ('value', 'width', 'expected'),
+    [
+        (1, 3, '001'),
+        ('001', 2, '01'),
+        (1234, 2, '1234'),
+        ('Pre', 5, 'Pre'),
+        (None, 2, None),
+    ],
+)
+def test_format_bids_entity(value, width, expected):
+    assert _format_bids_entity(value, width) == expected
+
+
+def test_conversion_dict_uses_configured_padding(tmp_path, monkeypatch):
+    meg_fname = tmp_path / 'TEST_rest_20001010_001.ds'
+    monkeypatch.setattr(
+        make_meg_bids_module,
+        '_get_bids_zfill',
+        lambda: {'zfill_run': 4, 'zfill_ses': 3},
+    )
+
+    conversion = _get_conversion_dict(
+        bids_id='S01',
+        bids_dir=tmp_path / 'bids',
+        session='03',
+        meg_dataset_list=[str(meg_fname)],
+    )
+
+    assert str(conversion[str(meg_fname)]).endswith(
+        'sub-S01/ses-003/meg/'
+        'sub-S01_ses-003_task-rest_run-0001_meg.ds'
+    )
 
 
 #def test_check_multiple_subjects():
@@ -165,21 +267,21 @@ def test_process_meg_bids(tmp_path):
     for i in ['dataset_description.json','participants.json','participants.tsv','README']:
         assert op.exists(bids_dir / i)
     assert op.exists(bids_dir / f'sub-{bids_id}')
-    assert op.exists(bids_dir / f'sub-{bids_id}' / 'ses-1' /'meg')
-    dset_checklist = ['sub-S01_ses-1_task-haririhammer_run-01_meg.json',
-                     'sub-S01_ses-1_task-airpuff_run-01_events.tsv',
-                     'sub-S01_ses-1_task-airpuff_run-01_events.json',
-                     'sub-S01_ses-1_task-airpuff_run-01_meg.ds',
-                     'sub-S01_ses-1_coordsystem.json',
-                     'sub-S01_ses-1_task-haririhammer_run-01_meg.ds',
-                     'sub-S01_ses-1_task-haririhammer_run-01_channels.tsv',
-                     'sub-S01_ses-1_task-airpuff_run-01_channels.tsv',
-                     'sub-S01_ses-1_task-airpuff_run-01_meg.json',
-                     'sub-S01_ses-1_task-haririhammer_run-01_events.tsv',
-                     'sub-S01_ses-1_task-haririhammer_run-01_events.json']
+    assert op.exists(bids_dir / f'sub-{bids_id}' / 'ses-01' /'meg')
+    dset_checklist = ['sub-S01_ses-01_task-haririhammer_run-01_meg.json',
+                     'sub-S01_ses-01_task-airpuff_run-01_events.tsv',
+                     'sub-S01_ses-01_task-airpuff_run-01_events.json',
+                     'sub-S01_ses-01_task-airpuff_run-01_meg.ds',
+                     'sub-S01_ses-01_coordsystem.json',
+                     'sub-S01_ses-01_task-haririhammer_run-01_meg.ds',
+                     'sub-S01_ses-01_task-haririhammer_run-01_channels.tsv',
+                     'sub-S01_ses-01_task-airpuff_run-01_channels.tsv',
+                     'sub-S01_ses-01_task-airpuff_run-01_meg.json',
+                     'sub-S01_ses-01_task-haririhammer_run-01_events.tsv',
+                     'sub-S01_ses-01_task-haririhammer_run-01_events.json']
     for i in dset_checklist:
         print(i)
-        assert op.exists(bids_dir / f'sub-{bids_id}' / 'ses-1' /'meg' / i)
+        assert op.exists(bids_dir / f'sub-{bids_id}' / 'ses-01' /'meg' / i)
         
 def test_process_mri_bids(tmp_path):
     out_dir = tmp_path / "bids_test_dir"
@@ -195,7 +297,7 @@ def test_process_mri_bids(tmp_path):
                      nii_mri = mri_path,
                          bids_id=bids_id, 
                          session=session)
-    out_bids_mri = out_dir / 'bids_dir' / 'sub-S01' / 'ses-1' / 'anat' / 'sub-S01_ses-1_T1w.nii.gz'
+    out_bids_mri = out_dir / 'bids_dir' / 'sub-S01' / 'ses-01' / 'anat' / 'sub-S01_ses-01_T1w.nii.gz'
     assert op.exists(out_bids_mri)
     gtruth_mri_load = nib.load(mri_path)
     bids_mri_load = nib.load(out_bids_mri)
@@ -209,7 +311,7 @@ def test_process_mri_json(tmp_path):
     
     
     elec_fname = str(test_data.mri_data_dir / 'ABABABAB_elec.txt')
-    mri_fname = str(tmp_path_mri / 'bids_dir' / 'sub-S01' / 'ses-1' / 'anat' / 'sub-S01_ses-1_T1w.nii.gz')
+    mri_fname = str(tmp_path_mri / 'bids_dir' / 'sub-S01' / 'ses-01' / 'anat' / 'sub-S01_ses-01_T1w.nii.gz')
     process_mri_json(elec_fname=elec_fname, mri_fname=mri_fname)
     
     out_json_fname = mri_fname.replace('.nii.gz','.json')
@@ -357,11 +459,11 @@ def test_make_meg_bids_fullpipeline(bids_dir,meg_input_dir, subjid_input, bids_i
     args = make_args(out_dir, str(meg_input_dir), subjid_input, bids_id, mri_bsight, bsight_elec, mri_brik)
     make_bids(args)
     
-    anats = glob.glob(op.join(out_dir, f'sub-{bids_id}','ses-1','anat', '*'))
+    anats = glob.glob(op.join(out_dir, f'sub-{bids_id}','ses-01','anat', '*'))
     assert len([i for i in anats if i.endswith('.nii.gz')])==1
     assert len([i for i in anats if i.endswith('.json')])==1
     
-    dsets = glob.glob(op.join(out_dir, f'sub-{bids_id}', 'ses-1','meg','*.ds'))
+    dsets = glob.glob(op.join(out_dir, f'sub-{bids_id}', 'ses-01','meg','*.ds'))
     for dset in dsets:
         print(dset)
         assert op.basename(dset).split('_task-')[-1].split('_')[0] in ['airpuff','haririhammer']

@@ -27,7 +27,9 @@ def _get_default_options():
                 'anonymize': 'N', 
                 'crop_zeros': 'N',
                 'emptyroom': 'N',
-                'run_rank_reorder': 'Y'
+                'run_rank_reorder': 'Y',
+                'zfill_run': 2,
+                'zfill_ses': 2,
                 }
     LOGGING = {'meg_dataset_gui': None}
     defaults = {'BIDS_gen': BIDS_GEN,

@@ -11,6 +11,7 @@ import mne
 import mne_bids
 import os, os.path as op 
 import glob
+import importlib
 import re
 import copy
 import numpy as np
@@ -58,6 +59,49 @@ scrub_list_general = ['MarkerFile.mrk', 'ClassFile.cls']
 include_list_general = ['BadChannels', 'ClassFile.cls', 'MarkerFile.mrk', 'params.dsc', 
                 'processing.cfg', '*.hc', '*.res4', '*.meg4',  
                 '*.infods']  #'*.acq' -- this contains redundant info
+
+DEFAULT_BIDS_ZFILL = 2
+
+
+def _get_bids_zfill():
+    """Read BIDS entity padding widths, falling back to two characters."""
+    fallback = {
+        'zfill_run': DEFAULT_BIDS_ZFILL,
+        'zfill_ses': DEFAULT_BIDS_ZFILL,
+    }
+    try:
+        config = importlib.import_module('nih2mne.config')
+        bids_defaults = config.DEFAULTS.get('BIDS_gen', {})
+    except Exception:
+        logger.warning(
+            'Could not read BIDS zero-fill defaults; using %d characters',
+            DEFAULT_BIDS_ZFILL,
+        )
+        return fallback
+
+    widths = {}
+    for key, default in fallback.items():
+        try:
+            value = bids_defaults[key]
+            if isinstance(value, bool):
+                raise ValueError
+            value = int(value)
+            if value < 1:
+                raise ValueError
+        except (KeyError, TypeError, ValueError):
+            value = default
+        widths[key] = value
+    return widths
+
+
+def _format_bids_entity(value, width):
+    """Pad a numeric BIDS entity without changing named entity labels."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    if value.isdigit():
+        value = str(int(value)).zfill(width)
+    return value
 
 
 def _gen_taskrundict(meg_list=None):
@@ -327,13 +371,15 @@ def process_meg_bids(dset_dict=None, subject_in=None, bids_id=None,
 
     '''
     # error_count=0
+    zfill = _get_bids_zfill()
+    session = _format_bids_entity(session, zfill['zfill_ses'])
     for task, task_sublist in dset_dict.items():
         for run, meg_fname in enumerate(task_sublist, start=1):
-            session = str(int(session)) # Remove preceeding zeros
-            run = str(run).zfill(2)
+            run = _format_bids_entity(run, zfill['zfill_run'])
             
             _bids_path = BIDSPath(subject=bids_id, root=bids_dir, 
                                   session=session, run=run, task=task,
+                                  datatype='meg',
                                   suffix = 'meg', extension='.ds')
             
             _proc_meg_bids(meg_fname = meg_fname, 
@@ -504,7 +550,8 @@ def process_mri_bids_fs(bids_dir=None,
     if not os.path.exists(bids_dir): os.mkdir(bids_dir)
     
     try:
-        ses=str(int(session)) #Confirm no leading zeros
+        zfill = _get_bids_zfill()
+        ses = _format_bids_entity(session, zfill['zfill_ses'])
         raw = mne.io.read_raw_ctf(meg_fname, system_clock='ignore')
         trans = mne.read_trans(trans_fname)
         
@@ -539,7 +586,8 @@ def process_mri_bids(bids_dir=None,
     # 'This function directly writes the brainsight mri without freesurfer processing'
     if not os.path.exists(bids_dir): os.mkdir(bids_dir)
     
-    ses=str(int(session)) #Confirm no leading zeros
+    zfill = _get_bids_zfill()
+    ses = _format_bids_entity(session, zfill['zfill_ses'])
     t1w_bids_path = \
         BIDSPath(subject=bids_id, session=ses, root=bids_dir, suffix='T1w')
 
@@ -858,7 +906,8 @@ def _get_conversion_dict(input_path=None, subject_in=None, bids_id=None,
         dset_dict = _gen_taskrundict(meg_dataset_list)
         
     
-    session = str(int(session)) #Confirm no leading zeros
+    zfill = _get_bids_zfill()
+    session = _format_bids_entity(session, zfill['zfill_ses'])
     conversion_dict={} 
     for task, task_sublist in dset_dict.items():
         for run, base_meg_fname in enumerate(task_sublist, start=1):
@@ -868,10 +917,10 @@ def _get_conversion_dict(input_path=None, subject_in=None, bids_id=None,
             else:
                 meg_fname = op.join(input_path, base_meg_fname)
             ses = session
-            run = str(run) 
-            if len(run)==1: run='0'+run
+            run = _format_bids_entity(run, zfill['zfill_run'])
             bids_path = BIDSPath(subject=bids_id, session=ses, task=task,
-                                  run=run, root=bids_dir, suffix='meg', 
+                                  run=run, root=bids_dir, datatype='meg',
+                                  suffix='meg',
                                   extension='.ds')
             conversion_dict[meg_fname] = bids_path.fpath
     return conversion_dict
@@ -885,6 +934,11 @@ def make_bids(args):
     
     #Set if not called through the cmdline
     args = _clean_python_args(args) 
+    zfill = _get_bids_zfill()
+    padded_session = _format_bids_entity(
+        args.bids_session,
+        zfill['zfill_ses'],
+    )
     
     #Initialize
     if not op.exists(args.bids_dir): os.mkdir(args.bids_dir)
@@ -1073,6 +1127,7 @@ def make_bids(args):
                                          subject_in=args.subjid_input,
                                          bids_id=args.bids_id,
                                          bids_dir=args.bids_dir, 
+                                         session=args.bids_session,
                                          meg_dataset_list=meg_dataset_list)
     _tmp = _output_checks(meg_conv_dict)
     
@@ -1097,8 +1152,14 @@ def make_bids(args):
     #
     fs_subjects_dir=op.join(args.bids_dir, 'derivatives','freesurfer','subjects')
     if args.freesurfer:
-        nii_fnames = glob.glob(op.join(args.bids_dir, 'sub-'+args.bids_id, 'ses-1','anat','*T1w.nii'))
-        nii_fnames += glob.glob(op.join(args.bids_dir, 'sub-'+args.bids_id, 'ses-1','anat','*T1w.nii.gz'))
+        nii_fnames = glob.glob(op.join(
+            args.bids_dir, 'sub-'+args.bids_id,
+            'ses-'+padded_session, 'anat', '*T1w.nii',
+        ))
+        nii_fnames += glob.glob(op.join(
+            args.bids_dir, 'sub-'+args.bids_id,
+            'ses-'+padded_session, 'anat', '*T1w.nii.gz',
+        ))
         nii_fnames = [i for i in nii_fnames if len(i) != 0]
         assert len(nii_fnames)==1
         nii_fname=nii_fnames[0]
@@ -1126,7 +1187,7 @@ def make_bids(args):
         #Loop over all filenames in bids path and generate forward model in 
         #the project derivatives folder
         filenames=glob.glob(op.join(args.bids_dir, 'sub-'+args.bids_id,
-                                    'ses-'+str(args.bids_session),'meg', '*.ds'))
+                                    'ses-'+padded_session, 'meg', '*.ds'))
         cmd = f"export SUBJECTS_DIR={fs_subjects_dir}; "                            
         for filename in filenames:
             bids_path = mne_bids.get_bids_path_from_fname(filename)
