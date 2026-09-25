@@ -42,6 +42,10 @@ import shutil
 from mne_bids import BIDSPath
 from nih2mne.make_meg_bids import _gen_taskrundict, _proc_meg_bids, _proc_mri_bids
 from collections import OrderedDict
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 #%% Setup Defaults for GUI browse functions
 BIDS_DEFAULTS = DEFAULTS['BIDS_gen']
@@ -177,6 +181,10 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     def _action_pb_run(self):
         'Run the BIDS conversion - Loop over all items in list'
         self._action_pb_CheckOutputs()  #Initialize io_mapping
+        logger.info(
+            'Starting BIDS conversion for %d MEG dataset(s)',
+            len(self.io_mapping),
+        )
         
         #MEG Conversion to BIDS
         for idx, key in enumerate(self.io_mapping.keys()):
@@ -186,13 +194,17 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
             _meg_fname = key
             _bids_path = self.io_mapping[key]['bidspath']
             try:
+                logger.info('Converting MEG dataset %s to %s',
+                            _meg_fname, _bids_path)
                 _proc_meg_bids(meg_fname=_meg_fname, bids_path=_bids_path,
                                     anonymize=False, tmpdir=None, ignore_eroom=True, 
                                     crop_trailing_zeros=False, 
                                    )
                 self._set_single_filelist_text(idx=idx, prefix='Done', 
                                                io_dict=self.io_mapping)
-            except BaseException as e:
+                logger.info('Finished MEG conversion for %s', _meg_fname)
+            except BaseException:
+                logger.exception('MEG conversion failed for %s', _meg_fname)
                 self._set_single_filelist_text(idx=idx, prefix='Error', 
                                                io_dict=self.io_mapping)
             QApplication.processEvents()  #Force text update live
@@ -206,6 +218,8 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                 
                 _mri_fname = list(self.anat_io_mapping.keys())[0]
                 _t1_bids_path = self.anat_io_mapping[_mri_fname]['bidspath']
+                logger.info('Converting MRI dataset %s to %s',
+                            _mri_fname, _t1_bids_path)
                 _proc_mri_bids(t1_bids_path = _t1_bids_path, 
                                anonymize=self.opts['anonymize'], 
                                mri_bsight=self.opts['mri_bsight'], 
@@ -215,7 +229,9 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                                input_id=self.opts['subjid_input'])
                 self._set_single_filelist_text(idx=self._anat_idx, prefix='Done',
                                                io_dict=self.anat_io_mapping)
-            except BaseException as e:
+                logger.info('Finished MRI conversion for %s', _mri_fname)
+            except BaseException:
+                logger.exception('MRI conversion failed')
                 self._set_single_filelist_text(idx=self._anat_idx, prefix='Error',
                                                io_dict=self.anat_io_mapping)
             QApplication.processEvents() #Force text update live
@@ -344,23 +360,19 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     
     def open_file_dialog(self, file_filters='*', default_dir=os.getcwd()):
         # Open file dialog
-        options = QtWidgets.QFileDialog.Option()
         fileName, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
             "Select File",  # Dialog title
             default_dir,
             file_filters,
-            options=options
         )
         return fileName
     
     def open_folder_dialog(self, default_dir=os.getcwd()):
-        options = QtWidgets.QFileDialog.Option()
         directory = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Select Directory",  # Dialog title
-            default_dir, 
-            options=options
+            default_dir,
         )
         return directory
     
@@ -375,6 +387,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                                  suffix='meg', 
                                  extension='.ds')
         except BaseException as e:
+            logger.exception('Could not construct BIDS path')
             bids_path = False
             print(f'{e}')
         return bids_path

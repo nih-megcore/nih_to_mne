@@ -30,6 +30,7 @@ from nih2mne.GUI.qt_compat import QtCore, QtGui, QtWidgets
 pyqtSignal = QtCore.pyqtSignal
 import argparse
 import importlib
+import logging
 import os, os.path as op
 from pathlib import Path
 import sys
@@ -41,6 +42,11 @@ from nih2mne.utilities.data_crop_wrapper import get_term_time
 import shutil
 import copy
 import numpy as np
+
+
+logger = logging.getLogger(__name__)
+DEFAULT_LOG_PATH = '~/megcore/logging/bids_conversion.log'
+LOGGING_CATEGORY = 'meg_dataset_gui'
 
 
 class _ConfigCreationDeclined(Exception):
@@ -63,6 +69,14 @@ def _get_parser():
         '-bids_root',
         metavar='PATH',
         help='BIDS root to use when opening the BIDS creator.',
+    )
+    parser.add_argument(
+        '-log',
+        metavar='PATH',
+        help=(
+            'Logfile for the dataset GUI and BIDS creator. This is a '
+            'session-only override of logging.meg_dataset_gui.'
+        ),
     )
     return parser
 
@@ -168,6 +182,101 @@ def _configure_bids_root(config, bids_root=None, config_fname=None,
         )
 
 
+def _prompt_for_log_path(input_func=None):
+    """Request a logfile, using the standard path for an empty response."""
+    if input_func is None:
+        input_func = input
+
+    try:
+        response = input_func(
+            f'Logging file [{DEFAULT_LOG_PATH}]: '
+        ).strip()
+    except EOFError:
+        response = ''
+    return response or DEFAULT_LOG_PATH
+
+
+def _confirm_log_path_persistence(log_path, input_func=None):
+    """Ask whether a prompted logfile should be saved to defaults.yml."""
+    if input_func is None:
+        input_func = input
+
+    prompt = (
+        f'Save logging path {log_path} to defaults.yml? [y/N] '
+    )
+    while True:
+        try:
+            response = input_func(prompt).strip().lower()
+        except EOFError:
+            response = ''
+
+        if response in ('y', 'yes'):
+            return True
+        if response in ('', 'n', 'no'):
+            return False
+        print("Please answer 'yes' or 'no'.")
+
+
+def _persist_log_path(config, log_path):
+    """Save the user-facing path representation to the active defaults file."""
+    import yaml
+
+    config.DEFAULTS['logging'][LOGGING_CATEGORY] = log_path
+    with open(config._get_defaults_fname(), 'w') as defaults_file:
+        yaml.dump(
+            config.DEFAULTS,
+            defaults_file,
+            sort_keys=False,
+            default_flow_style=False,
+        )
+
+
+def _initialize_file_logging(log_path):
+    """Attach one append-mode root handler for the normalized logfile path."""
+    resolved_path = Path(log_path).expanduser().resolve()
+    if resolved_path.exists() and not resolved_path.is_file():
+        raise ValueError(f'Log path exists but is not a file: {resolved_path}')
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    for handler in root_logger.handlers:
+        if not isinstance(handler, logging.FileHandler):
+            continue
+        handler_path = Path(handler.baseFilename).expanduser().resolve()
+        if handler_path == resolved_path:
+            return resolved_path
+
+    handler = logging.FileHandler(resolved_path, mode='a', encoding='utf-8')
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+    ))
+    root_logger.addHandler(handler)
+    return resolved_path
+
+
+def _configure_logging(config, command_log=None, input_func=None):
+    """Resolve, initialize, and optionally persist the workflow logfile."""
+    configured_log = config.DEFAULTS['logging'][LOGGING_CATEGORY]
+    prompted = command_log is None and configured_log in (None, '')
+
+    if command_log is not None:
+        selected_log = command_log
+    elif not prompted:
+        selected_log = configured_log
+    else:
+        selected_log = _prompt_for_log_path(input_func=input_func)
+
+    resolved_path = _initialize_file_logging(selected_log)
+
+    if prompted and _confirm_log_path_persistence(
+            selected_log, input_func=input_func):
+        _persist_log_path(config, selected_log)
+
+    return resolved_path
+
+
 class GUI_MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -204,6 +313,7 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
                 # Instantiate a filename tile
                 _tmp_tile = InputDatasetTile(fname=i)
             except BaseException as e:
+                logger.exception('Could not prepare dataset %s', i)
                 # Instantiate a NULL/ERROR tile
                 _tmp_tile = ErrorDatasetTile(fname=i, 
                                              error_type=type(e), 
@@ -238,6 +348,7 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         '''Open second window and populate the dataset list'''
         fnames = self.get_fnames_from_list()
         print('Opening bids app')
+        logger.info('Opening BIDS Creator with %d dataset(s)', len(fnames))
         self._bids_window_open(meg_dsets = fnames)
         self.bids_gui.ui.list_fname_conversion.addItems(fnames)
         
@@ -252,7 +363,8 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
                 return 'None'
             else:
                 return list(_tmp)[0]
-        except:
+        except BaseException:
+            logger.exception('Could not assess the MEG dataset identifier')
             print('Could not assess meghash')
             return 'None'
         
@@ -614,6 +726,12 @@ def main(argv=None):
         bids_root=args.bids_root,
         config_fname=args.config,
     )
+
+    try:
+        log_path = _configure_logging(config=config, command_log=args.log)
+    except (OSError, ValueError) as error:
+        parser.error(f'Could not initialize logging: {error}')
+    logger.info('Starting meg_dataset_gui; logging to %s', log_path)
 
     # All supported command-line arguments have already been consumed. Avoid
     # forwarding ``-config`` to Qt's independent argument parser.

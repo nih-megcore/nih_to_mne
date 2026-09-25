@@ -29,7 +29,9 @@ def _get_default_options():
                 'emptyroom': 'N',
                 'run_rank_reorder': 'Y'
                 }
-    defaults = {'BIDS_gen': BIDS_GEN}    
+    LOGGING = {'meg_dataset_gui': None}
+    defaults = {'BIDS_gen': BIDS_GEN,
+                'logging': LOGGING}
     return defaults
 
 def _get_defaults_fname():

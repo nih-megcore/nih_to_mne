@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
+import importlib
 import os
+import logging
 import sys
 from pathlib import Path
 
@@ -16,7 +18,9 @@ def isolate_config_module():
     missing = object()
     original_module = sys.modules.pop('nih2mne.config', missing)
     original_attribute = nih2mne.__dict__.pop('config', missing)
+    original_log_level = logging.getLogger().level
     yield
+    logging.getLogger().setLevel(original_log_level)
     sys.modules.pop('nih2mne.config', None)
     nih2mne.__dict__.pop('config', None)
     if original_module is not missing:
@@ -45,11 +49,16 @@ def _write_defaults(path, bids_root):
 
 def test_parser_accepts_config_option():
     args = dataset_gui._get_parser().parse_args(
-        ['-config', 'custom.yml', '-bids_root', '/data/bids']
+        [
+            '-config', 'custom.yml',
+            '-bids_root', '/data/bids',
+            '-log', '/tmp/bids.log',
+        ]
     )
 
     assert args.config == 'custom.yml'
     assert args.bids_root == '/data/bids'
+    assert args.log == '/tmp/bids.log'
 
 
 def test_cli_config_takes_precedence_over_environment(tmp_path, monkeypatch):
@@ -187,3 +196,185 @@ def test_invalid_bids_root_choice_reprompts(tmp_path, monkeypatch, capsys):
     )
 
     assert "Please answer 'write' or 'config'." in capsys.readouterr().out
+
+
+def _remove_log_handler(log_path):
+    resolved_path = Path(log_path).expanduser().resolve()
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        if not isinstance(handler, logging.FileHandler):
+            continue
+        if Path(handler.baseFilename).resolve() == resolved_path:
+            root_logger.removeHandler(handler)
+            handler.close()
+
+
+def test_logging_config_is_synchronized_into_existing_defaults(
+        tmp_path, monkeypatch):
+    config_path = tmp_path / 'defaults.yml'
+    _write_defaults(config_path, '/config/bids')
+    monkeypatch.setenv('HOME', str(tmp_path))
+
+    config = dataset_gui._initialize_config(config_path)
+
+    assert config.DEFAULTS['logging'] == {'meg_dataset_gui': None}
+    saved = yaml.safe_load(config_path.read_text(encoding='utf-8'))
+    assert saved['logging'] == {'meg_dataset_gui': None}
+
+
+def test_prompted_log_path_can_be_persisted(tmp_path, monkeypatch):
+    config_path = tmp_path / 'defaults.yml'
+    log_path = '~/project-logs/bids_conversion.log'
+    _write_defaults(config_path, '/config/bids')
+    monkeypatch.setenv('HOME', str(tmp_path))
+    config = dataset_gui._initialize_config(config_path)
+    responses = iter([log_path, 'yes'])
+
+    try:
+        resolved = dataset_gui._configure_logging(
+            config,
+            input_func=lambda _prompt: next(responses),
+        )
+
+        assert resolved == tmp_path / 'project-logs' / 'bids_conversion.log'
+        saved = yaml.safe_load(config_path.read_text(encoding='utf-8'))
+        assert saved['logging']['meg_dataset_gui'] == log_path
+    finally:
+        _remove_log_handler(tmp_path / 'project-logs' / 'bids_conversion.log')
+
+
+def test_prompted_default_log_path_can_remain_session_only(
+        tmp_path, monkeypatch):
+    config_path = tmp_path / 'defaults.yml'
+    _write_defaults(config_path, '/config/bids')
+    monkeypatch.setenv('HOME', str(tmp_path))
+    config = dataset_gui._initialize_config(config_path)
+    responses = iter(['', 'no'])
+    expected = tmp_path / 'megcore' / 'logging' / 'bids_conversion.log'
+
+    try:
+        resolved = dataset_gui._configure_logging(
+            config,
+            input_func=lambda _prompt: next(responses),
+        )
+
+        assert resolved == expected
+        assert expected.is_file()
+        saved = yaml.safe_load(config_path.read_text(encoding='utf-8'))
+        assert saved['logging']['meg_dataset_gui'] is None
+    finally:
+        _remove_log_handler(expected)
+
+
+def test_command_log_overrides_config_without_prompting(tmp_path, monkeypatch):
+    config_path = tmp_path / 'defaults.yml'
+    configured_log = tmp_path / 'configured.log'
+    command_log = tmp_path / 'command.log'
+    _write_defaults(config_path, '/config/bids')
+    monkeypatch.setenv('HOME', str(tmp_path))
+    config = dataset_gui._initialize_config(config_path)
+    config.DEFAULTS['logging']['meg_dataset_gui'] = str(configured_log)
+
+    try:
+        resolved = dataset_gui._configure_logging(
+            config,
+            command_log=command_log,
+            input_func=lambda _prompt: pytest.fail('unexpected prompt'),
+        )
+
+        assert resolved == command_log
+        saved = yaml.safe_load(config_path.read_text(encoding='utf-8'))
+        assert saved['logging']['meg_dataset_gui'] is None
+    finally:
+        _remove_log_handler(command_log)
+
+
+def test_configured_log_path_suppresses_prompt_and_records_messages(
+        tmp_path, monkeypatch):
+    config_path = tmp_path / 'defaults.yml'
+    log_path = tmp_path / 'configured.log'
+    _write_defaults(config_path, '/config/bids')
+    monkeypatch.setenv('HOME', str(tmp_path))
+    config = dataset_gui._initialize_config(config_path)
+    config.DEFAULTS['logging']['meg_dataset_gui'] = str(log_path)
+
+    try:
+        dataset_gui._configure_logging(
+            config,
+            input_func=lambda _prompt: pytest.fail('unexpected prompt'),
+        )
+        logging.getLogger('nih2mne.test').info('test logging message')
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+
+        assert 'test logging message' in log_path.read_text(encoding='utf-8')
+    finally:
+        _remove_log_handler(log_path)
+
+
+def test_logging_initialization_deduplicates_shared_path(tmp_path):
+    log_path = tmp_path / 'shared.log'
+
+    try:
+        dataset_gui._initialize_file_logging(log_path)
+        dataset_gui._initialize_file_logging(log_path)
+
+        matching_handlers = [
+            handler for handler in logging.getLogger().handlers
+            if isinstance(handler, logging.FileHandler)
+            and Path(handler.baseFilename).resolve() == log_path
+        ]
+        assert len(matching_handlers) == 1
+    finally:
+        _remove_log_handler(log_path)
+
+
+def test_logging_rejects_directory_as_logfile(tmp_path):
+    with pytest.raises(ValueError, match='is not a file'):
+        dataset_gui._initialize_file_logging(tmp_path)
+
+
+def test_bids_creator_dialogs_use_qt_default_options(
+        tmp_path, monkeypatch):
+    config_path = tmp_path / 'defaults.yml'
+    _write_defaults(config_path, '/config/bids')
+    monkeypatch.setenv('HOME', str(tmp_path))
+    dataset_gui._initialize_config(config_path)
+
+    module_name = (
+        'nih2mne.GUI.templates.bids_creator_gui_control_functions'
+    )
+    sys.modules.pop(module_name, None)
+    bids_creator = importlib.import_module(module_name)
+    calls = {}
+
+    def get_open_file_name(*args, **kwargs):
+        calls['file'] = (args, kwargs)
+        return '/data/electrodes.txt', '*.txt'
+
+    def get_existing_directory(*args, **kwargs):
+        calls['directory'] = (args, kwargs)
+        return '/data/bids'
+
+    monkeypatch.setattr(
+        bids_creator.QtWidgets.QFileDialog,
+        'getOpenFileName',
+        get_open_file_name,
+    )
+    monkeypatch.setattr(
+        bids_creator.QtWidgets.QFileDialog,
+        'getExistingDirectory',
+        get_existing_directory,
+    )
+
+    file_name = bids_creator.BIDS_MainWindow.open_file_dialog(
+        object(), file_filters='*.txt', default_dir='/data'
+    )
+    directory = bids_creator.BIDS_MainWindow.open_folder_dialog(
+        object(), default_dir='/data'
+    )
+
+    assert file_name == '/data/electrodes.txt'
+    assert directory == '/data/bids'
+    assert calls['file'][1] == {}
+    assert calls['directory'][1] == {}
