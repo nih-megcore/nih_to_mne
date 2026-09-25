@@ -899,6 +899,13 @@ p, li { white-space: pre-wrap; }
               <number>0</number>
              </property>
              <item>
+              <widget class="QPushButton" name="pb_LoadRunDict">
+               <property name="text">
+                <string>Load RUNDICT</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QPushButton" name="pb_print_cmd">
                <property name="text">
                 <string>Print CMD</string>

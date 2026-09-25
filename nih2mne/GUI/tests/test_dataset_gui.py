@@ -10,7 +10,14 @@ import nih2mne
 import pytest
 import yaml
 
+os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+
 from nih2mne.GUI import dataset_gui
+
+
+BIDS_CREATOR_MODULE = (
+    'nih2mne.GUI.templates.bids_creator_gui_control_functions'
+)
 
 
 @pytest.fixture(autouse=True)
@@ -18,6 +25,7 @@ def isolate_config_module():
     missing = object()
     original_module = sys.modules.pop('nih2mne.config', missing)
     original_attribute = nih2mne.__dict__.pop('config', missing)
+    original_bids_creator = sys.modules.pop(BIDS_CREATOR_MODULE, missing)
     original_log_level = logging.getLogger().level
     yield
     logging.getLogger().setLevel(original_log_level)
@@ -27,6 +35,17 @@ def isolate_config_module():
         sys.modules['nih2mne.config'] = original_module
     if original_attribute is not missing:
         nih2mne.config = original_attribute
+    sys.modules.pop(BIDS_CREATOR_MODULE, None)
+    if original_bids_creator is not missing:
+        sys.modules[BIDS_CREATOR_MODULE] = original_bids_creator
+
+
+@pytest.fixture(scope='module')
+def qapp():
+    app = dataset_gui.QtWidgets.QApplication.instance()
+    if app is None:
+        app = dataset_gui.QtWidgets.QApplication([])
+    return app
 
 
 def _write_defaults(path, bids_root):
@@ -47,18 +66,50 @@ def _write_defaults(path, bids_root):
     path.write_text(yaml.safe_dump(defaults), encoding='utf-8')
 
 
+def _run_dict():
+    return {
+        'anonymize': False,
+        'subjid_input': 'MEGHASH',
+        'bids_id': '01',
+        'bids_dir': '/tmp/bids',
+        'bids_session': '02',
+        'meg_dataset_list': [
+            '/tmp/MEGHASH_task_20260101_01.ds',
+            '/tmp/MEGHASH_task_20260101_02.ds',
+        ],
+        'mri_none': False,
+        'mri_bsight': '/tmp/mri.nii.gz',
+        'mri_elec': '/tmp/electrodes.txt',
+        'mri_brik': False,
+        'crop_zeros': True,
+        'include_empty_room': False,
+        'run_rank_reorder': False,
+    }
+
+
+def _load_bids_creator(tmp_path, monkeypatch):
+    config_path = tmp_path / 'defaults.yml'
+    _write_defaults(config_path, '/config/bids')
+    monkeypatch.setenv('HOME', str(tmp_path))
+    dataset_gui._initialize_config(config_path)
+    sys.modules.pop(BIDS_CREATOR_MODULE, None)
+    return importlib.import_module(BIDS_CREATOR_MODULE)
+
+
 def test_parser_accepts_config_option():
     args = dataset_gui._get_parser().parse_args(
         [
             '-config', 'custom.yml',
             '-bids_root', '/data/bids',
             '-log', '/tmp/bids.log',
+            '-rundict', 'RUNDICT: {}',
         ]
     )
 
     assert args.config == 'custom.yml'
     assert args.bids_root == '/data/bids'
     assert args.log == '/tmp/bids.log'
+    assert args.rundict == 'RUNDICT: {}'
 
 
 def test_cli_config_takes_precedence_over_environment(tmp_path, monkeypatch):
@@ -336,16 +387,7 @@ def test_logging_rejects_directory_as_logfile(tmp_path):
 
 def test_bids_creator_dialogs_use_qt_default_options(
         tmp_path, monkeypatch):
-    config_path = tmp_path / 'defaults.yml'
-    _write_defaults(config_path, '/config/bids')
-    monkeypatch.setenv('HOME', str(tmp_path))
-    dataset_gui._initialize_config(config_path)
-
-    module_name = (
-        'nih2mne.GUI.templates.bids_creator_gui_control_functions'
-    )
-    sys.modules.pop(module_name, None)
-    bids_creator = importlib.import_module(module_name)
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
     calls = {}
 
     def get_open_file_name(*args, **kwargs):
@@ -378,3 +420,165 @@ def test_bids_creator_dialogs_use_qt_default_options(
     assert directory == '/data/bids'
     assert calls['file'][1] == {}
     assert calls['directory'][1] == {}
+
+
+def test_rundict_round_trip_accepts_full_log_line(tmp_path, monkeypatch):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    run_dict = _run_dict()
+
+    serialized = bids_creator.serialize_run_dict(run_dict)
+    restored = bids_creator.parse_run_dict(
+        '2026-09-25 10:30:00 - INFO - bids.gui - RUNDICT: '
+        f'{serialized}'
+    )
+
+    assert '\n' not in serialized
+    assert restored == run_dict
+    assert bids_creator.parse_run_dict(serialized) == run_dict
+
+
+@pytest.mark.parametrize(
+    'mutation, match',
+    [
+        (lambda value: value.pop('bids_id'), 'missing required keys'),
+        (lambda value: value.update(extra='value'), 'unknown keys'),
+        (lambda value: value.update(anonymize='yes'), 'must be true or false'),
+        (lambda value: value.update(meg_dataset_list='dataset.ds'),
+         'must be a list of strings'),
+    ],
+)
+def test_rundict_validation_rejects_invalid_records(
+        tmp_path, monkeypatch, mutation, match):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    run_dict = _run_dict()
+    mutation(run_dict)
+
+    with pytest.raises(ValueError, match=match):
+        bids_creator.validate_run_dict(run_dict)
+
+
+def test_rundict_restores_bids_creator_controls(
+        tmp_path, monkeypatch, qapp):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    window = bids_creator.BIDS_MainWindow(run_dict=_run_dict())
+
+    try:
+        assert window.opts == _run_dict()
+        assert window.ui.pb_LoadRunDict.text() == 'Load RUNDICT'
+        assert window.ui.te_meghash.toPlainText() == 'MEGHASH'
+        assert window.ui.te_BIDS_id.toPlainText() == '01'
+        assert window.ui.te_bids_dir.toPlainText() == '/tmp/bids'
+        assert window.ui.cb_Bids_Session.currentText() == '02'
+        assert window.ui.list_fname_conversion.count() == 2
+        assert window.ui.te_brainsight_mri.toPlainText() == '/tmp/mri.nii.gz'
+        assert window.ui.te_brainsight_elec.toPlainText() == '/tmp/electrodes.txt'
+        assert window.ui.tab_Coreg.currentWidget() is window.ui.tab_BSight
+        assert window.ui.cb_crop_zeros.isChecked()
+        assert not window.ui.cb_emptyroom.isChecked()
+    finally:
+        window.close()
+
+
+def test_load_rundict_action_populates_and_checks_outputs(
+        tmp_path, monkeypatch, qapp):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    record = f'RUNDICT: {bids_creator.serialize_run_dict(_run_dict())}'
+    window = bids_creator.BIDS_MainWindow()
+    checked = []
+    monkeypatch.setattr(
+        bids_creator.QtWidgets.QInputDialog,
+        'getMultiLineText',
+        lambda *_args, **_kwargs: (record, True),
+    )
+    monkeypatch.setattr(
+        window,
+        'check_restored_outputs',
+        lambda: checked.append(True),
+    )
+
+    try:
+        window._action_load_rundict()
+
+        assert window.opts == _run_dict()
+        assert checked == [True]
+    finally:
+        window.close()
+
+
+def test_invalid_pasted_rundict_does_not_change_controls(
+        tmp_path, monkeypatch, qapp):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    window = bids_creator.BIDS_MainWindow()
+    original_opts = dict(window.opts)
+    warnings = []
+    monkeypatch.setattr(
+        bids_creator.QtWidgets.QInputDialog,
+        'getMultiLineText',
+        lambda *_args, **_kwargs: ('RUNDICT: {invalid}', True),
+    )
+    monkeypatch.setattr(
+        bids_creator.QtWidgets.QMessageBox,
+        'warning',
+        lambda *args: warnings.append(args),
+    )
+
+    try:
+        window._action_load_rundict()
+
+        assert window.opts == original_opts
+        assert len(warnings) == 1
+    finally:
+        window.close()
+
+
+def test_run_logs_rundict_before_output_check_failure(
+        tmp_path, monkeypatch, qapp, caplog):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    log_path = tmp_path / 'bids_conversion.log'
+    dataset_gui._initialize_file_logging(log_path)
+    window = bids_creator.BIDS_MainWindow(run_dict=_run_dict())
+    monkeypatch.setattr(
+        window,
+        '_action_pb_CheckOutputs',
+        lambda: (_ for _ in ()).throw(RuntimeError('check failed')),
+    )
+
+    try:
+        with caplog.at_level(logging.INFO, logger=bids_creator.logger.name):
+            with pytest.raises(RuntimeError, match='check failed'):
+                window._action_pb_run()
+
+        messages = [
+            record.getMessage() for record in caplog.records
+            if record.getMessage().startswith('RUNDICT: {')
+        ]
+        assert len(messages) == 1
+        assert bids_creator.parse_run_dict(messages[0]) == _run_dict()
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+        log_lines = log_path.read_text(encoding='utf-8').splitlines()
+        rundict_lines = [line for line in log_lines if 'RUNDICT:' in line]
+        assert len(rundict_lines) == 1
+        assert bids_creator.parse_run_dict(rundict_lines[0]) == _run_dict()
+    finally:
+        window.close()
+        _remove_log_handler(log_path)
+
+
+def test_restore_bids_creator_checks_without_running_conversion():
+    calls = []
+
+    class FakeBidsWindow:
+        def check_restored_outputs(self):
+            calls.append('check')
+
+    class FakeParent:
+        def _bids_window_open(self, meg_dsets=None, run_dict=None):
+            calls.append(('open', meg_dsets, run_dict))
+            self.bids_gui = FakeBidsWindow()
+
+    parent = FakeParent()
+
+    dataset_gui.GUI_MainWindow.restore_bids_creator(parent, _run_dict())
+
+    assert calls == [('open', None, _run_dict()), 'check']

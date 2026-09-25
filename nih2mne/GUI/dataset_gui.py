@@ -78,6 +78,14 @@ def _get_parser():
             'session-only override of logging.meg_dataset_gui.'
         ),
     )
+    parser.add_argument(
+        '-rundict',
+        metavar='JSON',
+        help=(
+            'Restore the BIDS Creator from a RUNDICT log line or its JSON '
+            'payload. Quote the value for the shell.'
+        ),
+    )
     return parser
 
 
@@ -354,6 +362,12 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         
         _meghash = self._assess_meghash(fnames)
         self.bids_gui.ui.te_meghash.setPlainText(_meghash)
+
+    def restore_bids_creator(self, run_dict):
+        """Open the BIDS Creator from recovery state and check its outputs."""
+        logger.info('Opening BIDS Creator from RUNDICT')
+        self._bids_window_open(run_dict=run_dict)
+        self.bids_gui.check_restored_outputs()
     
     def _assess_meghash(self, fnames):
         try:
@@ -369,12 +383,15 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
             return 'None'
         
     
-    def _bids_window_open(self, meg_dsets=None):
+    def _bids_window_open(self, meg_dsets=None, run_dict=None):
         '''Implement the logic to create and maintain a second main window'''
         from nih2mne.GUI.templates.bids_creator_gui_control_functions import \
             BIDS_MainWindow as BIDS_Ui_MainWindow
 
-        self.bids_gui = BIDS_Ui_MainWindow(meg_dsets=meg_dsets)
+        self.bids_gui = BIDS_Ui_MainWindow(
+            meg_dsets=meg_dsets,
+            run_dict=run_dict,
+        )
         self.bids_gui.show()
         
     def handle_close_request(self, widget):
@@ -733,6 +750,15 @@ def main(argv=None):
         parser.error(f'Could not initialize logging: {error}')
     logger.info('Starting meg_dataset_gui; logging to %s', log_path)
 
+    run_dict = None
+    if args.rundict is not None:
+        from nih2mne.GUI.templates.bids_creator_gui_control_functions import \
+            parse_run_dict
+        try:
+            run_dict = parse_run_dict(args.rundict)
+        except ValueError as error:
+            parser.error(str(error))
+
     # All supported command-line arguments have already been consumed. Avoid
     # forwarding ``-config`` to Qt's independent argument parser.
     app = QtWidgets.QApplication([sys.argv[0]])
@@ -742,6 +768,8 @@ def main(argv=None):
     
     MainWindow = GUI_MainWindow() 
     MainWindow.show()
+    if run_dict is not None:
+        MainWindow.restore_bids_creator(run_dict)
     sys.exit(app.exec())
 
 

@@ -32,6 +32,7 @@ from nih2mne.GUI.qt_compat import QtCore, QtGui, QtWidgets
 
 QApplication = QtWidgets.QApplication
 from nih2mne.GUI.templates.BIDS_creator_gui import Ui_MainWindow
+import json
 import sys
 import os, os.path as op
 from nih2mne.make_meg_bids import make_bids
@@ -46,6 +47,86 @@ import logging
 
 
 logger = logging.getLogger(__name__)
+
+RUNDICT_MARKER = 'RUNDICT:'
+RUNDICT_KEYS = {
+    'anonymize',
+    'subjid_input',
+    'bids_id',
+    'bids_dir',
+    'bids_session',
+    'meg_dataset_list',
+    'mri_none',
+    'mri_bsight',
+    'mri_elec',
+    'mri_brik',
+    'crop_zeros',
+    'include_empty_room',
+    'run_rank_reorder',
+}
+
+
+def serialize_run_dict(run_dict):
+    """Serialize BIDS Creator options as deterministic, single-line JSON."""
+    validated = validate_run_dict(run_dict)
+    return json.dumps(validated, sort_keys=True, separators=(',', ':'))
+
+
+def parse_run_dict(record):
+    """Parse JSON alone or extract it from a complete RUNDICT log line."""
+    if not isinstance(record, str) or not record.strip():
+        raise ValueError('RUNDICT input is empty')
+
+    payload = record.strip()
+    if RUNDICT_MARKER in payload:
+        payload = payload.rsplit(RUNDICT_MARKER, 1)[1].strip()
+
+    try:
+        run_dict = json.loads(payload)
+    except json.JSONDecodeError as error:
+        raise ValueError(f'RUNDICT is not valid JSON: {error.msg}') from error
+    return validate_run_dict(run_dict)
+
+
+def validate_run_dict(run_dict):
+    """Validate and copy the complete BIDS Creator recovery state."""
+    if not isinstance(run_dict, dict):
+        raise ValueError('RUNDICT must be a JSON object')
+
+    missing = RUNDICT_KEYS.difference(run_dict)
+    unknown = set(run_dict).difference(RUNDICT_KEYS)
+    if missing:
+        raise ValueError(
+            f'RUNDICT is missing required keys: {", ".join(sorted(missing))}'
+        )
+    if unknown:
+        raise ValueError(
+            f'RUNDICT contains unknown keys: {", ".join(sorted(unknown))}'
+        )
+
+    for key in (
+        'anonymize', 'mri_none', 'crop_zeros', 'include_empty_room',
+        'run_rank_reorder',
+    ):
+        if not isinstance(run_dict[key], bool):
+            raise ValueError(f'RUNDICT {key} must be true or false')
+
+    for key in ('subjid_input', 'bids_id', 'bids_dir', 'bids_session'):
+        if not isinstance(run_dict[key], str):
+            raise ValueError(f'RUNDICT {key} must be a string')
+
+    datasets = run_dict['meg_dataset_list']
+    if not isinstance(datasets, list) or not all(
+            isinstance(dataset, str) for dataset in datasets):
+        raise ValueError('RUNDICT meg_dataset_list must be a list of strings')
+
+    for key in ('mri_bsight', 'mri_elec', 'mri_brik'):
+        value = run_dict[key]
+        if value is not None and value is not False and not isinstance(value, str):
+            raise ValueError(f'RUNDICT {key} must be a path, false, or null')
+
+    # Round-trip through JSON so callers cannot mutate nested recovery state.
+    return json.loads(json.dumps(run_dict))
 
 #%% Setup Defaults for GUI browse functions
 BIDS_DEFAULTS = DEFAULTS['BIDS_gen']
@@ -107,7 +188,8 @@ else:
 #%% 
 
 class BIDS_MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, meghash='None', bids_id='None', meg_dsets=None):
+    def __init__(self, meghash='None', bids_id='None', meg_dsets=None,
+                 run_dict=None):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -118,7 +200,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                          bids_id=bids_id,
                          bids_dir=DEFAULT_BIDS_ROOT, 
                          bids_session=DEFAULT_BIDS_SESSION,
-                         meg_dataset_list = meg_dsets,
+                         meg_dataset_list = list(meg_dsets or []),
                          
                          #MRI_none
                          mri_none = True,
@@ -158,6 +240,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.pb_BrainsightMRI.clicked.connect(self._action_pb_BrainsightMRI)
         self.ui.pb_run.clicked.connect(self._action_pb_run)
         self.ui.pb_CheckOutputs.clicked.connect(self._action_pb_CheckOutputs)
+        self.ui.pb_LoadRunDict.clicked.connect(self._action_load_rundict)
         
         ### Connect checkboxes
         self.ui.cb_crop_zeros.stateChanged.connect(self._action_cb_crop_zeros)
@@ -176,10 +259,14 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                 self.opts['anonymize']=False
         else:
             self.ui.pb_Anonymize.setText('Anonymize: N')
+
+        if run_dict is not None:
+            self.apply_run_dict(run_dict)
         
     ############ >> Action Section  ##########
     def _action_pb_run(self):
         'Run the BIDS conversion - Loop over all items in list'
+        logger.info('%s %s', RUNDICT_MARKER, serialize_run_dict(self.opts))
         self._action_pb_CheckOutputs()  #Initialize io_mapping
         logger.info(
             'Starting BIDS conversion for %d MEG dataset(s)',
@@ -235,16 +322,102 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                 self._set_single_filelist_text(idx=self._anat_idx, prefix='Error',
                                                io_dict=self.anat_io_mapping)
             QApplication.processEvents() #Force text update live
-                
-            
-    
+
     def _action_pb_CheckOutputs(self):
         'Map the input files to output and display in filelist'
-        self._make_task_dict(run_rank_reorder=DEFAULT_RUN_RANK_REORDER)  #Generates the in_out_mapping
+        self._make_task_dict(
+            run_rank_reorder=self.opts['run_rank_reorder']
+        )  # Generates the in_out_mapping
         self._make_anat_dict()  #Generates anatomy anat_io_mapping
         self._set_filelist_text()
-        
-        
+
+    def _action_load_rundict(self):
+        """Paste a recovery record, populate the form, and check outputs."""
+        record, accepted = QtWidgets.QInputDialog.getMultiLineText(
+            self,
+            'Load RUNDICT',
+            'Paste the RUNDICT log line or JSON object:',
+        )
+        if not accepted:
+            return
+
+        try:
+            run_dict = parse_run_dict(record)
+        except ValueError as error:
+            QtWidgets.QMessageBox.warning(
+                self, 'Invalid RUNDICT', str(error)
+            )
+            return
+
+        self.apply_run_dict(run_dict)
+        self.check_restored_outputs()
+
+    def apply_run_dict(self, run_dict):
+        """Replace options and controls with validated recovery state."""
+        restored = validate_run_dict(run_dict)
+        self.opts = restored
+
+        self.ui.te_meghash.setPlainText(restored['subjid_input'])
+        self.ui.te_BIDS_id.setPlainText(restored['bids_id'])
+        self.ui.te_bids_dir.setPlainText(restored['bids_dir'])
+
+        session = restored['bids_session']
+        if self.ui.cb_Bids_Session.findText(session) == -1:
+            self.ui.cb_Bids_Session.addItem(session)
+        self.ui.cb_Bids_Session.setCurrentText(session)
+
+        self.ui.list_fname_conversion.clear()
+        self.ui.list_fname_conversion.addItems(restored['meg_dataset_list'])
+
+        self.ui.te_brainsight_elec.setPlainText(
+            restored['mri_elec'] or ''
+        )
+        self.ui.te_brainsight_mri.setPlainText(
+            restored['mri_bsight'] or ''
+        )
+        self.ui.te_BRIKfname.setPlainText(restored['mri_brik'] or '')
+
+        if restored['mri_brik']:
+            coreg_tab = self.ui.tab_AfniCoreg
+        elif restored['mri_bsight'] or restored['mri_elec']:
+            coreg_tab = self.ui.tab_BSight
+        else:
+            coreg_tab = self.ui.tab_None
+        self.ui.tab_Coreg.setCurrentWidget(coreg_tab)
+
+        checked = QtCore.Qt.CheckState.Checked
+        unchecked = QtCore.Qt.CheckState.Unchecked
+        self.ui.cb_crop_zeros.setCheckState(
+            checked if restored['crop_zeros'] else unchecked
+        )
+        self.ui.cb_emptyroom.setCheckState(
+            checked if restored['include_empty_room'] else unchecked
+        )
+
+        if restored['anonymize'] and shutil.which('newDs'):
+            self.ui.pb_Anonymize.setText('Anonymize: Y')
+        elif restored['anonymize']:
+            self.ui.pb_Anonymize.setText('Anonymize: N  (no CTF code)')
+            self.opts['anonymize'] = False
+        else:
+            self.ui.pb_Anonymize.setText('Anonymize: N')
+
+        logger.info('Loaded RUNDICT into BIDS Creator')
+
+    def check_restored_outputs(self):
+        """Check restored output mappings without closing or running the GUI."""
+        try:
+            self._action_pb_CheckOutputs()
+        except BaseException as error:
+            logger.exception('Could not check outputs from restored RUNDICT')
+            QtWidgets.QMessageBox.critical(
+                self,
+                'RUNDICT Output Check Failed',
+                f'The options were restored, but output checking failed:\n{error}',
+            )
+            return False
+        return True
+
     def _action_pb_BrainsightElec(self):
         'Browse for electrodes file'
         fname = self.open_file_dialog(file_filters='*.txt', 
