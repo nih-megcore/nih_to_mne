@@ -34,6 +34,7 @@ testing = ['datalad','pytest','pygit2']
 "make_meg_bids.py"='nih2mne.make_meg_bids:main'
 "make_meg_bids_fromcsv.py" = 'nih2mne.utilities.make_meg_bids_fromcsv:main'
 "print_bids_table.py"='nih2mne.utilities.print_bids_table:main'
+"make_bids_log_reader.py"='nih2mne.utilities.make_bids_log_reader:main'
 "fix_dsname.py"='nih2mne.utilities.fix_dsname:main'
 "megcore_prep_mri_bids.py"='nih2mne.megcore_prep_mri_bids:main'
 "qa_fids.py"='nih2mne.utilities.qa_fids:main'

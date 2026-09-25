@@ -32,7 +32,6 @@ from nih2mne.GUI.qt_compat import QtCore, QtGui, QtWidgets
 
 QApplication = QtWidgets.QApplication
 from nih2mne.GUI.templates.BIDS_creator_gui import Ui_MainWindow
-import json
 import sys
 import os, os.path as op
 from nih2mne.make_meg_bids import make_bids
@@ -44,89 +43,15 @@ from mne_bids import BIDSPath
 from nih2mne.make_meg_bids import _gen_taskrundict, _proc_meg_bids, _proc_mri_bids
 from collections import OrderedDict
 import logging
+from nih2mne.utilities.make_bids_log_reader import (
+    RUNDICT_MARKER,
+    parse_run_dict,
+    serialize_run_dict,
+    validate_run_dict,
+)
 
 
 logger = logging.getLogger(__name__)
-
-RUNDICT_MARKER = 'RUNDICT:'
-RUNDICT_KEYS = {
-    'anonymize',
-    'subjid_input',
-    'bids_id',
-    'bids_dir',
-    'bids_session',
-    'meg_dataset_list',
-    'mri_none',
-    'mri_bsight',
-    'mri_elec',
-    'mri_brik',
-    'crop_zeros',
-    'include_empty_room',
-    'run_rank_reorder',
-}
-
-
-def serialize_run_dict(run_dict):
-    """Serialize BIDS Creator options as deterministic, single-line JSON."""
-    validated = validate_run_dict(run_dict)
-    return json.dumps(validated, sort_keys=True, separators=(',', ':'))
-
-
-def parse_run_dict(record):
-    """Parse JSON alone or extract it from a complete RUNDICT log line."""
-    if not isinstance(record, str) or not record.strip():
-        raise ValueError('RUNDICT input is empty')
-
-    payload = record.strip()
-    if RUNDICT_MARKER in payload:
-        payload = payload.rsplit(RUNDICT_MARKER, 1)[1].strip()
-
-    try:
-        run_dict = json.loads(payload)
-    except json.JSONDecodeError as error:
-        raise ValueError(f'RUNDICT is not valid JSON: {error.msg}') from error
-    return validate_run_dict(run_dict)
-
-
-def validate_run_dict(run_dict):
-    """Validate and copy the complete BIDS Creator recovery state."""
-    if not isinstance(run_dict, dict):
-        raise ValueError('RUNDICT must be a JSON object')
-
-    missing = RUNDICT_KEYS.difference(run_dict)
-    unknown = set(run_dict).difference(RUNDICT_KEYS)
-    if missing:
-        raise ValueError(
-            f'RUNDICT is missing required keys: {", ".join(sorted(missing))}'
-        )
-    if unknown:
-        raise ValueError(
-            f'RUNDICT contains unknown keys: {", ".join(sorted(unknown))}'
-        )
-
-    for key in (
-        'anonymize', 'mri_none', 'crop_zeros', 'include_empty_room',
-        'run_rank_reorder',
-    ):
-        if not isinstance(run_dict[key], bool):
-            raise ValueError(f'RUNDICT {key} must be true or false')
-
-    for key in ('subjid_input', 'bids_id', 'bids_dir', 'bids_session'):
-        if not isinstance(run_dict[key], str):
-            raise ValueError(f'RUNDICT {key} must be a string')
-
-    datasets = run_dict['meg_dataset_list']
-    if not isinstance(datasets, list) or not all(
-            isinstance(dataset, str) for dataset in datasets):
-        raise ValueError('RUNDICT meg_dataset_list must be a list of strings')
-
-    for key in ('mri_bsight', 'mri_elec', 'mri_brik'):
-        value = run_dict[key]
-        if value is not None and value is not False and not isinstance(value, str):
-            raise ValueError(f'RUNDICT {key} must be a path, false, or null')
-
-    # Round-trip through JSON so callers cannot mutate nested recovery state.
-    return json.loads(json.dumps(run_dict))
 
 #%% Setup Defaults for GUI browse functions
 BIDS_DEFAULTS = DEFAULTS['BIDS_gen']
