@@ -570,6 +570,22 @@ def main(argv=None, input_func=input, stdout=None, stderr=None):
             output_func=lambda message: print(message, file=stdout),
         )
 
+    selected_range = None
+    if view == 'range':
+        if args.date_range is not None:
+            try:
+                selected_range = parse_date_range(args.date_range)
+            except ValueError as error:
+                parser.error(str(error))
+        elif sys.stdin.isatty() or input_func is not input:
+            selected_range = _prompt_date_range(
+                latest_week_range(result.entries),
+                input_func=input_func,
+                output_func=lambda message: print(message, file=stdout),
+            )
+        else:
+            parser.error('-view range requires -date_range outside a terminal')
+
     if args.bids_id is not None:
         try:
             bids_ids = parse_bids_id_filter(args.bids_id)
@@ -597,22 +613,6 @@ def main(argv=None, input_func=input, stdout=None, stderr=None):
         print('No conversion entries match the selected subject filters.',
               file=stdout)
         return 1
-
-    selected_range = None
-    if view == 'range':
-        if args.date_range is not None:
-            try:
-                selected_range = parse_date_range(args.date_range)
-            except ValueError as error:
-                parser.error(str(error))
-        elif sys.stdin.isatty() or input_func is not input:
-            selected_range = _prompt_date_range(
-                latest_week_range(filtered_entries),
-                input_func=input_func,
-                output_func=lambda message: print(message, file=stdout),
-            )
-        else:
-            parser.error('-view range requires -date_range outside a terminal')
 
     if view == 'last':
         sort_by = 'date'

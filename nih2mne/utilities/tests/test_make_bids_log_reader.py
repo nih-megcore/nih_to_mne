@@ -388,22 +388,33 @@ def test_main_tui_range_reprompts_and_applies_selected_sort(tmp_path):
     log_path.write_text(''.join(lines), encoding='utf-8')
     responses = iter([
         'range',
-        '',
-        '',
         'not-a-range',
         '09/01/2026-09/20/2026',
+        '',
+        '',
         'meghash',
     ])
+    prompts = []
     stdout = StringIO()
+
+    def respond(prompt):
+        prompts.append(prompt)
+        return next(responses)
 
     status = reader.main(
         ['-log', str(log_path)],
-        input_func=lambda _prompt: next(responses),
+        input_func=respond,
         stdout=stdout,
     )
 
     rendered = stdout.getvalue()
     assert status == 0
+    assert prompts[0].startswith('View ')
+    assert prompts[1].startswith('Date range ')
+    assert prompts[2].startswith('Date range ')
+    assert prompts[3].startswith('BIDS subject ID')
+    assert prompts[4].startswith('MEGHash ID')
+    assert prompts[5].startswith('Sort ')
     assert 'Date range must use MM/DD/YYYY-MM/DD/YYYY format' in rendered
     assert 'OUTSIDE' not in rendered
     assert (
