@@ -286,10 +286,11 @@ def _configure_logging(config, command_log=None, input_func=None):
 
 
 class GUI_MainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, log_path=None):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        self.log_path = log_path
         
         ####  Setup addon features >>>
         self.ui.FileDrop.dragEnterEvent = self.dragEnterEvent
@@ -391,6 +392,7 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         self.bids_gui = BIDS_Ui_MainWindow(
             meg_dsets=meg_dsets,
             run_dict=run_dict,
+            log_path=self.log_path,
         )
         self.bids_gui.show()
         
@@ -766,7 +768,7 @@ def main(argv=None):
     icon_img = op.join(op.dirname(__file__), 'templates', 'opposum_squid_icon.png')
     if op.exists(icon_img): app.setWindowIcon(QtGui.QIcon(icon_img))
     
-    MainWindow = GUI_MainWindow() 
+    MainWindow = GUI_MainWindow(log_path=log_path)
     MainWindow.show()
     if run_dict is not None:
         MainWindow.restore_bids_creator(run_dict)

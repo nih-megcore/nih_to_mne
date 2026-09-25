@@ -29,6 +29,7 @@ pb_run  #Run operation
 
 """
 from nih2mne.GUI.qt_compat import QtCore, QtGui, QtWidgets
+from pathlib import Path
 
 QApplication = QtWidgets.QApplication
 from nih2mne.GUI.templates.BIDS_creator_gui import Ui_MainWindow
@@ -44,6 +45,7 @@ from nih2mne.make_meg_bids import _gen_taskrundict, _proc_meg_bids, _proc_mri_bi
 from collections import OrderedDict
 import logging
 from nih2mne.utilities.make_bids_log_reader import (
+    LOG_LINE_PATTERN,
     RUNDICT_MARKER,
     parse_run_dict,
     serialize_run_dict,
@@ -52,6 +54,19 @@ from nih2mne.utilities.make_bids_log_reader import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_error_log_blocks(log_text):
+    """Extract ERROR/CRITICAL records and their continuation lines."""
+    error_lines = []
+    include_line = False
+    for line in log_text.splitlines():
+        match = LOG_LINE_PATTERN.match(line)
+        if match is not None:
+            include_line = match.group('level') in {'ERROR', 'CRITICAL'}
+        if include_line:
+            error_lines.append(line)
+    return '\n'.join(error_lines).strip()
 
 #%% Setup Defaults for GUI browse functions
 BIDS_DEFAULTS = DEFAULTS['BIDS_gen']
@@ -114,10 +129,23 @@ else:
 
 class BIDS_MainWindow(QtWidgets.QMainWindow):
     def __init__(self, meghash='None', bids_id='None', meg_dsets=None,
-                 run_dict=None):
+                 run_dict=None, log_path=None):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        self.log_path = (
+            Path(log_path).expanduser().resolve()
+            if log_path is not None else None
+        )
+        self._last_run_log_range = None
+
+        self.ui.pb_review_errors = QtWidgets.QPushButton(
+            'Review Errors', self
+        )
+        self.ui.pb_review_errors.setObjectName('pb_review_errors')
+        self.ui.pb_review_errors.hide()
+        self.ui.pb_review_errors.clicked.connect(self._show_run_errors)
+        self.ui.statusbar.addPermanentWidget(self.ui.pb_review_errors)
         
         # Collect all bids options in self.opts
         self.opts = dict(anonymize=DEFAULT_ANONYMIZE, 
@@ -191,6 +219,9 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     ############ >> Action Section  ##########
     def _action_pb_run(self):
         'Run the BIDS conversion - Loop over all items in list'
+        self.ui.pb_review_errors.hide()
+        self._last_run_log_range = None
+        run_log_start = self._log_position()
         logger.info('%s %s', RUNDICT_MARKER, serialize_run_dict(self.opts))
         self._action_pb_CheckOutputs()  #Initialize io_mapping
         self.ui.statusbar.showMessage('BIDS conversion running...')
@@ -253,15 +284,113 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                                                io_dict=self.anat_io_mapping)
             QApplication.processEvents() #Force text update live
 
-        if conversion_failed:
+        run_log_before_completion = self._log_position()
+        logged_errors = bool(self._read_error_log_range(
+            run_log_start, run_log_before_completion
+        ))
+        run_has_errors = conversion_failed or logged_errors
+
+        if run_has_errors:
             completion_message = 'BIDS conversion finished with errors.'
             logger.warning(completion_message)
         else:
             completion_message = 'BIDS conversion finished successfully.'
             logger.info(completion_message)
+        run_log_end = self._log_position()
+        if run_has_errors:
+            self._last_run_log_range = (run_log_start, run_log_end)
+            self.ui.pb_review_errors.show()
         self.ui.statusbar.showMessage(completion_message)
         QApplication.processEvents()
         print(completion_message, flush=True)
+
+    def _flush_logfile(self):
+        """Flush the handler writing the active GUI logfile."""
+        if self.log_path is None:
+            return
+        for handler in logging.getLogger().handlers:
+            if not isinstance(handler, logging.FileHandler):
+                continue
+            handler_path = Path(handler.baseFilename).expanduser().resolve()
+            if handler_path == self.log_path:
+                handler.flush()
+
+    def _log_position(self):
+        """Return a byte position after all current log records are flushed."""
+        if self.log_path is None:
+            return None
+        self._flush_logfile()
+        try:
+            return self.log_path.stat().st_size
+        except OSError:
+            return None
+
+    def _read_log_range(self, start, end):
+        """Read and decode a byte range from the active logfile."""
+        if self.log_path is None:
+            raise OSError('The active logfile path is unavailable.')
+        if start is None or end is None:
+            raise OSError('The logfile range for this RUN is unavailable.')
+        if end < start:
+            raise OSError('The logfile changed while the RUN was active.')
+
+        with self.log_path.open('rb') as log_file:
+            log_file.seek(0, os.SEEK_END)
+            if log_file.tell() < end:
+                raise OSError('The logfile changed after this RUN completed.')
+            log_file.seek(start)
+            return log_file.read(end - start).decode(
+                'utf-8', errors='replace'
+            )
+
+    def _read_error_log_range(self, start, end):
+        """Return filtered errors, or an empty string when no range is readable."""
+        try:
+            return _extract_error_log_blocks(
+                self._read_log_range(start, end)
+            )
+        except OSError:
+            return ''
+
+    def _error_review_text(self):
+        """Build the text shown by the error review dialog."""
+        displayed_path = (
+            str(self.log_path) if self.log_path is not None else 'unavailable'
+        )
+        header = f'The full log is located {displayed_path}'
+        if self._last_run_log_range is None:
+            return f'{header}\n\nNo failed BIDS conversion RUN is available.'
+
+        try:
+            log_text = self._read_log_range(*self._last_run_log_range)
+        except OSError as error:
+            return f'{header}\n\nUnable to read the RUN errors: {error}'
+
+        errors = _extract_error_log_blocks(log_text)
+        if not errors:
+            errors = 'No ERROR or CRITICAL log records were found for this RUN.'
+        return f'{header}\n\n{errors}'
+
+    def _show_run_errors(self):
+        """Show errors from the most recently completed failed RUN."""
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle('BIDS Conversion Errors')
+        dialog.resize(900, 600)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+        error_text = QtWidgets.QPlainTextEdit(dialog)
+        error_text.setObjectName('bids_conversion_error_text')
+        error_text.setReadOnly(True)
+        error_text.setPlainText(self._error_review_text())
+        layout.addWidget(error_text)
+
+        close_button = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Close,
+            parent=dialog,
+        )
+        close_button.rejected.connect(dialog.reject)
+        layout.addWidget(close_button)
+        dialog.exec()
 
     def _action_pb_CheckOutputs(self):
         'Map the input files to output and display in filelist'

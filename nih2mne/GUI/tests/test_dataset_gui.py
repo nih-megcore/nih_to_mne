@@ -587,6 +587,7 @@ def test_run_reports_success_in_status_bar_and_final_terminal_line(
 
         message = 'BIDS conversion finished successfully.'
         assert window.ui.statusbar.currentMessage() == message
+        assert window.ui.pb_review_errors.isHidden()
         assert capsys.readouterr().out.rstrip().splitlines()[-1] == message
         completion_records = [
             record for record in caplog.records
@@ -646,6 +647,183 @@ def test_run_reports_caught_conversion_errors(
         ]
         assert len(completion_records) == 1
         assert completion_records[0].levelno == logging.WARNING
+    finally:
+        window.close()
+
+
+def test_error_log_filter_includes_tracebacks_but_not_warnings(
+        tmp_path, monkeypatch):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    log_text = (
+        '2026-09-25 10:00:00,000 - INFO - test - starting\n'
+        '2026-09-25 10:00:01,000 - WARNING - test - warning\n'
+        '2026-09-25 10:00:02,000 - ERROR - test - failed\n'
+        'Traceback (most recent call last):\n'
+        '  File "conversion.py", line 1, in run\n'
+        'RuntimeError: failed\n'
+        '2026-09-25 10:00:03,000 - CRITICAL - test - stopped\n'
+        'critical detail\n'
+        '2026-09-25 10:00:04,000 - INFO - test - done\n'
+    )
+
+    errors = bids_creator._extract_error_log_blocks(log_text)
+
+    assert 'WARNING' not in errors
+    assert 'starting' not in errors
+    assert 'done' not in errors
+    assert 'ERROR - test - failed' in errors
+    assert 'RuntimeError: failed' in errors
+    assert 'CRITICAL - test - stopped' in errors
+    assert 'critical detail' in errors
+
+
+def test_log_path_is_propagated_to_bids_creator(
+        tmp_path, monkeypatch, qapp):
+    _load_bids_creator(tmp_path, monkeypatch)
+    log_path = tmp_path / 'bids_conversion.log'
+    parent = dataset_gui.GUI_MainWindow(log_path=log_path)
+
+    try:
+        parent._bids_window_open()
+
+        assert parent.bids_gui.log_path == log_path.resolve()
+    finally:
+        if hasattr(parent, 'bids_gui'):
+            parent.bids_gui.close()
+        parent.close()
+
+
+def test_review_errors_uses_only_latest_failed_run_log_range(
+        tmp_path, monkeypatch, qapp):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    log_path = tmp_path / 'bids_conversion.log'
+    dataset_gui._initialize_file_logging(log_path)
+    run_dict = _run_dict()
+    run_dict.update(mri_none=True, mri_bsight=False, mri_elec=False)
+    window = bids_creator.BIDS_MainWindow(
+        run_dict=run_dict,
+        log_path=log_path,
+    )
+
+    def prepare_outputs():
+        window.io_mapping = {
+            '/tmp/input.ds': {'bidspath': '/tmp/bids/output_meg.ds'}
+        }
+
+    def fail_conversion(**_kwargs):
+        logging.getLogger('conversion.library').warning('CURRENT WARNING')
+        raise RuntimeError('CURRENT FAILURE')
+
+    monkeypatch.setattr(window, '_action_pb_CheckOutputs', prepare_outputs)
+    monkeypatch.setattr(window, '_set_single_filelist_text', lambda **_kwargs: None)
+    monkeypatch.setattr(bids_creator, '_proc_meg_bids', fail_conversion)
+    logging.getLogger('conversion.library').error('OLDER FAILURE')
+
+    try:
+        assert window.ui.pb_review_errors.isHidden()
+        window._action_pb_run()
+        logging.getLogger('conversion.library').error('LATER FAILURE')
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+
+        review_text = window._error_review_text()
+        assert not window.ui.pb_review_errors.isHidden()
+        assert review_text.splitlines()[0] == (
+            f'The full log is located {log_path.resolve()}'
+        )
+        assert 'MEG conversion failed for /tmp/input.ds' in review_text
+        assert 'RuntimeError: CURRENT FAILURE' in review_text
+        assert 'CURRENT WARNING' not in review_text
+        assert 'OLDER FAILURE' not in review_text
+        assert 'LATER FAILURE' not in review_text
+
+        dialogs = []
+
+        def capture_dialog(dialog):
+            dialogs.append(dialog)
+            return bids_creator.QtWidgets.QDialog.DialogCode.Rejected
+
+        monkeypatch.setattr(
+            bids_creator.QtWidgets.QDialog,
+            'exec',
+            capture_dialog,
+        )
+        window._show_run_errors()
+
+        assert len(dialogs) == 1
+        assert dialogs[0].windowTitle() == 'BIDS Conversion Errors'
+        text_widget = dialogs[0].findChild(
+            bids_creator.QtWidgets.QPlainTextEdit,
+            'bids_conversion_error_text',
+        )
+        assert text_widget.isReadOnly()
+        assert text_widget.toPlainText() == review_text
+
+        def successful_conversion(**_kwargs):
+            assert window.ui.pb_review_errors.isHidden()
+
+        monkeypatch.setattr(
+            bids_creator, '_proc_meg_bids', successful_conversion
+        )
+        window._action_pb_run()
+
+        assert window.ui.pb_review_errors.isHidden()
+        assert window._last_run_log_range is None
+    finally:
+        window.close()
+        _remove_log_handler(log_path)
+
+
+def test_library_error_exposes_review_button_without_raised_exception(
+        tmp_path, monkeypatch, qapp):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    log_path = tmp_path / 'bids_conversion.log'
+    dataset_gui._initialize_file_logging(log_path)
+    run_dict = _run_dict()
+    run_dict.update(mri_none=True, mri_bsight=False, mri_elec=False)
+    window = bids_creator.BIDS_MainWindow(
+        run_dict=run_dict,
+        log_path=log_path,
+    )
+
+    def prepare_outputs():
+        window.io_mapping = {
+            '/tmp/input.ds': {'bidspath': '/tmp/bids/output_meg.ds'}
+        }
+
+    def log_error(**_kwargs):
+        logging.getLogger('conversion.library').error('LIBRARY ERROR')
+
+    monkeypatch.setattr(window, '_action_pb_CheckOutputs', prepare_outputs)
+    monkeypatch.setattr(window, '_set_single_filelist_text', lambda **_kwargs: None)
+    monkeypatch.setattr(bids_creator, '_proc_meg_bids', log_error)
+
+    try:
+        window._action_pb_run()
+
+        assert not window.ui.pb_review_errors.isHidden()
+        assert window.ui.statusbar.currentMessage() == (
+            'BIDS conversion finished with errors.'
+        )
+        assert 'LIBRARY ERROR' in window._error_review_text()
+    finally:
+        window.close()
+        _remove_log_handler(log_path)
+
+
+def test_error_review_reports_missing_logfile(tmp_path, monkeypatch, qapp):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    log_path = tmp_path / 'missing.log'
+    window = bids_creator.BIDS_MainWindow(log_path=log_path)
+    window._last_run_log_range = (0, 10)
+
+    try:
+        review_text = window._error_review_text()
+
+        assert review_text.startswith(
+            f'The full log is located {log_path.resolve()}\n\n'
+        )
+        assert 'Unable to read the RUN errors:' in review_text
     finally:
         window.close()
 
