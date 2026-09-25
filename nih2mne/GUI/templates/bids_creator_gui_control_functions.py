@@ -193,6 +193,9 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         'Run the BIDS conversion - Loop over all items in list'
         logger.info('%s %s', RUNDICT_MARKER, serialize_run_dict(self.opts))
         self._action_pb_CheckOutputs()  #Initialize io_mapping
+        self.ui.statusbar.showMessage('BIDS conversion running...')
+        QApplication.processEvents()
+        conversion_failed = False
         logger.info(
             'Starting BIDS conversion for %d MEG dataset(s)',
             len(self.io_mapping),
@@ -216,6 +219,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                                                io_dict=self.io_mapping)
                 logger.info('Finished MEG conversion for %s', _meg_fname)
             except BaseException:
+                conversion_failed = True
                 logger.exception('MEG conversion failed for %s', _meg_fname)
                 self._set_single_filelist_text(idx=idx, prefix='Error', 
                                                io_dict=self.io_mapping)
@@ -243,10 +247,21 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
                                                io_dict=self.anat_io_mapping)
                 logger.info('Finished MRI conversion for %s', _mri_fname)
             except BaseException:
+                conversion_failed = True
                 logger.exception('MRI conversion failed')
                 self._set_single_filelist_text(idx=self._anat_idx, prefix='Error',
                                                io_dict=self.anat_io_mapping)
             QApplication.processEvents() #Force text update live
+
+        if conversion_failed:
+            completion_message = 'BIDS conversion finished with errors.'
+            logger.warning(completion_message)
+        else:
+            completion_message = 'BIDS conversion finished successfully.'
+            logger.info(completion_message)
+        self.ui.statusbar.showMessage(completion_message)
+        QApplication.processEvents()
+        print(completion_message, flush=True)
 
     def _action_pb_CheckOutputs(self):
         'Map the input files to output and display in filelist'

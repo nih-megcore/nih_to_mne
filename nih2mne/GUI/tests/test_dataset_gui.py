@@ -565,6 +565,91 @@ def test_run_logs_rundict_before_output_check_failure(
         _remove_log_handler(log_path)
 
 
+def test_run_reports_success_in_status_bar_and_final_terminal_line(
+        tmp_path, monkeypatch, qapp, caplog, capsys):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    run_dict = _run_dict()
+    run_dict.update(mri_none=True, mri_bsight=False, mri_elec=False)
+    window = bids_creator.BIDS_MainWindow(run_dict=run_dict)
+
+    def prepare_outputs():
+        window.io_mapping = {
+            '/tmp/input.ds': {'bidspath': '/tmp/bids/output_meg.ds'}
+        }
+
+    monkeypatch.setattr(window, '_action_pb_CheckOutputs', prepare_outputs)
+    monkeypatch.setattr(window, '_set_single_filelist_text', lambda **_kwargs: None)
+    monkeypatch.setattr(bids_creator, '_proc_meg_bids', lambda **_kwargs: None)
+
+    try:
+        with caplog.at_level(logging.INFO, logger=bids_creator.logger.name):
+            window._action_pb_run()
+
+        message = 'BIDS conversion finished successfully.'
+        assert window.ui.statusbar.currentMessage() == message
+        assert capsys.readouterr().out.rstrip().splitlines()[-1] == message
+        completion_records = [
+            record for record in caplog.records
+            if record.getMessage() == message
+        ]
+        assert len(completion_records) == 1
+        assert completion_records[0].levelno == logging.INFO
+    finally:
+        window.close()
+
+
+@pytest.mark.parametrize('failed_stage', ['meg', 'mri'])
+def test_run_reports_caught_conversion_errors(
+        tmp_path, monkeypatch, qapp, caplog, capsys, failed_stage):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    run_dict = _run_dict()
+    if failed_stage == 'meg':
+        run_dict.update(mri_none=True, mri_bsight=False, mri_elec=False)
+    else:
+        run_dict.update(meg_dataset_list=[])
+    window = bids_creator.BIDS_MainWindow(run_dict=run_dict)
+
+    def prepare_outputs():
+        if failed_stage == 'meg':
+            window.io_mapping = {
+                '/tmp/input.ds': {'bidspath': '/tmp/bids/output_meg.ds'}
+            }
+        else:
+            window.io_mapping = {}
+            window.anat_io_mapping = {
+                '/tmp/mri.nii.gz': {'bidspath': '/tmp/bids/output_T1w.nii.gz'}
+            }
+            window._anat_idx = 0
+
+    def fail_conversion(**_kwargs):
+        raise RuntimeError(f'{failed_stage} failed')
+
+    monkeypatch.setattr(window, '_action_pb_CheckOutputs', prepare_outputs)
+    monkeypatch.setattr(window, '_set_single_filelist_text', lambda **_kwargs: None)
+    monkeypatch.setattr(bids_creator, '_proc_meg_bids', (
+        fail_conversion if failed_stage == 'meg' else lambda **_kwargs: None
+    ))
+    monkeypatch.setattr(bids_creator, '_proc_mri_bids', (
+        fail_conversion if failed_stage == 'mri' else lambda **_kwargs: None
+    ))
+
+    try:
+        with caplog.at_level(logging.INFO, logger=bids_creator.logger.name):
+            window._action_pb_run()
+
+        message = 'BIDS conversion finished with errors.'
+        assert window.ui.statusbar.currentMessage() == message
+        assert capsys.readouterr().out.rstrip().splitlines()[-1] == message
+        completion_records = [
+            record for record in caplog.records
+            if record.getMessage() == message
+        ]
+        assert len(completion_records) == 1
+        assert completion_records[0].levelno == logging.WARNING
+    finally:
+        window.close()
+
+
 def test_restore_bids_creator_checks_without_running_conversion():
     calls = []
 
