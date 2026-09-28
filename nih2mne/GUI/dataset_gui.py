@@ -31,6 +31,7 @@ pyqtSignal = QtCore.pyqtSignal
 import argparse
 import importlib
 import logging
+from numbers import Number
 import os, os.path as op
 from pathlib import Path
 import sys
@@ -89,25 +90,8 @@ def _display_qa_value(value):
     return str(value)
 
 
-def _qa_review_text(result):
-    """Format one detailed QA result as an aligned text block."""
-    overall = result['overall'].upper()
-    task = (result.get('task') or 'TASK').upper()
-    rows = []
-    status_order = {'fail': 0, 'pass': 1, 'skipped': 2}
-    checks = sorted(
-        result['checks'],
-        key=lambda check: status_order[check['status']],
-    )
-    for check in checks:
-        rows.append((
-            check['term'],
-            f"{check['operator']} {_display_qa_value(check['expected'])}",
-            _display_qa_value(check['actual']),
-            f"<{check['status'].upper()}>",
-        ))
-
-    headers = ('Condition', 'Expected', 'Actual', 'Result')
+def _aligned_table(headers, rows):
+    """Return a fixed-width plain-text table."""
     widths = [
         max(len(headers[index]), *(len(row[index]) for row in rows))
         for index in range(len(headers))
@@ -120,14 +104,112 @@ def _qa_review_text(result):
         ).rstrip()
 
     lines = [
-        f'{task}  <{overall}>',
-        f"QA file: {op.basename(result['qa_file'])}",
-        '',
         format_row(headers),
         format_row(tuple('-' * width for width in widths)),
     ]
     lines.extend(format_row(row) for row in rows)
     return '\n'.join(lines)
+
+
+def _qa_table_text(result):
+    """Format detailed QA conditions with failures first."""
+    status_order = {'fail': 0, 'pass': 1, 'skipped': 2}
+    checks = sorted(
+        result['checks'],
+        key=lambda check: status_order[check['status']],
+    )
+    rows = [
+        (
+            check['term'],
+            f"{check['operator']} {_display_qa_value(check['expected'])}",
+            _display_qa_value(check['actual']),
+            f"<{check['status'].upper()}>",
+        )
+        for check in checks
+    ]
+    return _aligned_table(
+        ('Condition', 'Expected', 'Actual', 'Result'),
+        rows,
+    )
+
+
+def _qa_review_text(result):
+    """Format one detailed QA result as an aligned text block."""
+    overall = result['overall'].upper()
+    task = (result.get('task') or 'TASK').upper()
+    lines = [
+        f'{task}  <{overall}>',
+        f"QA file: {op.basename(result['qa_file'])}",
+        '',
+        _qa_table_text(result),
+    ]
+    return '\n'.join(lines)
+
+
+def _event_counts(raw):
+    """Return complete deterministic annotation counts for a loaded dataset."""
+    event_frame = pd.DataFrame(raw.annotations)
+    if 'description' not in event_frame.columns:
+        return ()
+    counts = event_frame.description.value_counts().to_dict()
+    return tuple(sorted(
+        ((str(name), int(count)) for name, count in counts.items()),
+        key=lambda item: (-item[1], item[0].lower(), item[0]),
+    ))
+
+
+def _batch_review_block_text(block):
+    """Format one dataset snapshot for the aggregate batch review."""
+    kind = block['kind']
+    if kind == 'qa':
+        outcome = block['qa_result']['overall'].upper()
+    elif kind == 'error':
+        outcome = 'ERROR'
+    elif block.get('note', '').startswith('QA ERROR'):
+        outcome = 'QA ERROR'
+    else:
+        outcome = 'EVENT COUNTS'
+
+    lines = [
+        f"{block['task'].upper()} — Run {block['run']}  <{outcome}>",
+        f"Movement max: {block['movement']}  |  "
+        f"Duration: {block['duration']}",
+        f"Dataset: {block['dataset']}",
+    ]
+
+    if kind == 'qa':
+        result = block['qa_result']
+        lines.extend([
+            f"QA file: {op.basename(result['qa_file'])}",
+            '',
+            _qa_table_text(result),
+        ])
+    elif kind == 'error':
+        lines.extend(['', f"Error: {block['error']}"])
+    else:
+        if block.get('note'):
+            lines.append(f"Note: {block['note']}")
+        lines.append('')
+        if block['event_counts']:
+            rows = tuple(
+                (name, str(count)) for name, count in block['event_counts']
+            )
+            lines.extend([
+                'Events:',
+                _aligned_table(('Event', 'Count'), rows),
+            ])
+        else:
+            lines.append('Events: NONE')
+    return '\n'.join(lines)
+
+
+def _batch_review_text(blocks):
+    """Format the immutable snapshot from the latest Encode+QA All run."""
+    divider = '=' * 80
+    body = f'\n\n{divider}\n\n'.join(
+        _batch_review_block_text(block) for block in blocks
+    )
+    return f'ENCODE+QA RESULTS\n\n{body}'
 
 
 def _get_parser():
@@ -374,7 +456,10 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         self.ui.FileDrop.dropEvent = self.dropEvent
         self.ui.pb_DeleteAllEntries.clicked.connect(self.clear_all_entries)
         self.ui.pb_CheckData.clicked.connect(self.encode_and_qa_all)
+        self.ui.pb_ReviewResults.clicked.connect(self.show_batch_results)
+        self.ui.pb_ReviewResults.hide()
         self.ui.pb_LaunchBidsCreator.clicked.connect(self.open_bids_creator)
+        self._last_batch_results = ()
 
         #### <<< 
         
@@ -395,6 +480,7 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
         self.populate_file_tiles()
         
     def populate_file_tiles(self):
+        self._invalidate_batch_results()
         for i in self.meg_files: 
             try:
                 # Instantiate a filename tile
@@ -417,6 +503,7 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
             
     def clear_all_entries(self):
         '''Delete all of the entries in the dataset list'''
+        self._invalidate_batch_results()
         contents = self.ui.scrollAreaWidgetContents
         while contents.count():
             item = contents.takeItem(0)
@@ -433,26 +520,163 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
 
     def encode_and_qa_all(self):
         '''Run trigger processing for every processable dataset tile.'''
+        self._invalidate_batch_results()
+        batch_results = []
         listwidget = self.ui.scrollAreaWidgetContents
         for i in range(listwidget.count()):
             item = listwidget.item(i)
             tile = listwidget.itemWidget(item)
             trigprocess = getattr(tile, 'trigprocess', None)
             if not callable(trigprocess):
+                error = getattr(
+                    tile,
+                    'error_code',
+                    'Dataset tile could not be initialized.',
+                )
+                batch_results.append(
+                    self._batch_result_for_tile(tile, error=str(error))
+                )
                 continue
             try:
                 processed = trigprocess()
-                if processed is False or getattr(
-                        tile, '_trigproc_error', False):
-                    continue
-                qa_events = getattr(tile, 'qa_events', None)
-                if callable(qa_events):
-                    qa_events(show_error_dialog=False)
-            except Exception:
+            except Exception as error:
                 logger.exception(
                     'Encode+QA failed for dataset %s',
                     getattr(tile, 'fname', '<unknown>'),
                 )
+                batch_results.append(
+                    self._batch_result_for_tile(tile, error=str(error))
+                )
+                continue
+
+            if processed is False or getattr(tile, '_trigproc_error', False):
+                batch_results.append(self._batch_result_for_tile(
+                    tile,
+                    error='Trigger processing failed; event QA was not run.',
+                ))
+                continue
+
+            qa_events = getattr(tile, 'qa_events', None)
+            if callable(qa_events):
+                try:
+                    qa_events(show_error_dialog=False)
+                except Exception as error:
+                    logger.exception(
+                        'Event QA failed for dataset %s',
+                        getattr(tile, 'fname', '<unknown>'),
+                    )
+                    batch_results.append(self._batch_result_for_tile(
+                        tile,
+                        note=f'QA ERROR: {error}',
+                    ))
+                    continue
+            batch_results.append(self._batch_result_for_tile(tile))
+
+        self._last_batch_results = tuple(copy.deepcopy(batch_results))
+        self.ui.pb_ReviewResults.setVisible(bool(self._last_batch_results))
+        return self._last_batch_results
+
+    def _invalidate_batch_results(self):
+        """Clear the snapshot whenever the loaded tile collection changes."""
+        self._last_batch_results = ()
+        self.ui.pb_ReviewResults.hide()
+
+    def _batch_result_for_tile(self, tile, error=None, note=None):
+        """Capture one tile without retaining live widget or Raw references."""
+        fname = getattr(tile, 'fname', '<unknown>')
+        task = getattr(tile, 'taskname', None)
+        run = getattr(tile, 'run', None)
+        if task is None or run is None:
+            basename = op.basename(str(fname).rstrip('/'))
+            if '_task-' in basename:
+                task = task or basename.split('_task-')[-1].split('_')[0]
+                run = run or (
+                    basename.split('_run-')[-1].split('_')[0]
+                    if '_run-' in basename else 'NA'
+                )
+            else:
+                parts = basename.split('_')
+                task = task or (parts[1] if len(parts) >= 4 else 'DATASET')
+                run = run or (
+                    parts[-1].replace('.ds', '')
+                    if len(parts) >= 4 else 'NA'
+                )
+
+        movement = getattr(tile, 'head_movement', None)
+        if isinstance(movement, Number):
+            movement_text = f'{movement:.2f} cm'
+        elif movement not in (None, ''):
+            movement_text = str(movement)
+        else:
+            movement_text = 'unavailable'
+
+        duration = getattr(tile, 'duration_seconds', None)
+        duration_text = f'{duration} s' if duration is not None else 'unavailable'
+        base = {
+            'task': str(task),
+            'run': str(run),
+            'dataset': op.basename(str(fname).rstrip('/')),
+            'movement': movement_text,
+            'duration': duration_text,
+        }
+
+        if error is not None:
+            return {**base, 'kind': 'error', 'error': str(error)}
+
+        qa_result = getattr(tile, '_qa_result', None)
+        if qa_result is not None:
+            return {
+                **base,
+                'kind': 'qa',
+                'qa_result': copy.deepcopy(qa_result),
+            }
+
+        if note is None:
+            qa_status = getattr(tile, '_qa_status', '')
+            if qa_status.startswith('QA ERROR'):
+                note = qa_status
+            elif qa_status == 'No QA File':
+                note = 'No compatible QA file; event counts shown.'
+            else:
+                note = 'No QA results; event counts shown.'
+        raw = getattr(tile, 'raw', None)
+        counts = _event_counts(raw) if raw is not None else ()
+        return {
+            **base,
+            'kind': 'events',
+            'note': note,
+            'event_counts': counts,
+        }
+
+    def show_batch_results(self):
+        """Display the immutable snapshot from the latest batch run."""
+        if not self._last_batch_results:
+            return
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle('Encode+QA Results')
+        dialog.resize(900, 650)
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        result_text = QtWidgets.QPlainTextEdit(dialog)
+        result_text.setObjectName('batch_qa_review_text')
+        result_text.setReadOnly(True)
+        result_text.setPlainText(_batch_review_text(
+            self._last_batch_results
+        ))
+        fixed_font = QtGui.QFontDatabase.systemFont(
+            QtGui.QFontDatabase.SystemFont.FixedFont
+        )
+        result_text.setFont(fixed_font)
+        layout.addWidget(result_text)
+
+        close_button = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Close,
+            parent=dialog,
+        )
+        close_button.rejected.connect(dialog.reject)
+        layout.addWidget(close_button)
+        dialog.exec()
 
     def open_bids_creator(self):
         '''Open second window and populate the dataset list'''
@@ -500,6 +724,7 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
     def handle_close_request(self, widget):
         '''If file tile "emits" a close signal, this will trigger a loop over
         filenames to identify the widget that produced the close signal'''
+        self._invalidate_batch_results()
         item_count = self.ui.scrollAreaWidgetContents.count()
         for i in range(item_count):
             item = self.ui.scrollAreaWidgetContents.item(i)
@@ -544,7 +769,11 @@ class InputDatasetTile(QtWidgets.QWidget):
             run = 'NA'
             
         self.load_meg()
+        self.subjid = subjid
         self.taskname = taskname
+        self.date = date
+        self.run = run
+        self.duration_seconds = round(self.raw.times[-1])
         self._trigproc_error = False  #Initialize, because referenced in info section
         self._qa_file = None
         self._qa_result = None
@@ -554,7 +783,7 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.ui.ReadoutFilename.setText(f'File: {base_fname}')
         self.ui.ReadoutSubjid.setText(f'  Subjid: {subjid}')
         self.ui.ReadoutTaskname.setText(f'Task: {taskname}')
-        self.ui.label_Duration.setText(f'Duration: {round(self.raw.times[-1])}s')
+        self.ui.label_Duration.setText(f'Duration: {self.duration_seconds}s')
         
         ## Process Triggers
         self.ui.ProcFileComboBox.currentTextChanged.connect(
@@ -627,7 +856,6 @@ class InputDatasetTile(QtWidgets.QWidget):
         Set information on the status bar
         # check for default head transform
         '''
-        from numbers import Number
         status_text = ''
         if glob.glob(op.join(self.fname, 'MarkerFile.mrk')).__len__()==0:
             status_text+='No MrkFile! : '

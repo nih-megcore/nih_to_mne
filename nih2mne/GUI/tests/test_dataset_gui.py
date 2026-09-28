@@ -824,6 +824,76 @@ def test_qa_review_text_is_aligned_and_failures_first():
     assert '<SKIPPED>' in text
 
 
+def test_event_counts_include_all_events_in_deterministic_order():
+    raw = SimpleNamespace(annotations=[
+        {'description': 'probe_face'},
+        {'description': 'response_hit'},
+        {'description': 'probe_face'},
+        {'description': 'Encode'},
+        {'description': 'encode'},
+    ])
+
+    assert dataset_gui._event_counts(raw) == (
+        ('probe_face', 2),
+        ('Encode', 1),
+        ('encode', 1),
+        ('response_hit', 1),
+    )
+
+
+def test_batch_review_text_has_one_metadata_block_per_dataset():
+    qa_result = {
+        'task': 'hariri',
+        'qa_file': '/qa/hariri_v2.qa',
+        'overall': 'fail',
+        'summary': {'pass': 1, 'fail': 1, 'skipped': 0},
+        'checks': [
+            {
+                'term': 'response_hit', 'operator': '>', 'expected': 120,
+                'actual': 100, 'status': 'fail', 'optional': False,
+            },
+            {
+                'term': 'probe_face', 'operator': '==', 'expected': 90,
+                'actual': 90, 'status': 'pass', 'optional': False,
+            },
+        ],
+    }
+    blocks = (
+        {
+            'task': 'hariri', 'run': '001', 'dataset': 'first.ds',
+            'movement': '0.25 cm', 'duration': '300 s', 'kind': 'qa',
+            'qa_result': qa_result,
+        },
+        {
+            'task': 'hariri', 'run': '002', 'dataset': 'second.ds',
+            'movement': 'No hz2.ds', 'duration': '298 s',
+            'kind': 'events',
+            'note': 'No compatible QA file; event counts shown.',
+            'event_counts': (('probe_face', 90), ('response_hit', 80)),
+        },
+        {
+            'task': 'rest', 'run': '001', 'dataset': 'rest.ds',
+            'movement': 'unavailable', 'duration': 'unavailable',
+            'kind': 'error', 'error': 'Trigger processing failed',
+        },
+    )
+
+    text = dataset_gui._batch_review_text(blocks)
+
+    assert text.count('HARIRI — Run') == 2
+    assert 'HARIRI — Run 001  <FAIL>' in text
+    assert 'Movement max: 0.25 cm  |  Duration: 300 s' in text
+    assert text.index('response_hit', text.index('QA file:')) < text.index(
+        'probe_face', text.index('QA file:')
+    )
+    assert 'HARIRI — Run 002  <EVENT COUNTS>' in text
+    assert 'Event         Count' in text
+    assert 'probe_face    90' in text
+    assert 'response_hit' in text
+    assert 'REST — Run 001  <ERROR>' in text
+    assert 'Error: Trigger processing failed' in text
+
+
 def test_dataset_tile_selects_qa_for_proc_version_and_places_buttons(
         tmp_path, monkeypatch, qapp):
     tile = _make_dataset_tile(
@@ -1050,10 +1120,21 @@ def test_encode_and_qa_all_processes_tiles_in_order_and_skips_errors(
             'Run trigger processing and refresh QA status for all loaded '
             'datasets'
         )
+        assert parent.ui.verticalLayout_2.indexOf(
+            parent.ui.pb_CheckData
+        ) + 1 == parent.ui.verticalLayout_2.indexOf(
+            parent.ui.pb_ReviewResults
+        )
+        assert parent.ui.pb_ReviewResults.text() == 'Review Results'
         assert calls == [
             'first', 'first-qa', 'failed', 'rejected', 'last', 'last-qa'
         ]
         assert 'Encode+QA failed for dataset failed.ds' in caplog.text
+        assert not parent.ui.pb_ReviewResults.isHidden()
+        assert len(parent._last_batch_results) == 5
+        assert [block['kind'] for block in parent._last_batch_results] == [
+            'events', 'error', 'error', 'error', 'events'
+        ]
     finally:
         parent.close()
 
@@ -1062,8 +1143,65 @@ def test_encode_and_qa_all_accepts_empty_tile_list(qapp):
     parent = dataset_gui.GUI_MainWindow()
 
     try:
+        assert parent.ui.pb_ReviewResults.isHidden()
         parent.ui.pb_CheckData.click()
         assert parent.ui.scrollAreaWidgetContents.count() == 0
+        assert parent.ui.pb_ReviewResults.isHidden()
+    finally:
+        parent.close()
+
+
+def test_batch_review_popup_is_read_only_snapshot(monkeypatch, qapp):
+    parent = dataset_gui.GUI_MainWindow()
+    tile = dataset_gui.QtWidgets.QWidget()
+    tile.fname = '/data/SUBJ_hariri_20260101_001.ds'
+    tile.taskname = 'hariri'
+    tile.run = '001'
+    tile.head_movement = 0.123
+    tile.duration_seconds = 301
+    tile.raw = SimpleNamespace(annotations=[
+        {'description': 'probe_face'},
+        {'description': 'probe_face'},
+        {'description': 'response_hit'},
+    ])
+    tile._qa_result = None
+    tile._qa_status = 'No QA File'
+    tile.trigprocess = lambda: True
+    tile.qa_events = lambda **_kwargs: None
+    item = dataset_gui.QtWidgets.QListWidgetItem()
+    parent.ui.scrollAreaWidgetContents.addItem(item)
+    parent.ui.scrollAreaWidgetContents.setItemWidget(item, tile)
+    dialogs = []
+
+    def capture_dialog(dialog):
+        dialogs.append(dialog)
+        return dataset_gui.QtWidgets.QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(dataset_gui.QtWidgets.QDialog, 'exec', capture_dialog)
+
+    try:
+        parent.encode_and_qa_all()
+        tile.raw.annotations.append({'description': 'late_change'})
+        tile.head_movement = 9.9
+        parent.show_batch_results()
+
+        assert len(dialogs) == 1
+        text_widget = dialogs[0].findChild(
+            dataset_gui.QtWidgets.QPlainTextEdit,
+            'batch_qa_review_text',
+        )
+        assert text_widget.isReadOnly()
+        text = text_widget.toPlainText()
+        assert 'HARIRI — Run 001  <EVENT COUNTS>' in text
+        assert 'Movement max: 0.12 cm  |  Duration: 301 s' in text
+        assert 'probe_face    2' in text
+        assert 'response_hit  1' in text
+        assert 'late_change' not in text
+        assert '9.90 cm' not in text
+
+        parent.clear_all_entries()
+        assert parent._last_batch_results == ()
+        assert parent.ui.pb_ReviewResults.isHidden()
     finally:
         parent.close()
 

@@ -84,6 +84,16 @@
               </widget>
              </item>
              <item>
+              <widget class="QPushButton" name="pb_ReviewResults">
+               <property name="toolTip">
+                <string>Review results from the most recent Encode+QA All run</string>
+               </property>
+               <property name="text">
+                <string>Review Results</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QPushButton" name="pb_LaunchBidsCreator">
                <property name="text">
                 <string>Open BIDS creator</string>

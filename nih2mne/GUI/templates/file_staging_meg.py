@@ -64,6 +64,9 @@ class Ui_MainWindow(object):
         self.pb_CheckData = QtWidgets.QPushButton(parent=self.widget)
         self.pb_CheckData.setObjectName("pb_CheckData")
         self.verticalLayout_2.addWidget(self.pb_CheckData)
+        self.pb_ReviewResults = QtWidgets.QPushButton(parent=self.widget)
+        self.pb_ReviewResults.setObjectName("pb_ReviewResults")
+        self.verticalLayout_2.addWidget(self.pb_ReviewResults)
         self.pb_LaunchBidsCreator = QtWidgets.QPushButton(parent=self.widget)
         self.pb_LaunchBidsCreator.setObjectName("pb_LaunchBidsCreator")
         self.verticalLayout_2.addWidget(self.pb_LaunchBidsCreator)
@@ -108,6 +111,8 @@ class Ui_MainWindow(object):
         self.FileDrop.setTitle(_translate("MainWindow", "Drag/Drop Files"))
         self.pb_CheckData.setToolTip(_translate("MainWindow", "Run trigger processing and refresh QA status for all loaded datasets"))
         self.pb_CheckData.setText(_translate("MainWindow", "Encode+QA All"))
+        self.pb_ReviewResults.setToolTip(_translate("MainWindow", "Review results from the most recent Encode+QA All run"))
+        self.pb_ReviewResults.setText(_translate("MainWindow", "Review Results"))
         self.pb_LaunchBidsCreator.setText(_translate("MainWindow", "Open BIDS creator"))
         self.pb_DeleteAllEntries.setText(_translate("MainWindow", "Clear All Entries"))
 
