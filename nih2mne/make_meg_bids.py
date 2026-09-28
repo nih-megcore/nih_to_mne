@@ -35,6 +35,11 @@ from nih2mne.utilities.clear_mrk_path import (calc_extra_mark_filelist,
                                               clean_filepath_header)
 from nih2mne.utilities.mri_defacing import mri_deface
 from nih2mne.utilities.qa_fids import plot_fids_qa
+from nih2mne.utilities.calc_hm import (
+    compute_movement,
+    get_localizer_dframe,
+    get_movement_rows,
+)
 
 import nibabel as nib
 
@@ -61,6 +66,19 @@ include_list_general = ['BadChannels', 'ClassFile.cls', 'MarkerFile.mrk', 'param
                 '*.infods']  #'*.acq' -- this contains redundant info
 
 DEFAULT_BIDS_ZFILL = 2
+MOVEMENT_FILENAME = 'movement.txt'
+MOVEMENT_KEYS = ('N', 'L', 'R', 'Max')
+MOVEMENT_LABELS = {
+    'N': 'NAS',
+    'L': 'LPA',
+    'R': 'RPA',
+    'Max': 'Max',
+}
+MOVEMENT_LOCATION_COLUMNS = {
+    'NAS': ('nas_x', 'nas_y', 'nas_z'),
+    'LPA': ('lpa_x', 'lpa_y', 'lpa_z'),
+    'RPA': ('rpa_x', 'rpa_y', 'rpa_z'),
+}
 
 
 def _get_bids_zfill():
@@ -102,6 +120,93 @@ def _format_bids_entity(value, width):
     if value.isdigit():
         value = str(int(value)).zfill(width)
     return value
+
+
+def _calculate_movement(meg_fname):
+    """Return coil movement from an original CTF dataset when available."""
+    if shutil.which('calcHeadPos') is None:
+        logger.warning(
+            'Skipping movement calculation for %s: calcHeadPos is unavailable',
+            meg_fname,
+        )
+        return None
+
+    missing_localizers = [
+        localizer for localizer in ('hz.ds', 'hz2.ds')
+        if not op.isdir(op.join(meg_fname, localizer))
+    ]
+    if missing_localizers:
+        logger.warning(
+            'Skipping movement calculation for %s: missing %s',
+            meg_fname,
+            ', '.join(missing_localizers),
+        )
+        return None
+
+    try:
+        dframe = get_localizer_dframe(meg_fname)
+        movement = compute_movement(dframe, verbose=False)
+        movement = {key: float(movement[key]) for key in MOVEMENT_KEYS}
+        initial_row, final_row = get_movement_rows(dframe)
+        locations = {
+            localizer: {
+                label: tuple(float(row[column]) for column in columns)
+                for label, columns in MOVEMENT_LOCATION_COLUMNS.items()
+            }
+            for localizer, row in (
+                ('hz.ds', initial_row),
+                ('hz2.ds', final_row),
+            )
+        }
+        values = list(movement.values())
+        values.extend(
+            coordinate
+            for localizer in locations.values()
+            for coil in localizer.values()
+            for coordinate in coil
+        )
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError('movement calculation returned a non-finite value')
+    except Exception as error:
+        logger.warning(
+            'Skipping movement calculation for %s: %s',
+            meg_fname,
+            error,
+        )
+        return None
+
+    return {'locations': locations, 'movement': movement}
+
+
+def _format_movement(movement_record):
+    """Format movement values for the text file stored in a CTF dataset."""
+    lines = []
+    for localizer in ('hz.ds', 'hz2.ds'):
+        lines.append(f'#{localizer}')
+        for label in MOVEMENT_LOCATION_COLUMNS:
+            coordinates = movement_record['locations'][localizer][label]
+            coordinate_text = ','.join(f'{value:.4f}' for value in coordinates)
+            lines.append(f'#{label}  {coordinate_text}')
+        lines.append('')
+
+    lines.append('#Movement')
+    lines.extend(
+        f'{MOVEMENT_LABELS[key]}: '
+        f'{movement_record["movement"][key]:.2f} cm'
+        for key in MOVEMENT_KEYS
+    )
+    return '\n'.join(lines) + '\n'
+
+
+def _write_movement_file(bids_path, movement):
+    """Write movement into the output dataset, or remove stale output."""
+    movement_path = Path(bids_path.fpath) / MOVEMENT_FILENAME
+    if movement is None:
+        movement_path.unlink(missing_ok=True)
+        return None
+
+    movement_path.write_text(_format_movement(movement), encoding='utf-8')
+    return movement_path
 
 
 def _gen_taskrundict(meg_list=None):
@@ -397,6 +502,9 @@ def _proc_meg_bids(meg_fname=None, bids_path=None,
                     crop_trailing_zeros=False, eventID_csv=None, 
                    ):
     error_count=0
+    # Calculate this from the original dataset. Anonymization removes the
+    # hz.ds/hz2.ds localizers needed to reproduce the measurement.
+    movement = _calculate_movement(meg_fname)
     base_meg_fname = op.basename(meg_fname) #gen basename for legacy reasons
     try:
         _clear_ClassFile(meg_fname) #Remove Trials that fail CTFtools
@@ -432,6 +540,7 @@ def _proc_meg_bids(meg_fname=None, bids_path=None,
     
     write_raw_bids(raw, bids_path, overwrite=True, 
                    events=evts_vals, event_id=evts_ids)
+    _write_movement_file(bids_path, movement)
     logger.info(f'Successful MNE BIDS: {meg_fname} to {bids_path}')
 
     

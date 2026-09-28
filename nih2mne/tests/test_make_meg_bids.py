@@ -15,6 +15,7 @@ import glob
 from mne_bids import BIDSPath
 
 import nibabel as nib
+import pandas as pd
 import pytest 
 import nih2mne
 import os.path as op
@@ -109,6 +110,221 @@ def test_get_bids_zfill_falls_back_when_config_cannot_be_read(monkeypatch):
 )
 def test_format_bids_entity(value, width, expected):
     assert _format_bids_entity(value, width) == expected
+
+
+def _movement_record():
+    return {
+        'locations': {
+            'hz.ds': {
+                'NAS': (1.0, 2.0, 3.0),
+                'LPA': (4.0, 5.0, 6.0),
+                'RPA': (7.0, 8.0, 9.0),
+            },
+            'hz2.ds': {
+                'NAS': (1.1, 2.1, 3.1),
+                'LPA': (4.1, 5.1, 6.1),
+                'RPA': (7.1, 8.1, 9.1),
+            },
+        },
+        'movement': {
+            'N': 0.1234,
+            'L': 0.2,
+            'R': 0.3456,
+            'Max': 0.3456,
+        },
+    }
+
+
+def test_format_movement_includes_commented_locs_and_movement():
+    movement = _movement_record()
+
+    assert make_meg_bids_module._format_movement(movement) == (
+        '#hz.ds\n'
+        '#NAS  1.0000,2.0000,3.0000\n'
+        '#LPA  4.0000,5.0000,6.0000\n'
+        '#RPA  7.0000,8.0000,9.0000\n'
+        '\n'
+        '#hz2.ds\n'
+        '#NAS  1.1000,2.1000,3.1000\n'
+        '#LPA  4.1000,5.1000,6.1000\n'
+        '#RPA  7.1000,8.1000,9.1000\n'
+        '\n'
+        '#Movement\n'
+        'NAS: 0.12 cm\n'
+        'LPA: 0.20 cm\n'
+        'RPA: 0.35 cm\n'
+        'Max: 0.35 cm\n'
+    )
+
+
+def test_write_movement_file_writes_and_removes_stale_file(tmp_path):
+    bids_path = BIDSPath(
+        subject='TEST', session='01', task='rest', run='01',
+        datatype='meg', suffix='meg', extension='.ds', root=tmp_path,
+    )
+    bids_path.fpath.mkdir(parents=True)
+    movement = _movement_record()
+
+    movement_path = make_meg_bids_module._write_movement_file(
+        bids_path,
+        movement,
+    )
+
+    assert movement_path == bids_path.fpath / 'movement.txt'
+    assert movement_path.read_text(encoding='utf-8') == (
+        '#hz.ds\n'
+        '#NAS  1.0000,2.0000,3.0000\n'
+        '#LPA  4.0000,5.0000,6.0000\n'
+        '#RPA  7.0000,8.0000,9.0000\n'
+        '\n'
+        '#hz2.ds\n'
+        '#NAS  1.1000,2.1000,3.1000\n'
+        '#LPA  4.1000,5.1000,6.1000\n'
+        '#RPA  7.1000,8.1000,9.1000\n'
+        '\n'
+        '#Movement\n'
+        'NAS: 0.12 cm\n'
+        'LPA: 0.20 cm\n'
+        'RPA: 0.35 cm\n'
+        'Max: 0.35 cm\n'
+    )
+
+    make_meg_bids_module._write_movement_file(bids_path, None)
+    assert not movement_path.exists()
+
+
+def test_calculate_movement_returns_none_without_ctf_tools(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(make_meg_bids_module.shutil, 'which', lambda _name: None)
+
+    assert make_meg_bids_module._calculate_movement(tmp_path) is None
+
+
+def test_calculate_movement_returns_none_without_localizers(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        make_meg_bids_module.shutil,
+        'which',
+        lambda _name: '/opt/ctf/bin/calcHeadPos',
+    )
+
+    assert make_meg_bids_module._calculate_movement(tmp_path) is None
+
+
+def test_get_movement_rows_selects_last_hz_and_first_hz2_trials():
+    dframe = pd.DataFrame([
+        {'hz_val': 'hz', 'trial': '1', 'value': 'initial'},
+        {'hz_val': 'hz', 'trial': '3', 'value': 'last'},
+        {'hz_val': 'hz2', 'trial': '1', 'value': 'post'},
+    ])
+
+    initial_row, final_row = make_meg_bids_module.get_movement_rows(dframe)
+
+    assert initial_row['value'] == 'last'
+    assert final_row['value'] == 'post'
+
+
+def test_calculate_movement_uses_original_localizers(tmp_path, monkeypatch):
+    (tmp_path / 'hz.ds').mkdir()
+    (tmp_path / 'hz2.ds').mkdir()
+    dframe = object()
+    monkeypatch.setattr(
+        make_meg_bids_module.shutil,
+        'which',
+        lambda _name: '/opt/ctf/bin/calcHeadPos',
+    )
+    monkeypatch.setattr(
+        make_meg_bids_module,
+        'get_localizer_dframe',
+        lambda fname: dframe if fname == tmp_path else None,
+    )
+
+    def compute(input_dframe, verbose):
+        assert input_dframe is dframe
+        assert verbose is False
+        return {'N': 0.1, 'L': 0.2, 'R': 0.3, 'Max': 0.3}
+
+    monkeypatch.setattr(make_meg_bids_module, 'compute_movement', compute)
+    initial_row = {
+        'nas_x': 1, 'nas_y': 2, 'nas_z': 3,
+        'lpa_x': 4, 'lpa_y': 5, 'lpa_z': 6,
+        'rpa_x': 7, 'rpa_y': 8, 'rpa_z': 9,
+    }
+    final_row = {
+        'nas_x': 1.1, 'nas_y': 2.1, 'nas_z': 3.1,
+        'lpa_x': 4.1, 'lpa_y': 5.1, 'lpa_z': 6.1,
+        'rpa_x': 7.1, 'rpa_y': 8.1, 'rpa_z': 9.1,
+    }
+    monkeypatch.setattr(
+        make_meg_bids_module,
+        'get_movement_rows',
+        lambda input_dframe: (
+            (initial_row, final_row) if input_dframe is dframe else (None, None)
+        ),
+    )
+
+    assert make_meg_bids_module._calculate_movement(tmp_path) == {
+        'locations': {
+            'hz.ds': {
+                'NAS': (1.0, 2.0, 3.0),
+                'LPA': (4.0, 5.0, 6.0),
+                'RPA': (7.0, 8.0, 9.0),
+            },
+            'hz2.ds': {
+                'NAS': (1.1, 2.1, 3.1),
+                'LPA': (4.1, 5.1, 6.1),
+                'RPA': (7.1, 8.1, 9.1),
+            },
+        },
+        'movement': {'N': 0.1, 'L': 0.2, 'R': 0.3, 'Max': 0.3},
+    }
+
+
+def test_calculate_movement_returns_none_for_invalid_result(
+        tmp_path, monkeypatch):
+    (tmp_path / 'hz.ds').mkdir()
+    (tmp_path / 'hz2.ds').mkdir()
+    monkeypatch.setattr(
+        make_meg_bids_module.shutil,
+        'which',
+        lambda _name: '/opt/ctf/bin/calcHeadPos',
+    )
+    monkeypatch.setattr(
+        make_meg_bids_module,
+        'get_localizer_dframe',
+        lambda _fname: object(),
+    )
+    monkeypatch.setattr(
+        make_meg_bids_module,
+        'compute_movement',
+        lambda _dframe, verbose: {
+            'N': 0.1, 'L': 0.2, 'R': 0.3, 'Max': None,
+        },
+    )
+
+    assert make_meg_bids_module._calculate_movement(tmp_path) is None
+
+
+def test_calculate_movement_returns_none_on_calculation_error(
+        tmp_path, monkeypatch):
+    (tmp_path / 'hz.ds').mkdir()
+    (tmp_path / 'hz2.ds').mkdir()
+    monkeypatch.setattr(
+        make_meg_bids_module.shutil,
+        'which',
+        lambda _name: '/opt/ctf/bin/calcHeadPos',
+    )
+
+    def fail_calculation(_fname):
+        raise RuntimeError('test calculation error')
+
+    monkeypatch.setattr(
+        make_meg_bids_module,
+        'get_localizer_dframe',
+        fail_calculation,
+    )
+
+    assert make_meg_bids_module._calculate_movement(tmp_path) is None
 
 
 def test_conversion_dict_uses_configured_padding(tmp_path, monkeypatch):
@@ -510,6 +726,83 @@ def test_proc_meg_bids(tmpdir):
                         crop_trailing_zeros=False, 
                        )
     assert _bids_path.fpath.exists()
+
+
+def test_proc_meg_bids_preserves_movement_through_anonymization(
+        tmp_path, monkeypatch):
+    source_path = tmp_path / 'input.ds'
+    source_path.mkdir()
+    bids_path = BIDSPath(
+        subject='TEST', session='01', task='rest', run='01',
+        datatype='meg', suffix='meg', extension='.ds',
+        root=tmp_path / 'BIDS',
+    )
+    movement = _movement_record()
+    call_order = []
+
+    def calculate_movement(meg_fname):
+        assert meg_fname == str(source_path)
+        call_order.append('movement')
+        return movement
+
+    def anonymize_meg(meg_fname, tmpdir):
+        assert meg_fname == str(source_path)
+        call_order.append('anonymize')
+        return meg_fname
+
+    class DummyRaw:
+        info = {}
+
+    def write_raw_bids(_raw, output_path, **_kwargs):
+        call_order.append('write_bids')
+        output_path.fpath.mkdir(parents=True)
+
+    monkeypatch.setattr(
+        make_meg_bids_module, '_calculate_movement', calculate_movement,
+    )
+    monkeypatch.setattr(make_meg_bids_module, '_clear_ClassFile', lambda _f: None)
+    monkeypatch.setattr(make_meg_bids_module, '_check_markerfile', lambda _f: None)
+    monkeypatch.setattr(make_meg_bids_module, 'anonymize_meg', anonymize_meg)
+    monkeypatch.setattr(
+        make_meg_bids_module, 'anonymize_finalize', lambda _f: None,
+    )
+    monkeypatch.setattr(
+        make_meg_bids_module.mne.io,
+        'read_raw_ctf',
+        lambda *_args, **_kwargs: DummyRaw(),
+    )
+    monkeypatch.setattr(
+        make_meg_bids_module, 'write_raw_bids', write_raw_bids,
+    )
+
+    make_meg_bids_module._proc_meg_bids(
+        meg_fname=str(source_path),
+        bids_path=bids_path,
+        anonymize=True,
+        tmpdir=tmp_path / 'anonymized',
+        ignore_eroom=True,
+    )
+
+    assert call_order == ['movement', 'anonymize', 'write_bids']
+    assert (bids_path.fpath / 'movement.txt').read_text(
+        encoding='utf-8',
+    ) == (
+        '#hz.ds\n'
+        '#NAS  1.0000,2.0000,3.0000\n'
+        '#LPA  4.0000,5.0000,6.0000\n'
+        '#RPA  7.0000,8.0000,9.0000\n'
+        '\n'
+        '#hz2.ds\n'
+        '#NAS  1.1000,2.1000,3.1000\n'
+        '#LPA  4.1000,5.1000,6.1000\n'
+        '#RPA  7.1000,8.1000,9.1000\n'
+        '\n'
+        '#Movement\n'
+        'NAS: 0.12 cm\n'
+        'LPA: 0.20 cm\n'
+        'RPA: 0.35 cm\n'
+        'Max: 0.35 cm\n'
+    )
 
 
 def test_proc_mri_bids(tmpdir):

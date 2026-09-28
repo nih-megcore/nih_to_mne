@@ -119,6 +119,17 @@ def calc_movement(row1, row2, verbose=True):
     
 
 
+def get_movement_rows(dframe):
+    """Return the pre- and post-acquisition rows used for movement."""
+    last_hz_trial = dframe.query('hz_val=="hz"').trial.astype(int).max()
+    last_hz_trial = str(last_hz_trial)
+    row1_idx = dframe.query(
+        f'hz_val=="hz" and trial=="{last_hz_trial}"'
+    ).index[0]
+    row2_idx = dframe.query('hz_val=="hz2" and trial=="1"').index[0]
+    return dframe.loc[row1_idx], dframe.loc[row2_idx]
+
+
 def compute_movement(dframe, dframe2=None, verbose=True):
     '''If only one dframe set, pull the last trial from hz.ds and the only trial
     from hz2.ds.
@@ -127,15 +138,11 @@ def compute_movement(dframe, dframe2=None, verbose=True):
     Assess the last trial of both hz.ds files'''
     if dframe2 is None:  
         #Single Run pre/post acq
-        last_hz_trial = dframe.query('hz_val=="hz"').trial.astype(int).max()
-        last_hz_trial = str(last_hz_trial)
-        row1_idx = dframe.query(f'hz_val=="hz" and trial=="{last_hz_trial}"').index[0]
-        row1 = dframe.loc[row1_idx]
         try:
-            row2_idx = dframe.query('hz_val=="hz2" and trial=="1"').index[0]
-            row2 = dframe.loc[row2_idx]
-        except IndexError as e:
-            print(f"{dframe.loc[0,'dset']}: Can't assess movement.  It is possible the run was terminated early")
+            row1, row2 = get_movement_rows(dframe)
+        except IndexError:
+            if verbose:
+                print(f"{dframe.loc[0,'dset']}: Can't assess movement.  It is possible the run was terminated early")
             return {'N':None, 'L':None, 'R':None, 'Max':None}
         move_dict = calc_movement(row1, row2, verbose=verbose)
     else:  
@@ -335,4 +342,3 @@ if __name__=='__main__':
         
 
     
-
