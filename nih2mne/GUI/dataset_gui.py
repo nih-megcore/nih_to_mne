@@ -39,6 +39,11 @@ import glob
 import pandas as pd
 from nih2mne.utilities.calc_hm import get_localizer_dframe, compute_movement
 from nih2mne.utilities.data_crop_wrapper import get_term_time
+from nih2mne.utilities.qa_runner import (
+    filename_version,
+    find_qa_file,
+    run_qa_file,
+)
 import shutil
 import copy
 import numpy as np
@@ -51,6 +56,78 @@ LOGGING_CATEGORY = 'meg_dataset_gui'
 
 class _ConfigCreationDeclined(Exception):
     """Raised when the user declines to create a requested config file."""
+
+
+def _procfile_sort_key(filename):
+    """Sort processing files by numeric version, then name."""
+    version = filename_version(filename)
+    return (version is not None, version if version is not None else -1,
+            filename.lower())
+
+
+def _task_procfiles(directory, task):
+    """Return task processing files, excluding QA definitions."""
+    if not directory or not op.isdir(directory):
+        return []
+    task_prefix = f'{task}_'.lower()
+    filenames = [
+        filename
+        for filename in os.listdir(directory)
+        if filename.lower().startswith(task_prefix)
+        and not filename.lower().endswith('.qa')
+        and op.isfile(op.join(directory, filename))
+    ]
+    return sorted(filenames, key=_procfile_sort_key, reverse=True)
+
+
+def _display_qa_value(value):
+    """Format QA values without unnecessary decimal zeros."""
+    if value is None:
+        return '—'
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _qa_review_text(result):
+    """Format one detailed QA result as an aligned text block."""
+    overall = result['overall'].upper()
+    task = (result.get('task') or 'TASK').upper()
+    rows = []
+    status_order = {'fail': 0, 'pass': 1, 'skipped': 2}
+    checks = sorted(
+        result['checks'],
+        key=lambda check: status_order[check['status']],
+    )
+    for check in checks:
+        rows.append((
+            check['term'],
+            f"{check['operator']} {_display_qa_value(check['expected'])}",
+            _display_qa_value(check['actual']),
+            f"<{check['status'].upper()}>",
+        ))
+
+    headers = ('Condition', 'Expected', 'Actual', 'Result')
+    widths = [
+        max(len(headers[index]), *(len(row[index]) for row in rows))
+        for index in range(len(headers))
+    ]
+
+    def format_row(row):
+        return '  '.join(
+            value.ljust(widths[index])
+            for index, value in enumerate(row)
+        ).rstrip()
+
+    lines = [
+        f'{task}  <{overall}>',
+        f"QA file: {op.basename(result['qa_file'])}",
+        '',
+        format_row(headers),
+        format_row(tuple('-' * width for width in widths)),
+    ]
+    lines.extend(format_row(row) for row in rows)
+    return '\n'.join(lines)
 
 
 def _get_parser():
@@ -364,7 +441,13 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
             if not callable(trigprocess):
                 continue
             try:
-                trigprocess()
+                processed = trigprocess()
+                if processed is False or getattr(
+                        tile, '_trigproc_error', False):
+                    continue
+                qa_events = getattr(tile, 'qa_events', None)
+                if callable(qa_events):
+                    qa_events(show_error_dialog=False)
             except Exception:
                 logger.exception(
                     'Encode+QA failed for dataset %s',
@@ -463,6 +546,10 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.load_meg()
         self.taskname = taskname
         self._trigproc_error = False  #Initialize, because referenced in info section
+        self._qa_file = None
+        self._qa_result = None
+        self._qa_status = ''
+        self._tile_initialized = False
         
         self.ui.ReadoutFilename.setText(f'File: {base_fname}')
         self.ui.ReadoutSubjid.setText(f'  Subjid: {subjid}')
@@ -470,8 +557,14 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.ui.label_Duration.setText(f'Duration: {round(self.raw.times[-1])}s')
         
         ## Process Triggers
+        self.ui.ProcFileComboBox.currentTextChanged.connect(
+            self._on_procfile_changed
+        )
         self.fill_procfile_list()
         self.ui.pb_TrigProcess.clicked.connect(self.trigprocess)
+        self.ui.pb_QAEvts.clicked.connect(lambda: self.qa_events())
+        self.ui.pb_ReviewQAFails.clicked.connect(self.show_qa_failures)
+        self.ui.pb_ReviewQAFails.hide()
         
         ## Plotting
         self.ui.pb_PlotTrig.clicked.connect(self.plot_trig)
@@ -484,6 +577,7 @@ class InputDatasetTile(QtWidgets.QWidget):
         ## Info 
         self.set_events_label()
         self.set_status_label() 
+        self._tile_initialized = True
         
         ## Remove tile
         self.ui.pb_DeleteTile.clicked.connect(lambda: self.close_clicked.emit(self))
@@ -561,6 +655,9 @@ class InputDatasetTile(QtWidgets.QWidget):
             if self._trigproc_error not in [None, False, '']:
                 _trigproc_text = 'Trigproc Error (check terminal): ' # Eventually pipe in error text
         status_text += _trigproc_text
+
+        if self._qa_status:
+            status_text += self._qa_status + ': '
         
         self.ui.lbl_Status.setText(f'STATUS: {status_text}')
         
@@ -620,29 +717,135 @@ class InputDatasetTile(QtWidgets.QWidget):
     def fill_procfile_list(self):
         from nih2mne.config import TRIG_FILE_LOC
 
-        if op.exists(TRIG_FILE_LOC):
+        if op.isdir(TRIG_FILE_LOC):
             self.trigfile_dir = TRIG_FILE_LOC
         else:
             self.trigfile_dir = None
-            
-        _tmp_list = os.listdir(self.trigfile_dir)
-        task_trig_files = [i for i in _tmp_list if op.basename(i).split('_')[0].lower() == self.taskname.lower()]
-        if len(task_trig_files) > 0:
-            _tt_files = [op.basename(i) for i in task_trig_files]
-            _tt_files = sorted(_tt_files, reverse=True)
-            self.ui.ProcFileComboBox.addItems(_tt_files)
+
+        task_trig_files = _task_procfiles(
+            self.trigfile_dir,
+            self.taskname,
+        )
+        if task_trig_files:
+            self.ui.ProcFileComboBox.addItems(task_trig_files)
             self._trigproc_script_present = True
         else:
             self._trigproc_script_present = False
+        self._select_qa_file()
+
+    def _on_procfile_changed(self, _procfile=None):
+        """Refresh the compatible QA file when processing version changes."""
+        self._select_qa_file()
+        if self._tile_initialized:
+            self.set_status_label()
+
+    def _select_qa_file(self):
+        """Select the newest QA version compatible with the ProcFile."""
+        proc_file = self.ui.ProcFileComboBox.currentText()
+        self._qa_file = find_qa_file(
+            self.trigfile_dir,
+            self.taskname,
+            proc_file=proc_file,
+        )
+        self._qa_result = None
+        self.ui.pb_ReviewQAFails.hide()
+        if self._qa_file is None:
+            self._qa_status = 'No QA File'
+            self.ui.pb_QAEvts.setEnabled(False)
+            self.ui.pb_QAEvts.setToolTip(
+                'No compatible task QA file was found.'
+            )
+        else:
+            self._qa_status = ''
+            self.ui.pb_QAEvts.setEnabled(True)
+            self.ui.pb_QAEvts.setToolTip(
+                f'Run event QA using {op.basename(self._qa_file)}'
+            )
+
+    def _clear_qa_result(self):
+        """Invalidate QA output after event processing changes the dataset."""
+        self._qa_result = None
+        self.ui.pb_ReviewQAFails.hide()
+        self._qa_status = '' if self._qa_file else 'No QA File'
+
+    def qa_events(self, show_error_dialog=True):
+        """Run the selected event QA file and refresh tile status."""
+        if self._qa_file is None:
+            self._qa_status = 'No QA File'
+            self.set_status_label()
+            return None
+
+        try:
+            result = run_qa_file(
+                self.fname,
+                self._qa_file,
+                task=self.taskname,
+                logger=logger,
+            )
+        except Exception as error:
+            self._qa_result = None
+            self._qa_status = f'QA ERROR {op.basename(self._qa_file)}'
+            self.ui.pb_ReviewQAFails.hide()
+            logger.exception('Event QA failed for %s', self.fname)
+            self.set_status_label()
+            if show_error_dialog:
+                QtWidgets.QMessageBox.critical(
+                    self,
+                    'Event QA Error',
+                    str(error),
+                )
+            return None
+
+        self._qa_result = result
+        summary = result['summary']
+        outcome = result['overall'].upper()
+        self._qa_status = (
+            f'QA {op.basename(result["qa_file"])}: {outcome} '
+            f'(P={summary["pass"]} F={summary["fail"]} '
+            f'S={summary["skipped"]})'
+        )
+        self.ui.pb_ReviewQAFails.setVisible(summary['fail'] > 0)
+        self.set_status_label()
+        return result
+
+    def show_qa_failures(self):
+        """Show all conditions from the most recent failed QA run."""
+        if self._qa_result is None:
+            return
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle('Event QA Results')
+        dialog.resize(760, 480)
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        result_text = QtWidgets.QPlainTextEdit(dialog)
+        result_text.setObjectName('qa_failure_review_text')
+        result_text.setReadOnly(True)
+        result_text.setPlainText(_qa_review_text(self._qa_result))
+        fixed_font = QtGui.QFontDatabase.systemFont(
+            QtGui.QFontDatabase.SystemFont.FixedFont
+        )
+        result_text.setFont(fixed_font)
+        layout.addWidget(result_text)
+
+        close_button = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Close,
+            parent=dialog,
+        )
+        close_button.rejected.connect(dialog.reject)
+        layout.addWidget(close_button)
+        dialog.exec()
     
     def trigprocess(self):
         import subprocess
         import sys
+        self._clear_qa_result()
         current_trigfile = self.ui.ProcFileComboBox.currentText()
         if current_trigfile.strip() == '':
             print(f'No associated trigger processing file for task: {self.taskname.lower()}')
         if (current_trigfile == None) or (current_trigfile == ""):
-            return
+            self.set_status_label()
+            return False
         if current_trigfile.endswith('.py'):
             _python_path = sys.executable
             cmd = f'{_python_path} {self.trigfile_dir}/{current_trigfile} {self.fname}'
@@ -658,6 +861,7 @@ class InputDatasetTile(QtWidgets.QWidget):
         self.load_meg() #Reload to get the newly created annotations
         self.set_events_label()
         self.set_status_label() 
+        return not self._trigproc_error
 
         
 class ErrorDatasetTile(QtWidgets.QWidget):

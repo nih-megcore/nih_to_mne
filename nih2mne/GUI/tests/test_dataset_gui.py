@@ -5,6 +5,7 @@ import os
 import logging
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import nih2mne
 import pytest
@@ -102,6 +103,40 @@ def _load_bids_creator(
     dataset_gui._initialize_config(config_path)
     sys.modules.pop(BIDS_CREATOR_MODULE, None)
     return importlib.import_module(BIDS_CREATOR_MODULE)
+
+
+def _make_dataset_tile(tmp_path, monkeypatch, qapp, trig_files):
+    config_path = tmp_path / 'defaults.yml'
+    _write_defaults(config_path, '/config/bids')
+    monkeypatch.setenv('HOME', str(tmp_path))
+    config = dataset_gui._initialize_config(config_path)
+    trig_dir = tmp_path / 'megcore' / 'trigproc'
+    trig_dir.mkdir(parents=True, exist_ok=True)
+    config.TRIG_FILE_LOC = str(trig_dir)
+    for filename in trig_files:
+        (trig_dir / filename).write_text('marker == 1\n', encoding='utf-8')
+
+    def load_meg(tile):
+        tile.raw = SimpleNamespace(times=[0, 10], annotations=[])
+
+    monkeypatch.setattr(dataset_gui.InputDatasetTile, 'load_meg', load_meg)
+    monkeypatch.setattr(
+        dataset_gui.InputDatasetTile,
+        '_compute_movement',
+        lambda tile: setattr(tile, 'head_movement', 0.1),
+    )
+
+    def check_trailing_zeros(tile):
+        tile.early_termination = False
+
+    monkeypatch.setattr(
+        dataset_gui.InputDatasetTile,
+        '_check_trailing_zeros',
+        check_trailing_zeros,
+    )
+    return dataset_gui.InputDatasetTile(
+        fname='/data/SUBJ_hariri_20260101_001.ds'
+    )
 
 
 def test_parser_accepts_config_option():
@@ -739,29 +774,272 @@ def test_log_path_is_propagated_to_bids_creator(
         parent.close()
 
 
+def test_procfile_helpers_filter_qa_and_sort_versions(tmp_path):
+    for filename in (
+        'hariri_v2.py',
+        'hariri_v10.py',
+        'hariri_custom.sh',
+        'hariri_v20.qa',
+        'other_v30.py',
+    ):
+        (tmp_path / filename).touch()
+
+    assert dataset_gui._task_procfiles(tmp_path, 'HaRiRi') == [
+        'hariri_v10.py',
+        'hariri_v2.py',
+        'hariri_custom.sh',
+    ]
+
+
+def test_qa_review_text_is_aligned_and_failures_first():
+    result = {
+        'task': 'hariri',
+        'qa_file': '/qa/hariri_v2.qa',
+        'overall': 'fail',
+        'summary': {'pass': 1, 'fail': 1, 'skipped': 1},
+        'checks': [
+            {
+                'term': 'LResponse', 'operator': '==', 'expected': 50,
+                'actual': 50, 'status': 'pass', 'optional': False,
+            },
+            {
+                'term': 'RResponse', 'operator': '>', 'expected': 50,
+                'actual': 40, 'status': 'fail', 'optional': False,
+            },
+            {
+                'term': 'Optional', 'operator': '<', 'expected': 2,
+                'actual': None, 'status': 'skipped', 'optional': True,
+            },
+        ],
+    }
+
+    text = dataset_gui._qa_review_text(result)
+
+    assert text.splitlines()[0] == 'HARIRI  <FAIL>'
+    assert 'QA file: hariri_v2.qa' in text
+    assert text.index('RResponse') < text.index('LResponse')
+    assert '> 50' in text
+    assert '<FAIL>' in text
+    assert '—' in text
+    assert '<SKIPPED>' in text
+
+
+def test_dataset_tile_selects_qa_for_proc_version_and_places_buttons(
+        tmp_path, monkeypatch, qapp):
+    tile = _make_dataset_tile(
+        tmp_path,
+        monkeypatch,
+        qapp,
+        (
+            'hariri_v2.py',
+            'hariri_v10.py',
+            'hariri.qa',
+            'hariri_v2.qa',
+            'hariri_v3.qa',
+            'hariri_v11.qa',
+        ),
+    )
+
+    try:
+        proc_files = [
+            tile.ui.ProcFileComboBox.itemText(index)
+            for index in range(tile.ui.ProcFileComboBox.count())
+        ]
+        assert proc_files == ['hariri_v10.py', 'hariri_v2.py']
+        assert tile._qa_file.endswith('hariri_v3.qa')
+        assert tile.ui.pb_QAEvts.isEnabled()
+        layout = tile.ui.horizontalLayout_2
+        assert layout.indexOf(tile.ui.pb_TrigProcess) + 1 == layout.indexOf(
+            tile.ui.pb_QAEvts
+        )
+        assert layout.indexOf(tile.ui.pb_QAEvts) + 1 == layout.indexOf(
+            tile.ui.pb_ReviewQAFails
+        )
+        assert layout.indexOf(tile.ui.pb_ReviewQAFails) + 1 == layout.indexOf(
+            tile.ui.pb_PlotTrig
+        )
+
+        tile.ui.ProcFileComboBox.setCurrentText('hariri_v2.py')
+
+        assert tile._qa_file.endswith('hariri_v2.qa')
+        assert tile._qa_result is None
+        assert tile.ui.pb_ReviewQAFails.isHidden()
+    finally:
+        tile.close()
+
+
+def test_dataset_tile_qa_status_and_review_popup(
+        tmp_path, monkeypatch, qapp):
+    tile = _make_dataset_tile(
+        tmp_path,
+        monkeypatch,
+        qapp,
+        ('hariri_v2.py', 'hariri_v2.qa'),
+    )
+    result = {
+        'task': 'hariri',
+        'qa_file': str(tmp_path / 'megcore/trigproc/hariri_v2.qa'),
+        'overall': 'fail',
+        'summary': {'pass': 1, 'fail': 1, 'skipped': 0},
+        'checks': [
+            {
+                'term': 'response_hit', 'operator': '>', 'expected': 120,
+                'actual': 100, 'status': 'fail', 'optional': False,
+            },
+            {
+                'term': 'probe_face', 'operator': '==', 'expected': 90,
+                'actual': 90, 'status': 'pass', 'optional': False,
+            },
+        ],
+    }
+    monkeypatch.setattr(dataset_gui, 'run_qa_file', lambda *_a, **_k: result)
+
+    try:
+        assert tile.qa_events() == result
+        assert 'QA hariri_v2.qa: FAIL (P=1 F=1 S=0)' in (
+            tile.ui.lbl_Status.text()
+        )
+        assert not tile.ui.pb_ReviewQAFails.isHidden()
+
+        dialogs = []
+
+        def capture_dialog(dialog):
+            dialogs.append(dialog)
+            return dataset_gui.QtWidgets.QDialog.DialogCode.Rejected
+
+        monkeypatch.setattr(
+            dataset_gui.QtWidgets.QDialog,
+            'exec',
+            capture_dialog,
+        )
+        tile.show_qa_failures()
+
+        assert len(dialogs) == 1
+        text_widget = dialogs[0].findChild(
+            dataset_gui.QtWidgets.QPlainTextEdit,
+            'qa_failure_review_text',
+        )
+        assert text_widget.isReadOnly()
+        assert text_widget.toPlainText() == dataset_gui._qa_review_text(result)
+    finally:
+        tile.close()
+
+
+def test_dataset_tile_hides_review_after_passing_rerun(
+        tmp_path, monkeypatch, qapp):
+    tile = _make_dataset_tile(
+        tmp_path,
+        monkeypatch,
+        qapp,
+        ('hariri_v2.py', 'hariri_v2.qa'),
+    )
+    result = {
+        'task': 'hariri',
+        'qa_file': str(tmp_path / 'megcore/trigproc/hariri_v2.qa'),
+        'overall': 'pass',
+        'summary': {'pass': 1, 'fail': 0, 'skipped': 0},
+        'checks': [{
+            'term': 'probe_face', 'operator': '==', 'expected': 90,
+            'actual': 90, 'status': 'pass', 'optional': False,
+        }],
+    }
+    monkeypatch.setattr(dataset_gui, 'run_qa_file', lambda *_a, **_k: result)
+
+    try:
+        tile.ui.pb_ReviewQAFails.show()
+        tile.qa_events()
+
+        assert tile.ui.pb_ReviewQAFails.isHidden()
+        assert 'QA hariri_v2.qa: PASS (P=1 F=0 S=0)' in (
+            tile.ui.lbl_Status.text()
+        )
+    finally:
+        tile.close()
+
+
+def test_dataset_tile_reports_qa_errors_without_review_button(
+        tmp_path, monkeypatch, qapp):
+    tile = _make_dataset_tile(
+        tmp_path,
+        monkeypatch,
+        qapp,
+        ('hariri_v2.py', 'hariri_v2.qa'),
+    )
+
+    def fail_qa(*_args, **_kwargs):
+        raise ValueError('invalid QA definition')
+
+    monkeypatch.setattr(dataset_gui, 'run_qa_file', fail_qa)
+
+    try:
+        tile.ui.pb_ReviewQAFails.show()
+
+        assert tile.qa_events(show_error_dialog=False) is None
+        assert 'QA ERROR hariri_v2.qa' in tile.ui.lbl_Status.text()
+        assert tile.ui.pb_ReviewQAFails.isHidden()
+    finally:
+        tile.close()
+
+
+def test_dataset_tile_disables_qa_without_compatible_file(
+        tmp_path, monkeypatch, qapp):
+    tile = _make_dataset_tile(
+        tmp_path,
+        monkeypatch,
+        qapp,
+        ('hariri_v2.py', 'other_v2.qa'),
+    )
+
+    try:
+        assert tile._qa_file is None
+        assert not tile.ui.pb_QAEvts.isEnabled()
+        assert 'No QA File' in tile.ui.lbl_Status.text()
+    finally:
+        tile.close()
+
+
 def test_encode_and_qa_all_processes_tiles_in_order_and_skips_errors(
         qapp, caplog):
     parent = dataset_gui.GUI_MainWindow()
     calls = []
 
-    def add_tile(name, processor=None):
+    def add_tile(name, processor=None, qa_processor=None):
         tile = dataset_gui.QtWidgets.QWidget()
         tile.fname = name
         if processor is not None:
             tile.trigprocess = processor
+        if qa_processor is not None:
+            tile.qa_events = qa_processor
         item = dataset_gui.QtWidgets.QListWidgetItem()
         parent.ui.scrollAreaWidgetContents.addItem(item)
         parent.ui.scrollAreaWidgetContents.setItemWidget(item, tile)
 
-    add_tile('first.ds', lambda: calls.append('first'))
+    add_tile(
+        'first.ds',
+        lambda: calls.append('first'),
+        lambda **_kwargs: calls.append('first-qa'),
+    )
     add_tile('error.ds')
 
     def fail_processing():
         calls.append('failed')
         raise RuntimeError('trigger processing failed')
 
-    add_tile('failed.ds', fail_processing)
-    add_tile('last.ds', lambda: calls.append('last'))
+    add_tile(
+        'failed.ds',
+        fail_processing,
+        lambda **_kwargs: calls.append('failed-qa'),
+    )
+    add_tile(
+        'rejected.ds',
+        lambda: calls.append('rejected') or False,
+        lambda **_kwargs: calls.append('rejected-qa'),
+    )
+    add_tile(
+        'last.ds',
+        lambda: calls.append('last'),
+        lambda **_kwargs: calls.append('last-qa'),
+    )
 
     try:
         with caplog.at_level(logging.ERROR, logger=dataset_gui.logger.name):
@@ -772,7 +1050,9 @@ def test_encode_and_qa_all_processes_tiles_in_order_and_skips_errors(
             'Run trigger processing and refresh QA status for all loaded '
             'datasets'
         )
-        assert calls == ['first', 'failed', 'last']
+        assert calls == [
+            'first', 'first-qa', 'failed', 'rejected', 'last', 'last-qa'
+        ]
         assert 'Encode+QA failed for dataset failed.ds' in caplog.text
     finally:
         parent.close()

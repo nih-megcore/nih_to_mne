@@ -239,6 +239,26 @@
           </widget>
          </item>
          <item>
+          <widget class="QPushButton" name="pb_QAEvts">
+           <property name="toolTip">
+            <string>Run the compatible task QA file against the dataset events</string>
+           </property>
+           <property name="text">
+            <string>QAEvts</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="pb_ReviewQAFails">
+           <property name="toolTip">
+            <string>Review all conditions from the latest failed event QA run</string>
+           </property>
+           <property name="text">
+            <string>Review QAFails</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QPushButton" name="pb_PlotTrig">
            <property name="toolTip">
             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Plot the trigger line time series&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
