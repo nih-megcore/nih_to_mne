@@ -198,12 +198,62 @@ def test_subject_gui_plot_save_and_override_actions(qapp, monkeypatch):
             "lp": 40.0,
             "montage": "MONTAGE_SENTINEL",
             "f_mains": 60.0,
+            "browser_backend": "qt",
+            "block": False,
         }
     ]
     assert bids_info.plot_mri_fids_called is True
     assert bids_info.plot_3d_coreg_calls == [0]
     assert bids_info.saved is True
     assert bids_info.override_calls == ["/tmp/mri_b.nii.gz"]
+
+
+def test_subject_gui_reports_plot_failure(qapp, monkeypatch):
+    bids_info = FakeBidsInfo()
+    gui = Subject_GUI(bids_info)
+    critical_messages = []
+
+    def fail_plot(**_kwargs):
+        raise RuntimeError("Qt browser unavailable")
+
+    bids_info.plot_meg = fail_plot
+    monkeypatch.setattr(
+        qt_gui_module.QMessageBox,
+        "critical",
+        lambda *args: critical_messages.append(args),
+    )
+
+    gui.plot_meg()
+
+    assert len(critical_messages) == 1
+    assert critical_messages[0][1:] == (
+        "MEG Plot Failed",
+        "Qt browser unavailable",
+    )
+
+
+def test_subject_gui_reports_fids_plot_failure(qapp, monkeypatch):
+    bids_info = FakeBidsInfo()
+    gui = Subject_GUI(bids_info)
+    critical_messages = []
+
+    def fail_plot():
+        raise RuntimeError("FIDS rendering unavailable")
+
+    bids_info.plot_mri_fids = fail_plot
+    monkeypatch.setattr(
+        qt_gui_module.QMessageBox,
+        "critical",
+        lambda *args: critical_messages.append(args),
+    )
+
+    gui.plot_fids()
+
+    assert len(critical_messages) == 1
+    assert critical_messages[0][1:] == (
+        "FIDS Plot Failed",
+        "FIDS rendering unavailable",
+    )
 
 
 class FakeStatusMessage:
@@ -676,3 +726,26 @@ def test_project_window_proc_actions(qapp):
     assert subjects["sub-01"].mri_preproc_calls == []
     assert subjects["sub-02"].mri_preproc_calls == []
     assert subjects["sub-03"].mri_preproc_calls == [{"surf": False, "fname": "all"}]
+
+
+def test_window_reuses_running_qapplication(qapp, monkeypatch):
+    class ExistingApplication:
+        @classmethod
+        def instance(cls):
+            return qapp
+
+    project = FakeProject({"sub-01": FakeBidsInfo(subject="sub-01")})
+    monkeypatch.setattr(qt_gui_module, "QApplication", ExistingApplication)
+    monkeypatch.setattr(qt_gui_module.os, "chdir", lambda _path: None)
+
+    window = qt_gui_module.window(
+        bids_project=project,
+        num_rows=1,
+        num_cols=1,
+    )
+
+    try:
+        assert isinstance(window, BIDS_Project_Window)
+        assert window.isVisible()
+    finally:
+        window.close()

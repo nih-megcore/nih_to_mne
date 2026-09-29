@@ -380,7 +380,10 @@ class meglist_class:
         else:
             return self.meg_list[dset_idx]
     
-    def plot_meg(self, idx=None, hp=None, lp=None, montage=None, f_mains=False):
+    def plot_meg(self, idx=None, hp=None, lp=None, montage=None, f_mains=False,
+                 browser_backend=None, block=False):
+        if browser_backend is not None:
+            mne.viz.set_browser_backend(browser_backend)
         if idx == None:
             dset = self._pick_meg_from_list('Enter the number associated with the MEG dataset to plot: ')
         else:
@@ -404,13 +407,22 @@ class meglist_class:
             if (f_mains!=False) and (not misc_only): self.current_meg_dset.notch_filter(float(f_mains), n_jobs=n_jobs)
             
             # Plot
-            test_plot = self.current_meg_dset.plot(highpass=hp, lowpass=lp, n_channels=num_chans)
+            test_plot = self.current_meg_dset.plot(
+                highpass=hp,
+                lowpass=lp,
+                n_channels=num_chans,
+                block=block,
+            )
         else:
             self.current_meg_dset.load_data()
             # Conditionally filter 60hz if notch button checked
             if f_mains!=False: self.current_meg_dset.notch_filter(float(f_mains), n_jobs=n_jobs)
             # Plot
-            test_plot = self.current_meg_dset.plot(highpass=hp, lowpass=lp) 
+            test_plot = self.current_meg_dset.plot(
+                highpass=hp,
+                lowpass=lp,
+                block=block,
+            )
         return test_plot
     
     @property
@@ -750,9 +762,13 @@ class _subject_bids_info(qa_mri_class, meglist_class):
     def plot_mri_fids(self):
         ''' Open a triaxial image of the fiducial locations'''
         from nih2mne.utilities.qa_fids import plot_fids_qa
-        plot_fids_qa(subjid=self.subject,
-                     bids_root=self.bids_root, 
-                     outfile=None, block=True, mri_override=[self.mri])
+        return plot_fids_qa(
+            subjid=self.subject,
+            bids_root=self.bids_root,
+            outfile=False,
+            block=False,
+            mri_override=[self.mri],
+        )
 
     
     def plot_3D_coreg(self, idx=None):

@@ -73,7 +73,7 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None, block=False,
     '''
     if subjid[0:4]!='sub-':
         subjid='sub-'+subjid
-    if outfile == None:
+    if outfile is None:
         outfile = op.join(os.getcwd(), f'{subjid}_fids_qa.png')
     if mri_override != None:
         tmp = mri_override
@@ -108,17 +108,18 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None, block=False,
     if block==False:
         fig, axs = plt.subplots(3, 1, figsize=(7, 7), facecolor="k")
         for point_idx, label in enumerate(("LPA", "NAS", "RPA")):
-            plot_anat(
-                display_mr,
+            plot_kwargs = dict(
                 axes=axs[point_idx],
-                cut_coords=mri_pos[label],#, :],
+                cut_coords=mri_pos[label],
                 title=label,
                 vmin=0,
                 vmax=_FIDS_DISPLAY_MAX,
                 dim=0,
-                output_file = outfile
             )
-        plt.show()
+            if outfile is not False:
+                plot_kwargs['output_file'] = outfile
+            plot_anat(display_mr, **plot_kwargs)
+        plt.show(block=False)
     else:
         fig, axs = plt.subplots(3, 1, figsize=(7, 7), facecolor="k")
         for point_idx, label in enumerate(("LPA", "NAS", "RPA")):
@@ -132,6 +133,7 @@ def plot_fids_qa(subjid=None, bids_root=None, outfile=None, block=False,
                 dim=0,
             )
         plt.show(block=True)
+    return fig
 
 def main():
     import argparse

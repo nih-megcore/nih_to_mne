@@ -67,11 +67,15 @@ def test_normalize_empty_image_fails_clearly():
             qa_fids._normalize_mri_for_display(image)
 
 
-@pytest.mark.parametrize("block", [False, True])
+@pytest.mark.parametrize(
+    ("block", "interactive"),
+    [(False, False), (True, False), (False, True)],
+)
 def test_plot_fids_uses_normalized_volume_for_all_panels(
     tmp_path,
     monkeypatch,
     block,
+    interactive,
 ):
     anat_dir = tmp_path / "sub-01" / "anat"
     anat_dir.mkdir(parents=True)
@@ -113,8 +117,8 @@ def test_plot_fids_uses_normalized_volume_for_all_panels(
         lambda *args, **kwargs: show_calls.append((args, kwargs)),
     )
 
-    outfile = tmp_path / "sub-01_fids_qa.png"
-    qa_fids.plot_fids_qa(
+    outfile = False if interactive else tmp_path / "sub-01_fids_qa.png"
+    figure = qa_fids.plot_fids_qa(
         subjid="01",
         bids_root=tmp_path,
         outfile=outfile,
@@ -130,9 +134,10 @@ def test_plot_fids_uses_normalized_volume_for_all_panels(
         assert kwargs["vmin"] == 0
         assert kwargs["vmax"] == 128
         assert kwargs["dim"] == 0
-        if block:
+        if block or interactive:
             assert "output_file" not in kwargs
         else:
             assert kwargs["output_file"] == outfile
-    expected_show_calls = [((), {"block": True})] if block else [((), {})]
+    expected_show_calls = [((), {"block": block})]
     assert show_calls == expected_show_calls
+    assert figure is not None

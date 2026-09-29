@@ -20,6 +20,11 @@ Layout:
 
 """
 
+# Import Matplotlib's bundled FreeType bindings before Qt loads the system
+# FreeType library.  On Linux, loading these in the opposite order can cause
+# FT_Render_Glyph ``raster overflow`` errors with Matplotlib 3.11.
+from matplotlib import ft2font as _matplotlib_ft2font
+
 from nih2mne.GUI.qt_compat import QtCore, QtWidgets
 
 QApplication = QtWidgets.QApplication
@@ -922,8 +927,22 @@ class Subject_GUI(QWidget):
             _f_mains = 60.0
         else:
             _f_mains = False
-        tmp = self.bids_info.plot_meg(idx=idx, hp=fmin, lp=fmax, montage=montage_choice, 
-                                      f_mains=_f_mains)
+        try:
+            self.meg_browser = self.bids_info.plot_meg(
+                idx=idx,
+                hp=fmin,
+                lp=fmax,
+                montage=montage_choice,
+                f_mains=_f_mains,
+                browser_backend='qt',
+                block=False,
+            )
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                'MEG Plot Failed',
+                str(error),
+            )
         # i=0   #try to get the 
         # while not tmp._closed:
         #     print(i)
@@ -998,7 +1017,14 @@ class Subject_GUI(QWidget):
         
         
     def plot_fids(self):
-        self.bids_info.plot_mri_fids()
+        try:
+            self.fids_figure = self.bids_info.plot_mri_fids()
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                'FIDS Plot Failed',
+                str(error),
+            )
     
     def plot_3d_coreg(self):
         idx = self.b_chooser_meg.currentIndex()
@@ -1387,11 +1413,16 @@ class BIDS_Project_Window(QMainWindow):
 
 def window(bids_project=None, num_rows=6, num_cols=4):
     os.chdir(bids_project.bids_root)
-    app = QApplication(sys.argv)
+    app = QApplication.instance()
+    owns_event_loop = app is None
+    if owns_event_loop:
+        app = QApplication(sys.argv)
     win = BIDS_Project_Window(bids_project = bids_project, 
                               gridsize_row=num_rows, gridsize_col=num_cols)
     win.show()
-    sys.exit(app.exec())
+    if owns_event_loop:
+        sys.exit(app.exec())
+    return win
     
 def cmdline_main():
     import argparse

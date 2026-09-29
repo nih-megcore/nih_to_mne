@@ -95,6 +95,77 @@ def test_plot_3d_coreg_resolves_linked_bids_paths(tmp_path, monkeypatch):
     assert plot_calls[0][1]['trans'] == 'head-mri-trans'
 
 
+def test_plot_meg_uses_requested_nonblocking_browser(monkeypatch):
+    plot_calls = []
+    backend_calls = []
+
+    class FakeRaw:
+        def copy(self):
+            return self
+
+        def load_data(self):
+            return self
+
+        def plot(self, **kwargs):
+            plot_calls.append(kwargs)
+            return 'browser'
+
+    class FakeDataset:
+        raw = FakeRaw()
+
+        def load(self):
+            return None
+
+    meg_list = bids_interface.meglist_class.__new__(
+        bids_interface.meglist_class
+    )
+    meg_list.meg_list = [FakeDataset()]
+    monkeypatch.setattr(
+        bids_interface.mne.viz,
+        'set_browser_backend',
+        lambda backend: backend_calls.append(backend),
+    )
+
+    browser = meg_list.plot_meg(
+        idx=0,
+        browser_backend='qt',
+        block=False,
+    )
+
+    assert browser == 'browser'
+    assert backend_calls == ['qt']
+    assert plot_calls == [{
+        'highpass': None,
+        'lowpass': None,
+        'block': False,
+    }]
+
+
+def test_plot_mri_fids_is_nonblocking_and_interactive(monkeypatch):
+    plot_calls = []
+    monkeypatch.setattr(
+        'nih2mne.utilities.qa_fids.plot_fids_qa',
+        lambda **kwargs: plot_calls.append(kwargs) or 'figure',
+    )
+    bids_info = bids_interface._subject_bids_info.__new__(
+        bids_interface._subject_bids_info
+    )
+    bids_info.subject = 'sub-01'
+    bids_info.bids_root = '/bids'
+    bids_info.mri = '/bids/sub-01/anat/sub-01_T1w.nii.gz'
+
+    figure = bids_info.plot_mri_fids()
+
+    assert figure == 'figure'
+    assert plot_calls == [{
+        'subjid': 'sub-01',
+        'bids_root': '/bids',
+        'outfile': False,
+        'block': False,
+        'mri_override': ['/bids/sub-01/anat/sub-01_T1w.nii.gz'],
+    }]
+
+
 def test_update_bids_root_after_project_move(tmp_path):
     old_root = tmp_path / 'old_project'
     new_root = tmp_path / 'new_project'
