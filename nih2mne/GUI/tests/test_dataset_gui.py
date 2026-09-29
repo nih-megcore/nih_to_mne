@@ -474,9 +474,11 @@ def test_bids_creator_uses_configured_session_and_run_padding(
         zfill_ses=3,
     )
     meg_fname = '/tmp/MEGHASH_test_20260101_01.ds'
-    window = bids_creator.BIDS_MainWindow(meg_dsets=[meg_fname])
+    window = bids_creator.BIDS_MainWindow(
+        bids_id='sub-01',
+        meg_dsets=[meg_fname],
+    )
     window.opts.update(
-        bids_id='01',
         bids_dir='/tmp/bids',
         bids_session='03',
         mri_bsight='/tmp/mri.nii.gz',
@@ -484,6 +486,8 @@ def test_bids_creator_uses_configured_session_and_run_padding(
     )
 
     try:
+        assert window.opts['bids_id'] == '01'
+        assert window.ui.te_BIDS_id.toPlainText() == '01'
         window._make_task_dict(run_rank_reorder=True)
         window._make_anat_dict()
 
@@ -499,6 +503,50 @@ def test_bids_creator_uses_configured_session_and_run_padding(
             'sub-01_ses-003_run-0001_T1w.nii.gz'
         )
         assert window.opts['bids_session'] == '03'
+    finally:
+        window.close()
+
+
+def test_bids_creator_normalizes_typed_subject_prefix(
+        tmp_path, monkeypatch, qapp):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    window = bids_creator.BIDS_MainWindow()
+
+    try:
+        window.ui.te_BIDS_id.setPlainText('sub-A1')
+
+        assert window.opts['bids_id'] == 'A1'
+        bids_path = window._get_bids_path(task='rest', run=1)
+        assert bids_path.subject == 'A1'
+        assert 'sub-A1' in str(bids_path.fpath)
+    finally:
+        window.close()
+
+
+def test_output_check_reports_invalid_entity_without_raising(
+        tmp_path, monkeypatch, qapp):
+    bids_creator = _load_bids_creator(tmp_path, monkeypatch)
+    window = bids_creator.BIDS_MainWindow(
+        bids_id='A-1',
+        meg_dsets=['/tmp/MEGHASH_rest_20260101_01.ds'],
+    )
+    critical_messages = []
+    monkeypatch.setattr(
+        bids_creator.QtWidgets.QMessageBox,
+        'critical',
+        lambda *args: critical_messages.append(args),
+    )
+
+    try:
+        assert window._action_pb_CheckOutputs() is False
+        assert window.io_mapping == {}
+        assert window.anat_io_mapping == {}
+        assert len(critical_messages) == 1
+        assert critical_messages[0][1] == 'BIDS Output Check Failed'
+        assert 'Unallowed' in critical_messages[0][2]
+        assert 'Could not construct BIDS outputs' in (
+            window.ui.statusbar.currentMessage()
+        )
     finally:
         window.close()
 
@@ -618,16 +666,17 @@ def test_run_logs_rundict_before_output_check_failure(
     log_path = tmp_path / 'bids_conversion.log'
     dataset_gui._initialize_file_logging(log_path)
     window = bids_creator.BIDS_MainWindow(run_dict=_run_dict())
+    completed = []
+    window.conversion_finished.connect(lambda: completed.append(True))
     monkeypatch.setattr(
         window,
         '_action_pb_CheckOutputs',
-        lambda: (_ for _ in ()).throw(RuntimeError('check failed')),
+        lambda: False,
     )
 
     try:
         with caplog.at_level(logging.INFO, logger=bids_creator.logger.name):
-            with pytest.raises(RuntimeError, match='check failed'):
-                window._action_pb_run()
+            assert window._action_pb_run() is False
 
         messages = [
             record.getMessage() for record in caplog.records
@@ -641,6 +690,7 @@ def test_run_logs_rundict_before_output_check_failure(
         rundict_lines = [line for line in log_lines if 'RUNDICT:' in line]
         assert len(rundict_lines) == 1
         assert bids_creator.parse_run_dict(rundict_lines[0]) == _run_dict()
+        assert completed == []
     finally:
         window.close()
         _remove_log_handler(log_path)
@@ -652,11 +702,14 @@ def test_run_reports_success_in_status_bar_and_final_terminal_line(
     run_dict = _run_dict()
     run_dict.update(mri_none=True, mri_bsight=False, mri_elec=False)
     window = bids_creator.BIDS_MainWindow(run_dict=run_dict)
+    completed = []
+    window.conversion_finished.connect(lambda: completed.append(True))
 
     def prepare_outputs():
         window.io_mapping = {
             '/tmp/input.ds': {'bidspath': '/tmp/bids/output_meg.ds'}
         }
+        return True
 
     monkeypatch.setattr(window, '_action_pb_CheckOutputs', prepare_outputs)
     monkeypatch.setattr(window, '_set_single_filelist_text', lambda **_kwargs: None)
@@ -676,6 +729,7 @@ def test_run_reports_success_in_status_bar_and_final_terminal_line(
         ]
         assert len(completion_records) == 1
         assert completion_records[0].levelno == logging.INFO
+        assert completed == [True]
     finally:
         window.close()
 
@@ -690,6 +744,8 @@ def test_run_reports_caught_conversion_errors(
     else:
         run_dict.update(meg_dataset_list=[])
     window = bids_creator.BIDS_MainWindow(run_dict=run_dict)
+    completed = []
+    window.conversion_finished.connect(lambda: completed.append(True))
 
     def prepare_outputs():
         if failed_stage == 'meg':
@@ -702,6 +758,7 @@ def test_run_reports_caught_conversion_errors(
                 '/tmp/mri.nii.gz': {'bidspath': '/tmp/bids/output_T1w.nii.gz'}
             }
             window._anat_idx = 0
+        return True
 
     def fail_conversion(**_kwargs):
         raise RuntimeError(f'{failed_stage} failed')
@@ -728,6 +785,7 @@ def test_run_reports_caught_conversion_errors(
         ]
         assert len(completion_records) == 1
         assert completion_records[0].levelno == logging.WARNING
+        assert completed == [True]
     finally:
         window.close()
 
@@ -762,12 +820,24 @@ def test_log_path_is_propagated_to_bids_creator(
         tmp_path, monkeypatch, qapp):
     _load_bids_creator(tmp_path, monkeypatch)
     log_path = tmp_path / 'bids_conversion.log'
-    parent = dataset_gui.GUI_MainWindow(log_path=log_path)
+    bids_root = tmp_path / 'bids'
+    parent = dataset_gui.GUI_MainWindow(
+        log_path=log_path,
+        bids_root=bids_root,
+    )
+    completed = []
+    parent.bids_import_finished.connect(lambda: completed.append(True))
 
     try:
         parent._bids_window_open()
 
         assert parent.bids_gui.log_path == log_path.resolve()
+        assert parent.bids_gui.opts['bids_dir'] == str(bids_root.resolve())
+        assert parent.bids_gui.ui.te_bids_dir.toPlainText() == str(
+            bids_root.resolve()
+        )
+        parent.bids_gui.conversion_finished.emit()
+        assert completed == [True]
     finally:
         if hasattr(parent, 'bids_gui'):
             parent.bids_gui.close()
@@ -1222,6 +1292,7 @@ def test_review_errors_uses_only_latest_failed_run_log_range(
         window.io_mapping = {
             '/tmp/input.ds': {'bidspath': '/tmp/bids/output_meg.ds'}
         }
+        return True
 
     def fail_conversion(**_kwargs):
         logging.getLogger('conversion.library').warning('CURRENT WARNING')
@@ -1303,6 +1374,7 @@ def test_library_error_exposes_review_button_without_raised_exception(
         window.io_mapping = {
             '/tmp/input.ds': {'bidspath': '/tmp/bids/output_meg.ds'}
         }
+        return True
 
     def log_error(**_kwargs):
         logging.getLogger('conversion.library').error('LIBRARY ERROR')

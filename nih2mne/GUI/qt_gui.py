@@ -10,7 +10,7 @@ Layout:
     BIDS_project_window: 
         Freesurfer - Run all outstanding freesurfer processing
         MRIprep - Run all mri preprocessing on outstanding subjects
-        MEGNET - not implemented currently
+        Add Dataset - Open the dataset staging and BIDS import workflow
         Next/Prev - Page Numbers
     Subject_Tile: 
         BIDS_root lookup
@@ -1074,17 +1074,15 @@ class BIDS_Project_Window(QMainWindow):
     def __init__(self, bids_root=os.getcwd(), gridsize_row=8, gridsize_col=5, 
                  bids_project=None):
         super(BIDS_Project_Window, self).__init__()
+        self.bids_root = bids_project.bids_root
         self.setGeometry(100,100, 250*gridsize_col, 100*gridsize_row)
-        self.setWindowTitle(f'BIDS Folder: {bids_root}')
+        self.setWindowTitle(f'BIDS Folder: {self.bids_root}')
         self.gridsize_row = gridsize_row
         self.gridsize_col = gridsize_col
         self.bids_project = bids_project
         self.page_idx = 0
         self.subject_start_idx = 0
-        self.last_page_idx = len(bids_project.subjects)//(gridsize_col * gridsize_row) -1
-        _tmp = len(bids_project.subjects)/(gridsize_col * gridsize_row)
-        if _tmp != 0:
-            self.last_page_idx += 1  #Add a page for the remaining subjs
+        self.last_page_idx = self._last_page_for_project()
         self.make_task_set()
         self.selected_task = 'All'
         self.qa_file=None
@@ -1102,10 +1100,13 @@ class BIDS_Project_Window(QMainWindow):
         top_buttons_layout = QHBoxLayout()
         self.b_choose_bids_root = QPushButton('BIDS Directory')
         self.b_choose_bids_root.clicked.connect(self.select_bids_root)
+        self.b_add_dataset = QPushButton('Add Dataset')
+        self.b_add_dataset.clicked.connect(self.open_dataset_gui)
         self.b_choose_qa_file = QPushButton('QA file')
         self.b_choose_qa_file.clicked.connect(self.select_qa_file)
         self.b_subject_number = QLabel(f'Subject Totals: #{len(self.bids_project.subjects)}')
         top_buttons_layout.addWidget(self.b_choose_bids_root)
+        top_buttons_layout.addWidget(self.b_add_dataset)
         top_buttons_layout.addWidget(self.b_choose_qa_file)
         top_buttons_layout.addWidget(self.b_subject_number)
         self.b_task_chooser = QComboBox()
@@ -1147,10 +1148,6 @@ class BIDS_Project_Window(QMainWindow):
         self.b_mri_volSurf_selection = QComboBox()
         self.b_mri_volSurf_selection.addItems(['Surf','Vol'])
         bottom_buttons_layout.addWidget(self.b_mri_volSurf_selection)
-        #-MEGNet Cleaning-
-        self.b_run_megnet = QPushButton('Run MEGnet')
-        self.b_run_megnet.clicked.connect(self.proc_megnet)
-        bottom_buttons_layout.addWidget(self.b_run_megnet)
         #-Next / Prev Page buttons
         self.b_next_page = QPushButton('Next')
         self.b_next_page.clicked.connect(self.increment_page_idx)
@@ -1249,21 +1246,100 @@ class BIDS_Project_Window(QMainWindow):
         for subject in mriprep_proclist:
             self.bids_project.subjects[subject].mri_preproc(surf=surf, fname='all')
     
-    def proc_megnet(self):
-        pass
-
     def open_project_datproc_dialog(self):
         self.project_datproc_dialog = ProjectDatprocSubmissionDialog(self)
         self.project_datproc_dialog.exec()
-        
-        
-    def select_bids_root(self):
-        self.bids_root = QtWidgets.QFileDialog.getExistingDirectory(self, 'Select Folder')
-        os.chdir(self.bids_root)
-        self.bids_project = bids_project(bids_root=self.bids_root)
+
+    def open_dataset_gui(self):
+        """Open the dataset staging workflow for the current BIDS root."""
+        current_window = getattr(self, 'dataset_gui', None)
+        if current_window is not None and current_window.isVisible():
+            current_window.showNormal()
+            current_window.raise_()
+            current_window.activateWindow()
+            return
+
+        from nih2mne.GUI.dataset_gui import GUI_MainWindow
+
+        self.dataset_gui = GUI_MainWindow(
+            bids_root=self.bids_project.bids_root,
+        )
+        self.dataset_gui.bids_import_finished.connect(
+            self.reload_bids_project
+        )
+        self.dataset_gui.show()
+
+    def _last_page_for_project(self):
+        """Return the zero-based final page for the current project."""
+        page_size = self.gridsize_row * self.gridsize_col
+        subject_count = len(self.bids_project.subjects)
+        return max(0, (subject_count - 1) // page_size)
+
+    def reload_bids_project(self, bids_root=None, force_update=True):
+        """Reload project data from disk and refresh all project controls."""
+        root = bids_root or self.bids_project.bids_root
+        try:
+            refreshed_project = bids_project(
+                bids_root=root,
+                force_update=force_update,
+            )
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                'BIDS Project Reload Failed',
+                str(error),
+            )
+            return False
+
+        previous_task = self.selected_task
+        self.bids_project = refreshed_project
+        self.bids_root = refreshed_project.bids_root
+        self.setWindowTitle(f'BIDS Folder: {self.bids_root}')
+
+        self.make_task_set()
+        available_tasks = {
+            entry.split(':')[0].strip() for entry in self.task_set
+        }
+        self.selected_task = (
+            previous_task if previous_task in available_tasks else 'All'
+        )
+        self.b_task_chooser.blockSignals(True)
+        self.b_task_chooser.clear()
+        self.b_task_chooser.addItems(self.task_set)
+        selected_index = next(
+            (
+                index for index, entry in enumerate(self.task_set)
+                if entry.split(':')[0].strip() == self.selected_task
+            ),
+            0,
+        )
+        self.b_task_chooser.setCurrentIndex(selected_index)
+        self.b_task_chooser.blockSignals(False)
+
+        self.subject_keys = sorted(self.bids_project.subjects)
         self.page_idx = 0
         self.subject_start_idx = 0
+        self.last_page_idx = self._last_page_for_project()
+        self.b_subject_number.setText(
+            f'Subject Totals: #{len(self.bids_project.subjects)}'
+        )
+        self.b_current_page_idx.setText(
+            f'Page: {self.page_idx} / {self.last_page_idx}'
+        )
+        needs_fs = len(self.bids_project.issues['Freesurfer_notStarted'])
+        self.b_run_freesurfer.setText(f'Run Freesurfer (N={needs_fs})')
         self.update_subjects_layout()
+        return True
+
+    def select_bids_root(self):
+        selected_root = QtWidgets.QFileDialog.getExistingDirectory(
+            self, 'Select Folder'
+        )
+        if selected_root:
+            self.reload_bids_project(
+                bids_root=selected_root,
+                force_update=False,
+            )
         
     def update_subjects_layout(self):
         tile_idxs = np.arange(self.gridsize_row * self.gridsize_col)

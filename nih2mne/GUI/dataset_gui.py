@@ -445,11 +445,17 @@ def _configure_logging(config, command_log=None, input_func=None):
 
 
 class GUI_MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, log_path=None):
-        super().__init__()
+    bids_import_finished = pyqtSignal()
+
+    def __init__(self, log_path=None, bids_root=None, parent=None):
+        super().__init__(parent)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.log_path = log_path
+        self.bids_root = (
+            str(Path(bids_root).expanduser().resolve())
+            if bids_root is not None else None
+        )
         
         ####  Setup addon features >>>
         self.ui.FileDrop.dragEnterEvent = self.dragEnterEvent
@@ -718,6 +724,10 @@ class GUI_MainWindow(QtWidgets.QMainWindow):
             meg_dsets=meg_dsets,
             run_dict=run_dict,
             log_path=self.log_path,
+            bids_root=self.bids_root,
+        )
+        self.bids_gui.conversion_finished.connect(
+            self.bids_import_finished.emit
         )
         self.bids_gui.show()
         

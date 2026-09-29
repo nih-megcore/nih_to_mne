@@ -62,6 +62,14 @@ from nih2mne.utilities.make_bids_log_reader import (
 logger = logging.getLogger(__name__)
 
 
+def _normalize_bids_subject(value):
+    """Return the bare subject entity accepted by :class:`BIDSPath`."""
+    subject = str(value).strip()
+    if subject.lower().startswith('sub-'):
+        subject = subject[4:]
+    return subject
+
+
 def _extract_error_log_blocks(log_text):
     """Extract ERROR/CRITICAL records and their continuation lines."""
     error_lines = []
@@ -137,8 +145,10 @@ else:
 #%% 
 
 class BIDS_MainWindow(QtWidgets.QMainWindow):
+    conversion_finished = QtCore.pyqtSignal()
+
     def __init__(self, meghash='None', bids_id='None', meg_dsets=None,
-                 run_dict=None, log_path=None):
+                 run_dict=None, log_path=None, bids_root=None):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -156,11 +166,17 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.pb_review_errors.clicked.connect(self._show_run_errors)
         self.ui.statusbar.addPermanentWidget(self.ui.pb_review_errors)
         
+        initial_bids_root = (
+            DEFAULT_BIDS_ROOT
+            if bids_root is None
+            else op.abspath(op.expanduser(os.fspath(bids_root)))
+        )
+
         # Collect all bids options in self.opts
         self.opts = dict(anonymize=DEFAULT_ANONYMIZE, 
                          subjid_input=meghash, 
-                         bids_id=bids_id,
-                         bids_dir=DEFAULT_BIDS_ROOT, 
+                         bids_id=_normalize_bids_subject(bids_id),
+                         bids_dir=initial_bids_root,
                          bids_session=DEFAULT_BIDS_SESSION,
                          meg_dataset_list = list(meg_dsets or []),
                          
@@ -232,7 +248,8 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self._last_run_log_range = None
         run_log_start = self._log_position()
         logger.info('%s %s', RUNDICT_MARKER, serialize_run_dict(self.opts))
-        self._action_pb_CheckOutputs()  #Initialize io_mapping
+        if not self._action_pb_CheckOutputs():
+            return False
         self.ui.statusbar.showMessage('BIDS conversion running...')
         QApplication.processEvents()
         conversion_failed = False
@@ -312,6 +329,8 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.ui.statusbar.showMessage(completion_message)
         QApplication.processEvents()
         print(completion_message, flush=True)
+        self.conversion_finished.emit()
+        return True
 
     def _flush_logfile(self):
         """Flush the handler writing the active GUI logfile."""
@@ -403,11 +422,25 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
 
     def _action_pb_CheckOutputs(self):
         'Map the input files to output and display in filelist'
-        self._make_task_dict(
-            run_rank_reorder=self.opts['run_rank_reorder']
-        )  # Generates the in_out_mapping
-        self._make_anat_dict()  #Generates anatomy anat_io_mapping
-        self._set_filelist_text()
+        try:
+            self._make_task_dict(
+                run_rank_reorder=self.opts['run_rank_reorder']
+            )  # Generates the in_out_mapping
+            self._make_anat_dict()  #Generates anatomy anat_io_mapping
+            self._set_filelist_text()
+        except Exception as error:
+            self.io_mapping = OrderedDict()
+            self.anat_io_mapping = {}
+            message = f'Could not construct BIDS outputs: {error}'
+            logger.exception(message)
+            self.ui.statusbar.showMessage(message)
+            QtWidgets.QMessageBox.critical(
+                self,
+                'BIDS Output Check Failed',
+                message,
+            )
+            return False
+        return True
 
     def _action_load_rundict(self):
         """Paste a recovery record, populate the form, and check outputs."""
@@ -433,6 +466,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     def apply_run_dict(self, run_dict):
         """Replace options and controls with validated recovery state."""
         restored = validate_run_dict(run_dict)
+        restored['bids_id'] = _normalize_bids_subject(restored['bids_id'])
         self.opts = restored
 
         self.ui.te_meghash.setPlainText(restored['subjid_input'])
@@ -484,17 +518,7 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
 
     def check_restored_outputs(self):
         """Check restored output mappings without closing or running the GUI."""
-        try:
-            self._action_pb_CheckOutputs()
-        except BaseException as error:
-            logger.exception('Could not check outputs from restored RUNDICT')
-            QtWidgets.QMessageBox.critical(
-                self,
-                'RUNDICT Output Check Failed',
-                f'The options were restored, but output checking failed:\n{error}',
-            )
-            return False
-        return True
+        return self._action_pb_CheckOutputs()
 
     def _action_pb_BrainsightElec(self):
         'Browse for electrodes file'
@@ -569,7 +593,9 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
         self.opts['bids_dir']=self.ui.te_bids_dir.toPlainText().strip()
     
     def _update_bids_id(self):
-        self.opts['bids_id'] = self.ui.te_BIDS_id.toPlainText().strip()
+        self.opts['bids_id'] = _normalize_bids_subject(
+            self.ui.te_BIDS_id.toPlainText()
+        )
     
     def _update_bids_ses(self):
         _bids_session = self.ui.cb_Bids_Session.currentText()
@@ -629,25 +655,21 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
     
     def _get_bids_path(self, task=None, run=None):
         'Create the MEG bids path'
-        try:
-            session = _format_bids_entity(
-                self.opts['bids_session'],
-                DEFAULT_ZFILL_SES,
-            )
-            run = _format_bids_entity(run, DEFAULT_ZFILL_RUN)
-            bids_path = BIDSPath(subject=self.opts['bids_id'],
-                                 session=session,
-                                 task=task,
-                                 run=run,
-                                 datatype='meg',
-                                 root=self.opts['bids_dir'], 
-                                 suffix='meg', 
-                                 extension='.ds')
-        except BaseException as e:
-            logger.exception('Could not construct BIDS path')
-            bids_path = False
-            print(f'{e}')
-        return bids_path
+        session = _format_bids_entity(
+            self.opts['bids_session'],
+            DEFAULT_ZFILL_SES,
+        )
+        run = _format_bids_entity(run, DEFAULT_ZFILL_RUN)
+        return BIDSPath(
+            subject=_normalize_bids_subject(self.opts['bids_id']),
+            session=session,
+            task=task,
+            run=run,
+            datatype='meg',
+            root=self.opts['bids_dir'],
+            suffix='meg',
+            extension='.ds',
+        )
     
     def _make_anat_dict(self):
         'Generate the fname to anat bidspath dictionary'
@@ -665,13 +687,15 @@ class BIDS_MainWindow(QtWidgets.QMainWindow):
             DEFAULT_ZFILL_SES,
         )
         run = _format_bids_entity(1, DEFAULT_ZFILL_RUN)
-        t1_bids_path = BIDSPath(subject=self.opts['bids_id'],
-                             session=session,
-                             datatype='anat',
-                             run=run,
-                             root=self.opts['bids_dir'], 
-                             suffix='T1w', 
-                             extension='.nii.gz')
+        t1_bids_path = BIDSPath(
+            subject=_normalize_bids_subject(self.opts['bids_id']),
+            session=session,
+            datatype='anat',
+            run=run,
+            root=self.opts['bids_dir'],
+            suffix='T1w',
+            extension='.nii.gz',
+        )
 
         self.anat_io_mapping[key]['bidspath'] = t1_bids_path
         self.anat_io_mapping[key]['out_fname'] = str(t1_bids_path.fpath)

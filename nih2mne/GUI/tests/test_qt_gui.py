@@ -500,6 +500,16 @@ def test_project_window_task_filter_and_pagination(qapp):
     assert window.b_subject_number.text() == "Subject Totals: #3"
     assert window.b_current_page_idx.text() == "Page: 0 / 1"
     assert window.b_project_datproc.text() == "Batch Datproc"
+    assert window.b_add_dataset.text() == "Add Dataset"
+    assert not hasattr(window, "b_run_megnet")
+
+    top_layout = window.centralWidget().layout().itemAt(0).layout()
+    top_button_text = [
+        top_layout.itemAt(index).widget().text()
+        for index in range(top_layout.count())
+        if isinstance(top_layout.itemAt(index).widget(), qt_gui_module.QPushButton)
+    ]
+    assert top_button_text[:2] == ["BIDS Directory", "Add Dataset"]
 
     window.b_task_chooser.setCurrentIndex(1)
     window.filter_task_qa_vis()
@@ -516,6 +526,115 @@ def test_project_window_task_filter_and_pagination(qapp):
     qapp.processEvents()
     assert window.page_idx == 0
     assert window.subject_start_idx == 0
+
+
+def test_add_dataset_opens_one_window_for_current_root(
+        qapp, monkeypatch):
+    class FakeSignal:
+        def __init__(self):
+            self.callback = None
+
+        def connect(self, callback):
+            self.callback = callback
+
+    class FakeDatasetWindow:
+        instances = []
+
+        def __init__(self, bids_root=None):
+            self.bids_root = bids_root
+            self.bids_import_finished = FakeSignal()
+            self.visible = False
+            self.raised = 0
+            self.activated = 0
+            self.instances.append(self)
+
+        def isVisible(self):
+            return self.visible
+
+        def show(self):
+            self.visible = True
+
+        def showNormal(self):
+            return None
+
+        def raise_(self):
+            self.raised += 1
+
+        def activateWindow(self):
+            self.activated += 1
+
+    fake_module = types.ModuleType("nih2mne.GUI.dataset_gui")
+    fake_module.GUI_MainWindow = FakeDatasetWindow
+    monkeypatch.setitem(
+        sys.modules,
+        "nih2mne.GUI.dataset_gui",
+        fake_module,
+    )
+
+    project = FakeProject({"sub-01": FakeBidsInfo(subject="sub-01")})
+    window = BIDS_Project_Window(
+        bids_project=project,
+        gridsize_row=1,
+        gridsize_col=1,
+    )
+    reloads = []
+    monkeypatch.setattr(
+        window,
+        "reload_bids_project",
+        lambda: reloads.append(True),
+    )
+
+    window.open_dataset_gui()
+    dataset_window = FakeDatasetWindow.instances[0]
+    assert dataset_window.bids_root == project.bids_root
+    assert dataset_window.visible is True
+
+    dataset_window.bids_import_finished.callback()
+    assert reloads == [True]
+
+    window.open_dataset_gui()
+    assert len(FakeDatasetWindow.instances) == 1
+    assert dataset_window.raised == 1
+    assert dataset_window.activated == 1
+
+
+def test_reload_bids_project_rescans_and_refreshes_controls(
+        qapp, monkeypatch):
+    original = FakeProject({
+        "sub-01": FakeBidsInfo(subject="sub-01"),
+        "sub-02": FakeBidsInfo(subject="sub-02"),
+    })
+    window = BIDS_Project_Window(
+        bids_project=original,
+        gridsize_row=1,
+        gridsize_col=2,
+    )
+    window.b_task_chooser.setCurrentIndex(1)
+    window.filter_task_qa_vis()
+
+    refreshed = FakeProject({
+        "sub-01": FakeBidsInfo(subject="sub-01"),
+        "sub-02": FakeBidsInfo(subject="sub-02"),
+        "sub-03": FakeBidsInfo(subject="sub-03"),
+    })
+    refreshed.issues["Freesurfer_notStarted"] = ["sub-03"]
+    calls = []
+
+    def load_project(**kwargs):
+        calls.append(kwargs)
+        return refreshed
+
+    monkeypatch.setattr(qt_gui_module, "bids_project", load_project)
+
+    assert window.reload_bids_project() is True
+    assert calls == [{"bids_root": original.bids_root, "force_update": True}]
+    assert window.bids_project is refreshed
+    assert window.selected_task == "rest"
+    assert window.subject_keys == ["sub-01", "sub-02", "sub-03"]
+    assert window.b_subject_number.text() == "Subject Totals: #3"
+    assert window.b_current_page_idx.text() == "Page: 0 / 1"
+    assert window.b_run_freesurfer.text() == "Run Freesurfer (N=1)"
+    assert window.windowTitle() == f"BIDS Folder: {refreshed.bids_root}"
 
 
 def test_project_window_proc_actions(qapp):
