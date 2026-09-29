@@ -31,6 +31,12 @@ QT_API=pyqt5 bids_qa_gui.py
 Developers can regenerate the checked-in Qt Designer forms with PyQt6 by
 running `python tools/regenerate_qt_ui.py` from the repository root.
 
+## Containers
+
+Podman and Singularity/Apptainer images, including host Wayland/X11 and macOS
+XQuartz GUI support, can be built through the Makefile. See
+[container/README.md](container/README.md) for build and launch instructions.
+
 ## GUI Components For Creating and QA-ing BIDS data
 Overview Here: https://megcore.nih.gov/index.php/BIDS_GUIs
 Include: Trigger Parsing, BIDS creation, and BIDS QA

@@ -1,0 +1,75 @@
+FROM docker.io/library/python:3.11-slim-trixie
+
+LABEL org.opencontainers.image.title="nih2mne" \
+      org.opencontainers.image.description="NIH MEG Core integration tools for MNE and MNE-BIDS" \
+      org.opencontainers.image.source="https://github.com/nih-megcore/nih_to_mne"
+
+# PyQt6 supplies Qt itself. These packages provide the Linux X11, Wayland,
+# OpenGL, font, and desktop libraries used by the Qt and PyVista front ends.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        dbus \
+        fontconfig \
+        fonts-dejavu-core \
+        libdbus-1-3 \
+        libegl1 \
+        libfontconfig1 \
+        libfreetype6 \
+        libgl1 \
+        libgl1-mesa-dri \
+        libglib2.0-0t64 \
+        libglu1-mesa \
+        libglx-mesa0 \
+        libice6 \
+        libopengl0 \
+        libsm6 \
+        libwayland-client0 \
+        libwayland-cursor0 \
+        libwayland-egl1 \
+        libx11-6 \
+        libx11-xcb1 \
+        libxcb-cursor0 \
+        libxcb-glx0 \
+        libxcb-icccm4 \
+        libxcb-image0 \
+        libxcb-keysyms1 \
+        libxcb-randr0 \
+        libxcb-render-util0 \
+        libxcb-shape0 \
+        libxcb-shm0 \
+        libxcb-sync1 \
+        libxcb-util1 \
+        libxcb-xfixes0 \
+        libxcb-xinerama0 \
+        libxcb-xkb1 \
+        libxcb1 \
+        libxext6 \
+        libxfixes3 \
+        libxi6 \
+        libxkbcommon-x11-0 \
+        libxkbcommon0 \
+        libxrender1 \
+        mesa-utils \
+        tk \
+        xdg-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONUNBUFFERED=1 \
+    QT_API=pyqt6
+
+WORKDIR /opt/nih2mne
+
+COPY pyproject.toml README.md MANIFEST.in UNLICENSE ./
+COPY nih2mne ./nih2mne
+
+RUN python -m pip install --no-cache-dir .
+
+# Fail the build if the Python bindings, Qt runtime, visualization packages,
+# or either Linux Qt platform plugin are unavailable.
+RUN QT_QPA_PLATFORM=offscreen python -c \
+    "from pathlib import Path; import tkinter; import mne; import mne_qt_browser; import pyqtgraph; import pyvista; from PyQt6.QtCore import QLibraryInfo, PYQT_VERSION_STR, QT_VERSION_STR; from PyQt6.QtWidgets import QApplication; plugins = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)) / 'platforms'; assert (plugins / 'libqxcb.so').is_file(), plugins; assert any(plugins.glob('libqwayland*.so')), plugins; app = QApplication([]); mne.viz.set_browser_backend('qt'); assert mne.viz.get_browser_backend() == 'qt'; tkinter.Tcl(); print(f'PyQt {PYQT_VERSION_STR}; Qt {QT_VERSION_STR}; MNE browser qt; QPA {app.platformName()}')"
+
+RUN mkdir -p /data
+WORKDIR /data
+
+CMD ["bids_qa_gui.py"]

@@ -6,6 +6,38 @@ SHELL=/bin/bash
 CONDA_ACTIVATE=source $$(conda info --base)/etc/profile.d/conda.sh ; conda activate ; conda activate 
 # <<<<
 
+PODMAN ?= podman
+PODMAN_IMAGE ?= localhost/nih2mne:latest
+CONTAINERFILE ?= container/Containerfile
+SINGULARITY ?= $(shell if command -v apptainer >/dev/null 2>&1; then printf apptainer; else printf singularity; fi)
+SIF_IMAGE ?= build/nih2mne.sif
+DATA_DIR ?= $(CURDIR)
+CONTAINER_CMD ?= bids_qa_gui.py
+GUI_BACKEND ?= auto
+
+.PHONY: podman singularity podman-gui singularity-gui
+
+podman:
+	command -v $(PODMAN) >/dev/null
+	$(PODMAN) build --file $(CONTAINERFILE) --tag $(PODMAN_IMAGE) .
+
+singularity: podman
+	command -v $(SINGULARITY) >/dev/null
+	mkdir -p $(dir $(SIF_IMAGE))
+	@set -eu; \
+	archive=$$(mktemp "$${TMPDIR:-/tmp}/nih2mne.XXXXXX"); \
+	trap 'rm -f "$$archive"' EXIT HUP INT TERM; \
+	$(PODMAN) save --format docker-archive --output "$$archive" $(PODMAN_IMAGE); \
+	$(SINGULARITY) build --force $(SIF_IMAGE) "docker-archive:$$archive"
+
+podman-gui: podman
+	DATA_DIR="$(DATA_DIR)" GUI_BACKEND="$(GUI_BACKEND)" PODMAN="$(PODMAN)" \
+		./container/launch-gui.sh podman "$(PODMAN_IMAGE)" "$(CONTAINER_CMD)"
+
+singularity-gui: singularity
+	DATA_DIR="$(DATA_DIR)" GUI_BACKEND="$(GUI_BACKEND)" SINGULARITY="$(SINGULARITY)" \
+		./container/launch-gui.sh singularity "$(SIF_IMAGE)" "$(CONTAINER_CMD)"
+
 install_test:
 	mamba create --override-channels --channel=conda-forge --name=nih2mne_test "mne>1.6" "python<3.12"  pip -y  
 	($(CONDA_ACTIVATE) nih2mne_test ; pip install -e .[testing]; pip install pytest pytest-reportlog )
@@ -39,4 +71,3 @@ test_headless:
 
 get_data:
 	git submodule update --init --recursive
-

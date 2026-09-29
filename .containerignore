@@ -1,0 +1,14 @@
+.git
+.github
+.agents
+.aws
+.codex
+.pytest_cache
+build
+spec
+*.egg-info
+**/__pycache__
+**/*.pyc
+**/*.pyo
+nih2mne/test_data
+nih2mne/**/tests
