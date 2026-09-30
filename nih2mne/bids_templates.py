@@ -19,7 +19,7 @@ from mne_bids import BIDSPath
 
 
 ArtifactStatus = Literal["present", "missing", "invalid"]
-ArtifactKind = Literal["file", "directory", "raw", "json"]
+ArtifactKind = Literal["file", "directory", "raw", "json", "surface_stc"]
 Loader = str | Callable[..., Any] | None
 
 _PROJECT_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -171,20 +171,29 @@ class ArtifactRecord:
     status: ArtifactStatus
     validation_errors: tuple[str, ...] = ()
     expected_metadata: Mapping[str, Any] | None = None
+    component_paths: tuple[Path, ...] = ()
     _loader: Loader = field(default=None, repr=False, compare=False)
     _load_target: Any = field(default=None, repr=False, compare=False)
 
     @property
     def exists(self) -> bool:
-        """Whether an object of the expected filesystem type exists."""
+        """Whether the complete, valid artifact is present."""
 
-        return self.status != "missing"
+        return self.status == "present"
 
     def load_file(self, **kwargs: Any) -> Any:
         """Load this artifact using its configured MNE or JSON reader."""
 
-        if not self.path.exists():
-            raise FileNotFoundError(self.path)
+        load_paths = self.component_paths or (self.path,)
+        missing = [
+            path
+            for path in load_paths
+            if not (path.is_file() if self.component_paths else path.exists())
+        ]
+        if missing:
+            raise FileNotFoundError(
+                ", ".join(str(path) for path in missing)
+            )
         if self._loader is None:
             raise TypeError(f"artifact '{self.key}' does not have a file loader")
         target = self._load_target if self._load_target is not None else self.path
@@ -235,6 +244,7 @@ def _run_loader(loader: str, target: Any, kwargs: dict[str, Any]) -> Any:
         "forward": mne.read_forward_solution,
         "ica": mne.preprocessing.read_ica,
         "beamformer": mne.beamformer.read_beamformer,
+        "source_estimate": mne.read_source_estimate,
     }
     try:
         reader = readers[loader]
@@ -374,6 +384,14 @@ class MEGDerivativeTemplate:
             uses_filter=True, loader="beamformer",
         ),
         ArtifactSpec(
+            "stc", "project", "primary", "surface_stc", "stc", None,
+            (
+                "subject", "session", "task", "acquisition", "run", "recording",
+                "space", "description",
+            ),
+            uses_filter=True, loader="source_estimate",
+        ),
+        ArtifactSpec(
             "noise_filtered_raw", "project", "noise", "file", "meg", ".fif",
             ("subject", "session", "task", "acquisition", "run", "recording"),
             uses_filter=True, loader="raw_fif",
@@ -491,12 +509,18 @@ class MEGDerivativeTemplate:
             "run": primary.run,
             "recording": primary.recording,
             "space": self.space,
+            "description": None,
         }
         if source == "noise":
             context.update(self.noise_entities)
         return context
 
-    def _artifact_path(self, spec: ArtifactSpec, paths: Mapping[str, Path]) -> Path:
+    def _artifact_path(
+        self,
+        spec: ArtifactSpec,
+        paths: Mapping[str, Path],
+        entity_overrides: Mapping[str, Any] | None = None,
+    ) -> Path:
         if spec.location == "input":
             return self._input_path(spec.source)
         root = self._pipeline_root(spec.pipeline)
@@ -504,6 +528,13 @@ class MEGDerivativeTemplate:
             return root / "dataset_description.json"
 
         context = self._entity_context(spec.source)
+        overrides = dict(entity_overrides or {})
+        unknown = set(overrides) - set(spec.entities)
+        if unknown:
+            raise ValueError(
+                f"unsupported entities for '{spec.key}': {sorted(unknown)}"
+            )
+        context.update(overrides)
         entities = {key: context.get(key) for key in spec.entities}
         entities = {key: value for key, value in entities.items() if value is not None}
         if spec.uses_filter:
@@ -572,7 +603,25 @@ class MEGDerivativeTemplate:
         self, spec: ArtifactSpec, path: Path, expected_metadata: Mapping[str, Any] | None
     ) -> ArtifactRecord:
         errors: tuple[str, ...] = ()
-        if not path.exists():
+        component_paths: tuple[Path, ...] = ()
+        if spec.kind == "surface_stc":
+            component_paths = (
+                path.with_name(f"{path.name}-lh.stc"),
+                path.with_name(f"{path.name}-rh.stc"),
+            )
+            present = tuple(component.is_file() for component in component_paths)
+            if all(present):
+                status: ArtifactStatus = "present"
+            elif any(component.exists() for component in component_paths):
+                status = "invalid"
+                errors = tuple(
+                    f"missing or invalid surface STC component: {component}"
+                    for component, valid in zip(component_paths, present)
+                    if not valid
+                )
+            else:
+                status = "missing"
+        elif not path.exists():
             status: ArtifactStatus = "missing"
         elif spec.kind == "directory" and not path.is_dir():
             status = "invalid"
@@ -602,6 +651,7 @@ class MEGDerivativeTemplate:
             status=status,
             validation_errors=errors,
             expected_metadata=expected_metadata,
+            component_paths=component_paths,
             _loader=loader,
             _load_target=load_target,
         )
@@ -623,6 +673,30 @@ class MEGDerivativeTemplate:
                 expected_metadata = {"DatasetType": "derivative"}
             records[spec.key] = self._record(spec, path, expected_metadata)
         return records
+
+    def artifact(self, key: str, **entity_overrides: Any) -> ArtifactRecord:
+        """Evaluate one artifact, optionally overriding its filename entities."""
+
+        paths: dict[str, Path] = {}
+        target: ArtifactSpec | None = None
+        for spec in self.ARTIFACT_SPECS:
+            if spec.source == "noise" and self.noise is None:
+                continue
+            overrides = entity_overrides if spec.key == key else None
+            path = self._artifact_path(spec, paths, overrides)
+            paths[spec.key] = path
+            if spec.key == key:
+                target = spec
+                break
+        if target is None:
+            raise KeyError(f"unknown or unavailable artifact: {key}")
+
+        expected_metadata: Mapping[str, Any] | None = None
+        if target.metadata_for is not None:
+            expected_metadata = self._filter_metadata(target.source)
+        elif target.location == "dataset":
+            expected_metadata = {"DatasetType": "derivative"}
+        return self._record(target, paths[key], expected_metadata)
 
 
 __all__ = [

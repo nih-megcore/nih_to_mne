@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import mne
+import numpy as np
 import pytest
 from mne_bids import BIDSPath
 
@@ -266,6 +268,57 @@ def test_load_file_dispatches_and_rejects_missing_or_directory(tmp_path, monkeyp
     assert calls == [("epochs", records["epochs"].path, {"preload": False})]
     with pytest.raises(TypeError, match="does not have"):
         records["ica_dir"].load_file()
+
+
+def test_surface_stc_artifact_tracks_and_loads_both_hemispheres(tmp_path):
+    template = _template(tmp_path, space="fsaverage")
+    record = template.artifact("stc", description="stim")
+    expected_stem = (
+        "sub-ON08710_ses-1_task-rest_run-01_proc-filt1to40n60x120r250_"
+        "space-fsaverage_desc-stim_stc"
+    )
+    assert record.path.name == expected_stem
+    assert record.component_paths == (
+        record.path.with_name(f"{expected_stem}-lh.stc"),
+        record.path.with_name(f"{expected_stem}-rh.stc"),
+    )
+    assert record.status == "missing"
+    assert not record.exists
+
+    record.path.parent.mkdir(parents=True)
+    record.component_paths[0].touch()
+    partial = template.artifact("stc", description="stim")
+    assert partial.status == "invalid"
+    assert not partial.exists
+    assert str(record.component_paths[1]) in partial.validation_errors[0]
+
+    record.component_paths[0].unlink()
+    stc = mne.SourceEstimate(
+        np.arange(12, dtype=float).reshape(4, 3),
+        vertices=[np.array([0, 1]), np.array([2, 3])],
+        tmin=0.0,
+        tstep=0.01,
+        subject="fsaverage",
+    )
+    stc.save(record.path, ftype="stc", overwrite=True)
+
+    saved = template.artifact("stc", description="stim")
+    assert saved.status == "present"
+    assert saved.exists
+    loaded = saved.load_file(subject="fsaverage")
+    np.testing.assert_array_equal(loaded.data, stc.data)
+    assert all(
+        np.array_equal(left, right)
+        for left, right in zip(loaded.vertices, stc.vertices)
+    )
+
+
+def test_artifact_entity_overrides_are_validated(tmp_path):
+    template = _template(tmp_path)
+    with pytest.raises(ValueError, match="unsupported entities"):
+        template.artifact("stc", run="02", bogus="value")
+    with pytest.raises(KeyError, match="unknown or unavailable"):
+        template.artifact("not_an_artifact")
 
 
 def test_project_validation_and_raw_input_validation(tmp_path):
