@@ -31,6 +31,69 @@ QT_API=pyqt5 bids_qa_gui.py
 Developers can regenerate the checked-in Qt Designer forms with PyQt6 by
 running `python tools/regenerate_qt_ui.py` from the repository root.
 
+## MEG derivative path templates
+
+`nih2mne.bids_templates` generates and inspects the expected MNE derivative
+paths for one MEG recording. It does not create directories, filter data, or
+write files. Filtering parameters become part of the `proc-` entity and are
+also exposed as expected JSON metadata:
+
+```python
+from mne_bids import BIDSPath
+from nih2mne.bids_templates import FilterSpec, MEGDerivativeTemplate
+
+raw_path = BIDSPath(
+    root="/data/my-bids",
+    subject="01",
+    session="1",
+    task="rest",
+    run="01",
+    datatype="meg",
+    suffix="meg",
+    extension=".fif",
+)
+filter_spec = FilterSpec(
+    l_freq=1,
+    h_freq=40,
+    notch_freqs=(60, 120),
+    resample_sfreq=250,
+    method="fir",
+    phase="zero",
+)
+template = MEGDerivativeTemplate(
+    raw_path,
+    project="ENIGMA_MEG",
+    filter_spec=filter_spec,
+)
+artifacts = template.evaluate()
+
+# ..._task-rest_run-01_proc-filt1to40n60x120r250_epo.fif
+print(artifacts["epochs"].path)
+print(artifacts["epochs"].status)  # present, missing, or invalid
+epochs = artifacts["epochs"].load_file()
+
+# Metadata to place beside the filtered FIF file.
+print(artifacts["filtered_raw_json"].expected_metadata)
+```
+
+An optional noise input may be another `BIDSPath` (including one from a
+different dataset) or an arbitrary path. Noise derivatives always adopt the
+primary recording's subject and session while retaining the noise task and run:
+
+```python
+template = MEGDerivativeTemplate(
+    raw_path,
+    project="ENIGMA_MEG",
+    filter_spec=filter_spec,
+    noise="/data/empty-room/noise.fif",
+    noise_entities={"task": "noise", "run": "01"},
+)
+```
+
+Project-specific templates can append immutable `ArtifactSpec` entries in a
+subclass by extending `MEGDerivativeTemplate.ARTIFACT_SPECS`. Duplicate keys
+are rejected when the template is constructed.
+
 ## Containers
 
 Podman and Singularity/Apptainer images, including host Wayland/X11 and macOS
