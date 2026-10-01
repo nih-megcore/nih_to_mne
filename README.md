@@ -15,7 +15,7 @@
 
 ## Install:
 Set up MNE environment (conda can be substituted for mamba below if it doesn't work):<br>
-```mamba create --override-channels --channel=conda-forge --name=nihmeg mne 'python<3.12'``` <br>
+```mamba create --override-channels --channel=conda-forge --name=nihmeg mne ``` <br>
 ```mamba activate nihmeg```<br>
 Install nih_to_mne<br>
 ```pip install git+https://github.com/nih-megcore/nih_to_mne```
