@@ -15,8 +15,10 @@ literal matrix in both views, or ``--vlim-pt`` to set their shared scale.
 from __future__ import annotations
 
 import argparse
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from types import SimpleNamespace
 
 import matplotlib.pyplot as plt
@@ -143,8 +145,23 @@ class LinkedTopomap:
         self.topo_fig = None
         self.topo_ax = None
         self.callback_id = None
+        self.callback_ids = []
         self.time_cursor = None
+        self.topo_image = None
+        self.topo_interp = None
+        self.topo_title = None
+        self.topo_overlay_artists = []
+        self.raw_background = None
+        self.topo_background = None
+        self.use_raw_blit = False
+        self.use_topo_blit = False
         self.last_draw: DrawState | None = None
+
+    def _connect(self, canvas, event_name: str, callback) -> int:
+        """Connect and retain a callback so close() can disconnect it."""
+        callback_id = canvas.mpl_connect(event_name, callback)
+        self.callback_ids.append((canvas, callback_id))
+        return callback_id
 
     def create_figures(self, *, show: bool = True) -> None:
         """Create both figures and connect the browser click handler."""
@@ -165,8 +182,10 @@ class LinkedTopomap:
             figsize=(6, 5),
             layout="constrained",
         )
-        self.callback_id = self.raw_fig.canvas.mpl_connect(
-            "button_press_event", self.on_browser_click
+        self.callback_id = self._connect(
+            self.raw_fig.canvas,
+            "button_press_event",
+            self.on_browser_click,
         )
         self.time_cursor = self.raw_fig.mne.ax_main.axvline(
             self.raw.first_time,
@@ -175,9 +194,160 @@ class LinkedTopomap:
             linewidth=1.5,
             zorder=20,
         )
+        self.use_raw_blit = self.raw_fig.canvas.supports_blit
+        if self.use_raw_blit:
+            self.time_cursor.set_animated(True)
+            self._connect(
+                self.raw_fig.canvas,
+                "draw_event",
+                self._on_raw_draw,
+            )
+            # Establish a background without the animated cursor. The draw
+            # callback paints the cursor back on top before returning.
+            self.raw_fig.canvas.draw()
         self.draw_topomap(0.0)
         if show:
             self.topo_fig.show()
+
+    def _on_raw_draw(self, event) -> None:
+        """Refresh the browser background after navigation or resize."""
+        if not self.use_raw_blit or event.canvas is not self.raw_fig.canvas:
+            return
+        axes = self.raw_fig.mne.ax_main
+        self.raw_background = event.canvas.copy_from_bbox(axes.bbox)
+        axes.draw_artist(self.time_cursor)
+        event.canvas.blit(axes.bbox)
+
+    def _draw_cursor(self) -> None:
+        """Paint only the cursor when blitting is available."""
+        canvas = self.raw_fig.canvas
+        axes = self.raw_fig.mne.ax_main
+        if self.use_raw_blit and self.raw_background is not None:
+            canvas.restore_region(self.raw_background)
+            axes.draw_artist(self.time_cursor)
+            canvas.blit(axes.bbox)
+        else:
+            canvas.draw_idle()
+
+    def _topomap_title(self, time_relative: float, sample: int) -> str:
+        """Build the dynamic title without changing axes layout."""
+        mode = "channel-centered" if self.remove_dc else "literal matrix"
+        return (
+            f"t = {time_relative:.3f} s, sample = {sample}\n"
+            f"grade {self.raw.compensation_grade}, {mode}"
+        )
+
+    def _plot_topomap_public(self, data_pt: np.ndarray) -> None:
+        """Plot with MNE's public API as a compatibility fallback."""
+        self.topo_ax.clear()
+        self.topo_image, _ = mne.viz.plot_topomap(
+            data_pt,
+            self.raw.info,
+            axes=self.topo_ax,
+            show=False,
+            sensors=True,
+            contours=0,
+            extrapolate="local",
+            cmap="RdBu_r",
+            vlim=(-self.vlim_pt, self.vlim_pt),
+        )
+
+    def _initialize_topomap(
+        self,
+        data_pt: np.ndarray,
+        title: str,
+    ) -> None:
+        """Create static artists once and retain MNE's interpolator."""
+        try:
+            # plot_topomap() deliberately returns only the image and contours.
+            # Its private implementation also returns the reusable interpolator
+            # used by MNE's own interactive topomap updater.
+            from mne.viz import topomap as mne_topomap
+
+            sphere = mne_topomap._check_sphere(None, self.raw.info)
+            (
+                self.topo_image,
+                _,
+                self.topo_interp,
+            ) = mne_topomap._plot_topomap(
+                data_pt,
+                self.raw.info,
+                axes=self.topo_ax,
+                show=False,
+                sensors=True,
+                contours=0,
+                extrapolate="local",
+                cmap="RdBu_r",
+                vmin=-self.vlim_pt,
+                vmax=self.vlim_pt,
+                sphere=sphere,
+            )
+        except (AttributeError, TypeError) as error:
+            warnings.warn(
+                "MNE's reusable topomap interpolator is unavailable; "
+                "falling back to full topomap redraws. "
+                f"Original error: {error}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            self.topo_interp = None
+            self._plot_topomap_public(data_pt)
+
+        self.topo_title = self.topo_ax.set_title(title)
+        self.topo_fig.suptitle(
+            f"CTF MEG; fixed scale +/-{self.vlim_pt:.3g} pT"
+        )
+        self.topo_overlay_artists = sorted(
+            [
+                *self.topo_ax.lines,
+                *self.topo_ax.collections,
+                *self.topo_ax.patches,
+            ],
+            key=lambda artist: artist.get_zorder(),
+        )
+
+        self.use_topo_blit = (
+            self.topo_interp is not None
+            and self.topo_fig.canvas.supports_blit
+        )
+        if self.use_topo_blit:
+            self.topo_image.set_animated(True)
+            self.topo_title.set_animated(True)
+            self._connect(
+                self.topo_fig.canvas,
+                "draw_event",
+                self._on_topo_draw,
+            )
+        # This initial draw lays out constrained axes and establishes the
+        # background. The draw callback restores animated artists afterward.
+        self.topo_fig.canvas.draw()
+
+    def _paint_topomap_artists(self, *, restore: bool) -> None:
+        """Draw the changing image plus overlays in their visual order."""
+        canvas = self.topo_fig.canvas
+        if restore:
+            canvas.restore_region(self.topo_background)
+        self.topo_ax.draw_artist(self.topo_image)
+        # The image covers the cached sensor and outline pixels, so paint
+        # those artists again before painting the dynamic title.
+        for artist in self.topo_overlay_artists:
+            self.topo_ax.draw_artist(artist)
+        self.topo_ax.draw_artist(self.topo_title)
+        canvas.blit(self.topo_fig.bbox)
+
+    def _on_topo_draw(self, event) -> None:
+        """Refresh the topomap background after a resize or full redraw."""
+        if not self.use_topo_blit or event.canvas is not self.topo_fig.canvas:
+            return
+        self.topo_background = event.canvas.copy_from_bbox(self.topo_fig.bbox)
+        self._paint_topomap_artists(restore=False)
+
+    def _draw_topomap_artists(self) -> None:
+        """Update the topomap canvas without rebuilding static artists."""
+        if self.use_topo_blit and self.topo_background is not None:
+            self._paint_topomap_artists(restore=True)
+        else:
+            self.topo_fig.canvas.draw_idle()
 
     def time_to_sample(self, time_relative: float) -> tuple[float, int]:
         """Clip a relative time and convert it to a matrix column."""
@@ -201,7 +371,7 @@ class LinkedTopomap:
         cursor_time = self.raw.first_time + time_relative
         if self.time_cursor is not None:
             self.time_cursor.set_xdata([cursor_time, cursor_time])
-            self.raw_fig.canvas.draw_idle()
+            self._draw_cursor()
 
         # This assertion guards against accidental transposition or aliasing.
         np.testing.assert_array_equal(
@@ -209,26 +379,18 @@ class LinkedTopomap:
             self.display_data_pt[:, sample],
         )
 
-        self.topo_ax.clear()
-        mne.viz.plot_topomap(
-            data_pt,
-            self.raw.info,
-            axes=self.topo_ax,
-            show=False,
-            sensors=True,
-            contours=0,
-            extrapolate="local",
-            cmap="RdBu_r",
-            vlim=(-self.vlim_pt, self.vlim_pt),
-        )
-        mode = "channel-centered" if self.remove_dc else "literal matrix"
-        self.topo_ax.set_title(
-            f"t = {time_relative:.3f} s, sample = {sample}\n"
-            f"grade {self.raw.compensation_grade}, {mode}"
-        )
-        self.topo_fig.suptitle(f"CTF MEG; fixed scale +/-{self.vlim_pt:.3g} pT")
-        self.topo_fig.canvas.draw_idle()
-        self.topo_fig.canvas.flush_events()
+        title = self._topomap_title(time_relative, sample)
+        if self.topo_image is None:
+            self._initialize_topomap(data_pt, title)
+        elif self.topo_interp is not None:
+            interpolated = self.topo_interp.set_values(data_pt)()
+            self.topo_image.set_data(interpolated)
+            self.topo_title.set_text(title)
+            self._draw_topomap_artists()
+        else:
+            self._plot_topomap_public(data_pt)
+            self.topo_title = self.topo_ax.set_title(title)
+            self.topo_fig.canvas.draw_idle()
 
         self.last_draw = DrawState(time_relative, sample, data_pt)
         peak = self.raw.ch_names[int(np.argmax(np.abs(data_pt)))]
@@ -257,8 +419,9 @@ class LinkedTopomap:
 
     def close(self) -> None:
         """Disconnect callbacks and close figures."""
-        if self.raw_fig is not None and self.callback_id is not None:
-            self.raw_fig.canvas.mpl_disconnect(self.callback_id)
+        for canvas, callback_id in self.callback_ids:
+            canvas.mpl_disconnect(callback_id)
+        self.callback_ids.clear()
         for fig in (self.raw_fig, self.topo_fig):
             if fig is not None:
                 plt.close(fig)
@@ -277,6 +440,15 @@ def test_temporal_linking(viewer: LinkedTopomap) -> None:
 
     rendered_columns = []
     rendered_frames = []
+    click_durations_ms = []
+    initial_image = viewer.topo_image
+    initial_interp = viewer.topo_interp
+    initial_artist_count = len(viewer.topo_ax.get_children())
+
+    # Exercise draw-event handlers before testing clicks. Interactive browser
+    # navigation and window resizes use this same cache-refresh path.
+    viewer.raw_fig.canvas.draw()
+    viewer.topo_fig.canvas.draw()
     for requested_time in requested_times:
         browser_x = float(viewer.raw.first_time + requested_time)
         event = SimpleNamespace(
@@ -284,7 +456,9 @@ def test_temporal_linking(viewer: LinkedTopomap) -> None:
             inaxes=viewer.raw_fig.mne.ax_main,
             xdata=browser_x,
         )
+        start = perf_counter()
         viewer.on_browser_click(event)
+        click_durations_ms.append((perf_counter() - start) * 1_000)
 
         state = viewer.last_draw
         if state is None:
@@ -321,10 +495,19 @@ def test_temporal_linking(viewer: LinkedTopomap) -> None:
                 f"{viewer.topo_ax.get_title()!r}"
             )
 
-        # Force an Agg-compatible render and retain its RGBA pixels. This
-        # verifies that changing matrix columns produces a visible update, not
-        # merely a change in callback bookkeeping.
-        viewer.topo_fig.canvas.draw()
+        if viewer.topo_interp is not None:
+            if viewer.topo_image is not initial_image:
+                raise AssertionError("Topomap image was rebuilt during a click")
+            if viewer.topo_interp is not initial_interp:
+                raise AssertionError("Topomap interpolator was not reused")
+            if len(viewer.topo_ax.get_children()) != initial_artist_count:
+                raise AssertionError("Topomap artist count grew during clicks")
+
+        # Retain the already-rendered fast-path pixels. Calling canvas.draw()
+        # here would hide regressions that only update callback bookkeeping.
+        # The compatibility fallback has no blitted frame, so render it now.
+        if not viewer.use_topo_blit:
+            viewer.topo_fig.canvas.draw()
         frame = np.asarray(viewer.topo_fig.canvas.buffer_rgba()).copy()
         rendered_columns.append(state.data_pt)
         rendered_frames.append(frame)
@@ -343,9 +526,16 @@ def test_temporal_linking(viewer: LinkedTopomap) -> None:
         for frame in rendered_frames[1:]
     ):
         raise AssertionError("All tested rendered topomap frames were identical")
+    # A conventional redraw must reproduce the latest blitted frame exactly;
+    # this also validates cached sensor/head-outline layering.
+    viewer.topo_fig.canvas.draw()
+    full_frame = np.asarray(viewer.topo_fig.canvas.buffer_rgba()).copy()
+    np.testing.assert_array_equal(rendered_frames[-1], full_frame)
+    median_ms = float(np.median(click_durations_ms))
     print(
         f"[test] Temporal linking passed for {len(requested_times)} times; "
-        "the matrix columns and rendered canvas pixels both changed."
+        "the matrix columns and rendered canvas pixels both changed. "
+        f"Median click render: {median_ms:.1f} ms."
     )
 
 
@@ -405,7 +595,9 @@ def parse_args() -> argparse.Namespace:
     )
     args = parser.parse_args()
     if args.dataset_option is not None and args.dataset_positional is not None:
-        parser.error("provide the dataset either positionally or with --dataset, not both")
+        parser.error(
+            "provide the dataset either positionally or with --dataset, not both"
+        )
     args.dataset = (
         args.dataset_option
         if args.dataset_option is not None
