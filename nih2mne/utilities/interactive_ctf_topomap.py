@@ -10,6 +10,8 @@ By default one channel-centered matrix is constructed and supplied unchanged
 to both the raw browser and topomap. This empty-room recording has channel
 offsets much larger than its temporal variation. Pass ``--keep-dc`` to use the
 literal matrix in both views, or ``--vlim-pt`` to set their shared scale.
+Pass ``--artifact-projector`` to append the signed SSP projection amplitude
+as a ``misc`` channel named ``DOOR_SSP_PT`` in the raw browser.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ import numpy as np
 DEFAULT_DATASET = Path(
     "/fast2/EMPTY/20260916/MEG_EmptyRoom_20260916_001.ds"
 )
+ARTIFACT_CHANNEL_NAME = "DOOR_SSP_PT"
 
 
 def prepare_raw(
@@ -85,6 +88,85 @@ def prepare_raw(
     return raw
 
 
+def prepare_display_data(
+    raw: mne.io.BaseRaw,
+    *,
+    remove_dc: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return the matrix displayed by the browser and its channel offsets."""
+    data_t = raw.get_data()
+    if remove_dc:
+        channel_dc_t = data_t.mean(axis=1, keepdims=True)
+        data_t = data_t - channel_dc_t
+    else:
+        channel_dc_t = np.zeros((len(raw.ch_names), 1))
+    return data_t, channel_dc_t
+
+
+def artifact_projection_timeseries(
+    data_t: np.ndarray,
+    data_ch_names: list[str],
+    projector: mne.Projection,
+) -> np.ndarray:
+    """Project a channel-by-time matrix onto one SSP vector and return pT."""
+    data_t = np.asarray(data_t, dtype=float)
+    projector_data = np.asarray(projector["data"]["data"], dtype=float)
+    projector_names = list(projector["data"]["col_names"])
+    if data_t.ndim != 2 or data_t.shape[0] != len(data_ch_names):
+        raise ValueError("data shape does not match its channel-name list")
+    if projector_data.shape != (1, len(projector_names)):
+        raise ValueError(
+            "artifact projector must contain exactly one spatial component"
+        )
+    if len(set(data_ch_names)) != len(data_ch_names):
+        raise ValueError("data channel names are not unique")
+    lookup = {name: index for index, name in enumerate(data_ch_names)}
+    missing = [name for name in projector_names if name not in lookup]
+    if missing:
+        raise ValueError(
+            f"data are missing {len(missing)} projector channels: {missing[:5]}"
+        )
+    vector = projector_data[0]
+    norm = np.linalg.norm(vector)
+    if not np.isfinite(norm) or norm == 0:
+        raise ValueError("artifact projector has invalid or zero norm")
+    aligned = data_t[[lookup[name] for name in projector_names]]
+    return ((vector / norm) @ aligned) * 1e12
+
+
+def append_artifact_channel(
+    raw: mne.io.BaseRaw,
+    display_data_t: np.ndarray,
+    projector: mne.Projection,
+    *,
+    channel_name: str = ARTIFACT_CHANNEL_NAME,
+) -> tuple[mne.io.BaseRaw, np.ndarray]:
+    """Return a browser Raw with a signed SSP-amplitude misc channel."""
+    if channel_name in raw.ch_names:
+        raise ValueError(f"artifact channel already exists: {channel_name}")
+    score_pt = artifact_projection_timeseries(
+        display_data_t,
+        raw.ch_names,
+        projector,
+    )
+    browser_raw = raw.copy()
+    browser_raw._data = display_data_t.copy()
+    artifact_info = mne.create_info(
+        [channel_name],
+        raw.info["sfreq"],
+        ch_types=["misc"],
+    )
+    artifact_raw = mne.io.RawArray(
+        score_pt[np.newaxis],
+        artifact_info,
+        first_samp=raw.first_samp,
+        verbose="ERROR",
+    )
+    artifact_raw.set_meas_date(raw.info["meas_date"])
+    browser_raw.add_channels([artifact_raw], force_update_info=True)
+    return browser_raw, score_pt
+
+
 @dataclass
 class DrawState:
     """Most recently rendered time and data, also used by the link test."""
@@ -103,19 +185,17 @@ class LinkedTopomap:
         *,
         remove_dc: bool = True,
         vlim_pt: float | None = None,
+        artifact_projector: mne.Projection | None = None,
+        artifact_vlim_pt: float | None = None,
     ):
         self.raw = raw
         self.remove_dc = remove_dc
 
-        self.data_t = raw.get_data()
-        if remove_dc:
-            # Match the raw browser's default intent: show variation rather
-            # than the much larger per-channel static offsets.
-            self.channel_dc_t = self.data_t.mean(axis=1, keepdims=True)
-            display_t = self.data_t - self.channel_dc_t
-        else:
-            self.channel_dc_t = np.zeros((len(raw.ch_names), 1))
-            display_t = self.data_t
+        display_t, self.channel_dc_t = prepare_display_data(
+            raw,
+            remove_dc=remove_dc,
+        )
+        self.data_t = display_t + self.channel_dc_t
 
         # MNE represents the CTF axial gradiometers as "mag" in tesla.
         self.display_data_t = display_t
@@ -124,12 +204,40 @@ class LinkedTopomap:
         # Give the browser the exact same matrix used by plot_topomap. This is
         # a separate Raw object so the input Raw remains untouched. No further
         # browser-side DC removal or projection is permitted in create_figures.
-        self.browser_raw = raw.copy()
-        self.browser_raw._data = self.display_data_t.copy()
+        self.artifact_score_pt = None
+        if artifact_projector is None:
+            self.browser_raw = raw.copy()
+            self.browser_raw._data = self.display_data_t.copy()
+        else:
+            self.browser_raw, self.artifact_score_pt = append_artifact_channel(
+                raw,
+                self.display_data_t,
+                artifact_projector,
+            )
         np.testing.assert_array_equal(
-            self.browser_raw.get_data(),
+            self.browser_raw.get_data(picks="mag"),
             self.display_data_t,
         )
+
+        if self.artifact_score_pt is None:
+            self.artifact_vlim_pt = None
+        elif artifact_vlim_pt is None:
+            stride = max(1, self.artifact_score_pt.size // 100_000)
+            self.artifact_vlim_pt = float(
+                np.nanpercentile(
+                    np.abs(self.artifact_score_pt[::stride]),
+                    99.5,
+                )
+            )
+        else:
+            self.artifact_vlim_pt = float(artifact_vlim_pt)
+        if self.artifact_vlim_pt is not None and (
+            not np.isfinite(self.artifact_vlim_pt)
+            or self.artifact_vlim_pt <= 0
+        ):
+            raise RuntimeError(
+                f"Invalid artifact scale: {self.artifact_vlim_pt} pT"
+            )
 
         if vlim_pt is None:
             stride = max(1, self.display_data_pt.shape[1] // 100_000)
@@ -166,15 +274,20 @@ class LinkedTopomap:
     def create_figures(self, *, show: bool = True) -> None:
         """Create both figures and connect the browser click handler."""
         mne.viz.set_browser_backend("matplotlib")
+        scalings = {"mag": self.vlim_pt * 1e-12}
+        if self.artifact_vlim_pt is not None:
+            # The misc channel is intentionally stored directly in pT.
+            scalings["misc"] = self.artifact_vlim_pt
         self.raw_fig = self.browser_raw.plot(
             butterfly=True,
             # The browser object already contains the final display matrix.
             remove_dc=False,
             proj=False,
-            scalings={"mag": self.vlim_pt * 1e-12},
+            scalings=scalings,
             clipping=None,
             title=f"Shared matrix; scale +/-{self.vlim_pt:g} pT",
             block=False,
+            duration=60,
             show=show,
         )
         self.topo_fig, self.topo_ax = plt.subplots(
@@ -481,6 +594,7 @@ def test_temporal_linking(viewer: LinkedTopomap) -> None:
         np.testing.assert_array_equal(
             state.data_pt,
             viewer.browser_raw.get_data(
+                picks="mag",
                 start=expected_sample,
                 stop=expected_sample + 1,
             )[:, 0]
@@ -577,6 +691,23 @@ def parse_args() -> argparse.Namespace:
         help="Plot literal matrix values instead of channel-centered values",
     )
     parser.add_argument(
+        "--artifact-projector",
+        type=Path,
+        default=None,
+        metavar="PROJ_FIF",
+        help=(
+            "One-component SSP file; append its signed projection amplitude "
+            "as the DOOR_SSP_PT misc channel"
+        ),
+    )
+    parser.add_argument(
+        "--artifact-vlim-pt",
+        type=float,
+        default=None,
+        metavar="PT",
+        help="Optional display scale for the SSP projection misc channel",
+    )
+    parser.add_argument(
         "--duration",
         type=float,
         default=None,
@@ -627,10 +758,29 @@ def main() -> None:
         duration=duration,
         n_jobs=args.n_jobs,
     )
+    artifact_projector = None
+    if args.artifact_projector is not None:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=(
+                    "This filename .* does not conform to MNE naming "
+                    "conventions"
+                ),
+            )
+            projectors = mne.read_proj(args.artifact_projector)
+        if len(projectors) != 1:
+            raise ValueError(
+                "artifact projector file must contain exactly one component; "
+                f"got {len(projectors)}"
+            )
+        artifact_projector = projectors[0]
     viewer = LinkedTopomap(
         raw,
         remove_dc=not args.keep_dc,
         vlim_pt=args.vlim_pt,
+        artifact_projector=artifact_projector,
+        artifact_vlim_pt=args.artifact_vlim_pt,
     )
     print(
         f"Prepared {len(raw.ch_names)} channels x {raw.n_times} samples; "
@@ -638,6 +788,13 @@ def main() -> None:
         f"compensation grade={raw.compensation_grade}; "
         f"topomap vlim=+/-{viewer.vlim_pt:.4g} pT"
     )
+    if viewer.artifact_score_pt is not None:
+        print(
+            f"Added {ARTIFACT_CHANNEL_NAME} misc channel; "
+            f"browser scale=+/-{viewer.artifact_vlim_pt:.4g} pT; "
+            f"range={viewer.artifact_score_pt.min():+.4g} to "
+            f"{viewer.artifact_score_pt.max():+.4g} pT"
+        )
 
     if args.test_linking:
         viewer.create_figures(show=False)

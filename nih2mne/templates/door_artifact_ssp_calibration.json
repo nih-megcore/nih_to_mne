@@ -1,0 +1,111 @@
+{
+  "accepted_threshold_pt": null,
+  "candidate_datasets": 40,
+  "filter_edge_guard_s": 16.5,
+  "final": {
+    "projector": {
+      "explained_variance": 0.81153133867463,
+      "pooled_shape": [
+        269,
+        9000
+      ],
+      "template_spatial_correlation": 0.9116858501979077
+    },
+    "scan": {
+      "failed_datasets": 1,
+      "failures": [
+        {
+          "dataset": "/fast2/EMPTY/20260331/MEG_EmptyRoom_20260331_002.ds",
+          "error": "The number of samples is not an even multiple of the trial size",
+          "error_type": "RuntimeError"
+        }
+      ],
+      "interior_max_pt": {
+        "max": 49.24647934315831,
+        "median": 8.260611443042482,
+        "min": 1.6980984195682305,
+        "p90": 35.85406377051945,
+        "p95": 45.783771788972565
+      },
+      "successful_datasets": 39
+    },
+    "training_windows": [
+      {
+        "dataset": "/fast2/EMPTY/20260312/MEG_EmptyRoom_20260312_001.ds",
+        "duration": 6.0,
+        "onset": 32.483333333333334,
+        "seed_score_pt": -47.668098163684974
+      },
+      {
+        "dataset": "/fast2/EMPTY/20260901/MEG_EmptyRoom_20260901_001.ds",
+        "duration": 6.0,
+        "onset": 63.88,
+        "seed_score_pt": -46.927512250475566
+      },
+      {
+        "dataset": "/fast2/EMPTY/20260929/MEG_EmptyRoom_20260929_001.ds",
+        "duration": 6.0,
+        "onset": 70.01333333333334,
+        "seed_score_pt": -45.32986492752506
+      },
+      {
+        "dataset": "/fast2/EMPTY/20260909/MEG_EmptyRoom_20260909_001.ds",
+        "duration": 6.0,
+        "onset": 25.366666666666667,
+        "seed_score_pt": 33.618577773026516
+      },
+      {
+        "dataset": "/fast2/EMPTY/20260309/MEG_EmptyRoom6m_20260309_002.ds",
+        "duration": 6.0,
+        "onset": 231.65,
+        "seed_score_pt": -27.097462441222778
+      }
+    ]
+  },
+  "outputs": {
+    "final_projector": "templates/door_artifact_final-proj.fif",
+    "final_scan": "templates/door_artifact_final_scan.csv",
+    "metadata": "templates/door_artifact_ssp_calibration.json",
+    "seed_projector": "templates/door_artifact_seed-proj.fif",
+    "seed_scan": "templates/door_artifact_seed_scan.csv"
+  },
+  "processing": {
+    "compensation_grade": 0,
+    "highpass": 0.1,
+    "lowpass": 40.0,
+    "n_jobs": 1,
+    "remove_dc": true,
+    "resample_sfreq": 300.0
+  },
+  "root": "/fast2/EMPTY",
+  "seed": {
+    "dataset": "/fast2/EMPTY/20260923/MEG_EmptyRoom_20260923_001.ds",
+    "explained_variance": 0.8859713946648281,
+    "onset_s": 78.76333333333334,
+    "scan": {
+      "failed_datasets": 1,
+      "failures": [
+        {
+          "dataset": "/fast2/EMPTY/20260331/MEG_EmptyRoom_20260331_002.ds",
+          "error": "The number of samples is not an even multiple of the trial size",
+          "error_type": "RuntimeError"
+        }
+      ],
+      "interior_max_pt": {
+        "max": 50.48492080257917,
+        "median": 8.941127279606915,
+        "min": 1.7473594148261808,
+        "p90": 35.96083520392626,
+        "p95": 47.00157084179651
+      },
+      "successful_datasets": 39
+    },
+    "template_spatial_correlation": 0.9201640779117285,
+    "window_shape": [
+      269,
+      1800
+    ]
+  },
+  "top_n": 5,
+  "window_duration_s": 6.0
+}

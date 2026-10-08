@@ -1,0 +1,45 @@
+{
+  "epoch": {
+    "baseline": null,
+    "reject_by_annotation": false,
+    "tmax_s": 0.5,
+    "tmin_s": -0.25
+  },
+  "event_filename": "door_evts.npy",
+  "inputs": {
+    "empty_event_files": 30,
+    "event_files": 40,
+    "nonempty_event_files": 10
+  },
+  "kind": "door_artifact_third_order_ssp",
+  "outputs": {
+    "epoch_audit": "/home/jstout/src/SAM_NIH2MNE_INTEGRATION/nih_to_mne/nih2mne/templates/door_artifact_final-proj_3ord_epochs.csv",
+    "metadata": "/home/jstout/src/SAM_NIH2MNE_INTEGRATION/nih_to_mne/nih2mne/templates/door_artifact_final-proj_3ord.json",
+    "projector": "/home/jstout/src/SAM_NIH2MNE_INTEGRATION/nih_to_mne/nih2mne/templates/door_artifact_final-proj_3ord.fif"
+  },
+  "processing": {
+    "compensation_grade": 3,
+    "highpass": 0.1,
+    "lowpass": 40.0,
+    "n_jobs": 1,
+    "remove_dc": true,
+    "resample_sfreq": 300.0
+  },
+  "projector": {
+    "channels": 269,
+    "components": 1,
+    "description": "door-artifact-final-3ord-PCA-01",
+    "explained_variance": 0.9996983019454856,
+    "polarity_reference_correlation": 0.9975125788083596,
+    "post_projection_max_component_pt": 3.5321641461723414e-13,
+    "selected_component_rms_pt": 143.2741337731713,
+    "total_variance_reduction": 0.999698301945486
+  },
+  "root": "/fast2/EMPTY",
+  "selection": {
+    "burst_gap_s": 1.5,
+    "candidate_epochs": 370,
+    "criterion": "maximum full-epoch grade-3 RMS",
+    "selected_epochs": 41
+  }
+}
