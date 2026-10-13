@@ -5,6 +5,8 @@ import numpy as np
 import pytest
 
 from nih2mne.utilities.door_ssp_classifier import (
+    DEFAULT_3ORD_PROJECTOR,
+    DEFAULT_PROJECTOR,
     EventEpochRecord,
     ProcessingConfig,
     apply_projector,
@@ -17,10 +19,12 @@ from nih2mne.utilities.door_ssp_classifier import (
     find_projected_matches,
     orient_projector,
     orient_projector_to_event_codes,
+    parse_args,
     projected_matches_to_annotations,
     projected_pt_score,
     plot_grade3_epoch,
     read_selected_epoch_records,
+    resolve_classification_projector,
     select_training_windows,
     strongest_epoch_indices,
     summarize_score,
@@ -58,6 +62,23 @@ def test_projected_pt_score_aligns_channels_and_preserves_sign():
     data = np.array([[2e-12], [3e-12], [1e-12]])
     score = projected_pt_score(data, ["b", "c", "a"], projector)
     np.testing.assert_allclose(score, [1.0])
+
+
+def test_projected_pt_score_omits_missing_channels_and_renormalizes():
+    projector = _projector([3.0, 4.0, 12.0])
+    data = np.array([[8e-12], [6e-12]])
+    with pytest.warns(RuntimeWarning, match="missing 1 projector channels.*c"):
+        score = projected_pt_score(data, ["b", "a"], projector)
+    np.testing.assert_allclose(score, [10.0])
+
+
+def test_projected_pt_score_rejects_no_usable_projector_weight():
+    projector = _projector([1.0, 0.0], names=("a", "b"))
+    with pytest.raises(ValueError, match="none of the projector channels"):
+        projected_pt_score(np.ones((1, 2)), ["missing"], projector)
+    with pytest.warns(RuntimeWarning, match="missing 1 projector channels"):
+        with pytest.raises(ValueError, match="zero on the available"):
+            projected_pt_score(np.ones((1, 2)), ["b"], projector)
 
 
 def test_artifact_projection_can_be_appended_as_misc_channel():
@@ -293,14 +314,163 @@ def test_find_projected_matches_applies_threshold_edges_and_codes():
         min_distance=0.5,
         prominence_pt=1.0,
         edge_guard_s=0.5,
+        min_duration=0.1,
     )
-    np.testing.assert_array_equal(result.peak_indices, [20, 35])
+    np.testing.assert_array_equal(result.center_indices, [20, 35])
+    np.testing.assert_array_equal(result.peak_indices, result.center_indices)
     np.testing.assert_array_equal(result.event_codes, [2, 1])
     annotations = projected_matches_to_annotations(result)
+    np.testing.assert_allclose(annotations.onset, [2.0, 3.5])
+    np.testing.assert_allclose(annotations.duration, [0.1, 0.1])
     assert annotations.description.tolist() == [
         "door_artifact_negative",
         "door_artifact_positive",
     ]
+
+
+def test_projected_matches_merge_flicker_and_split_baseline_returns():
+    sfreq = 100.0
+    score = np.zeros(1200)
+    score[100:180] = -20.0
+    score[190:300] = -20.0
+    score[350:550] = 30.0
+    score[695:900] = -25.0
+    result = find_projected_matches(
+        score,
+        np.arange(len(score)) / sfreq,
+        sfreq,
+        threshold_pt=10.0,
+        min_distance=0.1,
+        prominence_pt=1.0,
+        edge_guard_s=0.0,
+        baseline_z=3.0,
+        baseline_dwell=0.25,
+        min_duration=1.0,
+    )
+    np.testing.assert_array_equal(result.center_indices, [199, 449, 797])
+    np.testing.assert_allclose(result.episode_onsets, [1.0, 3.5, 6.95])
+    np.testing.assert_allclose(result.durations, [2.0, 2.0, 2.05])
+    np.testing.assert_array_equal(result.event_codes, [2, 1, 2])
+
+
+def test_projected_matches_keep_episodes_clipped_to_safe_edges():
+    sfreq = 10.0
+    score = np.zeros(100)
+    score[10:20] = 20.0
+    score[80:90] = -20.0
+    result = find_projected_matches(
+        score,
+        np.arange(len(score)) / sfreq,
+        sfreq,
+        threshold_pt=10.0,
+        min_distance=0.1,
+        prominence_pt=1.0,
+        edge_guard_s=1.0,
+        min_duration=0.5,
+    )
+    np.testing.assert_allclose(result.episode_onsets, [1.0, 8.0])
+    np.testing.assert_allclose(result.durations, [1.0, 1.0])
+
+
+def test_projected_matches_allow_a_zero_width_quiet_baseline():
+    score = np.zeros(100)
+    result = find_projected_matches(
+        score,
+        np.arange(len(score)) / 10.0,
+        10.0,
+        threshold_pt=10.0,
+        min_distance=0.5,
+        prominence_pt=0.0,
+        edge_guard_s=1.0,
+    )
+    assert len(result.onsets) == 0
+    assert result.baseline_center_pt == 0.0
+    assert result.baseline_scale_pt == 0.0
+
+
+def test_projected_matches_require_three_second_episodes_by_default():
+    sfreq = 100.0
+    score = np.zeros(1500)
+    score[100:300] = -20.0
+    score[500:900] = 30.0
+    result = find_projected_matches(
+        score,
+        np.arange(len(score)) / sfreq,
+        sfreq,
+        threshold_pt=10.0,
+        min_distance=0.5,
+        prominence_pt=0.0,
+        edge_guard_s=0.0,
+    )
+    np.testing.assert_array_equal(result.center_indices, [699])
+    np.testing.assert_allclose(result.durations, [4.0])
+
+
+@pytest.mark.parametrize(
+    ("baseline_z", "baseline_dwell"),
+    [(0.0, 0.25), (3.0, 0.0)],
+)
+def test_projected_matches_reject_invalid_baseline_settings(
+    baseline_z,
+    baseline_dwell,
+):
+    with pytest.raises(ValueError, match="baseline"):
+        find_projected_matches(
+            np.zeros(100),
+            np.arange(100) / 10.0,
+            10.0,
+            threshold_pt=10.0,
+            min_distance=0.5,
+            prominence_pt=0.0,
+            edge_guard_s=1.0,
+            baseline_z=baseline_z,
+            baseline_dwell=baseline_dwell,
+        )
+
+
+def test_classify_cli_accepts_baseline_and_compensation_options(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "door_ssp_classifier.py",
+            "classify",
+            "--dataset",
+            "sample.ds",
+            "--projector",
+            "door-proj.fif",
+            "--threshold-pt",
+            "10",
+            "--baseline-z",
+            "4",
+            "--baseline-dwell",
+            "0.5",
+            "--compensation-grade",
+            "3",
+        ],
+    )
+    args = parse_args()
+    assert args.baseline_z == 4.0
+    assert args.baseline_dwell == 0.5
+    assert args.min_duration == 3.0
+    assert args.compensation_grade == 3
+
+
+@pytest.mark.parametrize(
+    ("grade", "expected"),
+    [(0, DEFAULT_PROJECTOR), (3, DEFAULT_3ORD_PROJECTOR)],
+)
+def test_classification_projector_defaults_follow_compensation_grade(
+    grade,
+    expected,
+):
+    assert resolve_classification_projector(None, grade) == expected
+
+
+def test_classification_projector_override_and_unsupported_grade():
+    override = Path("custom-proj.fif")
+    assert resolve_classification_projector(override, 2) == override
+    with pytest.raises(ValueError, match="no default projector.*grade 2"):
+        resolve_classification_projector(None, 2)
 
 
 def test_build_and_apply_projector_removes_component():

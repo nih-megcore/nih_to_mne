@@ -57,9 +57,15 @@ DEFAULT_TEMPLATE = PACKAGE_ROOT / "templates" / "door_artifact_template.fif"
 DEFAULT_OUTPUT_DIR = PACKAGE_ROOT / "templates"
 DEFAULT_WINDOW_DURATION = 6.0
 DEFAULT_TOP_N = 5
+DEFAULT_MIN_DURATION = 3.0
+DEFAULT_PROJECTOR = DEFAULT_OUTPUT_DIR / "door_artifact_final-proj.fif"
 DEFAULT_3ORD_PROJECTOR = (
     DEFAULT_OUTPUT_DIR / "door_artifact_final-proj_3ord.fif"
 )
+DEFAULT_CLASSIFICATION_PROJECTORS = {
+    0: DEFAULT_PROJECTOR,
+    3: DEFAULT_3ORD_PROJECTOR,
+}
 DEFAULT_3ORD_TMIN = -0.25
 DEFAULT_3ORD_TMAX = 0.50
 DEFAULT_BURST_GAP = 1.5
@@ -96,12 +102,21 @@ class TrainingWindow:
 
 @dataclass(frozen=True)
 class ProjectedMatchResult:
-    """Continuous projected-pT values and thresholded local maxima."""
+    """Continuous projected-pT values and baseline-delimited episodes."""
 
     score_pt: np.ndarray
-    peak_indices: np.ndarray
+    center_indices: np.ndarray
     onsets: np.ndarray
     event_codes: np.ndarray
+    episode_onsets: np.ndarray
+    durations: np.ndarray
+    baseline_center_pt: float
+    baseline_scale_pt: float
+
+    @property
+    def peak_indices(self) -> np.ndarray:
+        """Return center indices under the pre-episode API name."""
+        return self.center_indices
 
 
 @dataclass
@@ -413,10 +428,37 @@ def projected_pt_score(
     data_ch_names: list[str],
     projector: mne.Projection,
 ) -> np.ndarray:
-    """Return the signed amplitude along one SSP vector in pT."""
+    """Return projected pT, omitting and renormalizing unavailable channels."""
     vector, projector_names = projector_vector(projector)
-    aligned = align_data_to_template(data_t, data_ch_names, projector_names)
-    return (vector @ aligned) * 1e12
+    available_data_names = set(data_ch_names)
+    available_indices = np.asarray(
+        [
+            index
+            for index, name in enumerate(projector_names)
+            if name in available_data_names
+        ],
+        dtype=int,
+    )
+    missing = [name for name in projector_names if name not in available_data_names]
+    if len(available_indices) == 0:
+        raise ValueError("data contain none of the projector channels")
+    if missing:
+        preview = ", ".join(missing[:5])
+        warnings.warn(
+            f"data are missing {len(missing)} projector channels ({preview}); "
+            f"scoring with and renormalizing the remaining "
+            f"{len(available_indices)} channels",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    available_names = [projector_names[index] for index in available_indices]
+    aligned = align_data_to_template(data_t, data_ch_names, available_names)
+    available_vector = vector[available_indices]
+    available_norm = np.linalg.norm(available_vector)
+    if not np.isfinite(available_norm) or available_norm == 0:
+        raise ValueError("SSP vector is zero on the available data channels")
+    available_vector = available_vector / available_norm
+    return (available_vector @ aligned) * 1e12
 
 
 def build_projector_from_segments(
@@ -1180,35 +1222,129 @@ def find_projected_matches(
     min_distance: float,
     prominence_pt: float,
     edge_guard_s: float,
+    baseline_z: float = 3.0,
+    baseline_dwell: float = 0.25,
+    min_duration: float = DEFAULT_MIN_DURATION,
 ) -> ProjectedMatchResult:
-    """Find local projected-pT peaks above an explicit absolute threshold."""
-    if threshold_pt <= 0 or min_distance <= 0 or prominence_pt < 0:
+    """Find threshold-confirmed episodes delimited by a robust baseline."""
+    if (
+        threshold_pt <= 0
+        or min_distance <= 0
+        or prominence_pt < 0
+        or edge_guard_s < 0
+        or baseline_z <= 0
+        or baseline_dwell <= 0
+        or min_duration <= 0
+    ):
         raise ValueError(
-            "threshold and distance must be positive; prominence nonnegative"
+            "threshold, distance, baseline-z, baseline-dwell, and "
+            "min-duration must be positive; prominence and edge guard "
+            "must be nonnegative"
         )
+    if sfreq <= 0:
+        raise ValueError("sfreq must be positive")
     score_pt = np.asarray(score_pt, dtype=float)
     times = np.asarray(times, dtype=float)
+    if score_pt.ndim != 1 or times.shape != score_pt.shape:
+        raise ValueError(
+            "score and times must be equal-length one-dimensional arrays"
+        )
+    if len(score_pt) == 0:
+        raise ValueError("score and times must not be empty")
+    if not np.isfinite(score_pt).all() or not np.isfinite(times).all():
+        raise ValueError("score and times must contain only finite values")
+
+    valid = (times >= edge_guard_s) & (times <= times[-1] - edge_guard_s)
+    valid_indices = np.flatnonzero(valid)
+    if len(valid_indices) == 0:
+        raise ValueError("recording is too short for the configured edge guard")
+    valid_start = int(valid_indices[0])
+    valid_stop = int(valid_indices[-1]) + 1
+    valid_score = score_pt[valid]
+    baseline_center_pt = float(np.median(valid_score))
+    baseline_scale_pt = float(
+        1.4826 * np.median(np.abs(valid_score - baseline_center_pt))
+    )
+    baseline_half_width = baseline_z * baseline_scale_pt
+    in_baseline = np.abs(score_pt - baseline_center_pt) <= baseline_half_width
+
     values = np.abs(score_pt).copy()
-    values[(times < edge_guard_s) | (times > times[-1] - edge_guard_s)] = 0.0
-    peaks, _ = find_peaks(
+    values[~valid] = 0.0
+    candidate_peaks, _ = find_peaks(
         values,
         height=threshold_pt,
         distance=max(1, int(round(min_distance * sfreq))),
         prominence=prominence_pt,
     )
-    peaks = peaks.astype(int, copy=False)
+    candidate_peaks = candidate_peaks[valid[candidate_peaks]].astype(
+        int,
+        copy=False,
+    )
+
+    outside = ~in_baseline[valid_start:valid_stop]
+    changes = np.flatnonzero(np.diff(outside.astype(np.int8))) + 1
+    run_starts = np.r_[0, changes]
+    run_stops = np.r_[changes, len(outside)]
+    excursion_runs = [
+        [valid_start + int(start), valid_start + int(stop)]
+        for start, stop in zip(run_starts, run_stops)
+        if outside[start]
+    ]
+
+    dwell_samples = max(1, int(np.ceil(baseline_dwell * sfreq)))
+    min_duration_samples = max(1, int(np.ceil(min_duration * sfreq)))
+    merged_runs: list[list[int]] = []
+    for start, stop in excursion_runs:
+        if merged_runs and start - merged_runs[-1][1] < dwell_samples:
+            merged_runs[-1][1] = stop
+        else:
+            merged_runs.append([start, stop])
+
+    episodes = [
+        (start, stop)
+        for start, stop in merged_runs
+        if stop - start >= min_duration_samples
+        and np.any((candidate_peaks >= start) & (candidate_peaks < stop))
+    ]
+    episode_starts = np.asarray([start for start, _ in episodes], dtype=int)
+    episode_stops = np.asarray([stop for _, stop in episodes], dtype=int)
+    centers = np.asarray(
+        [(start + stop - 1) // 2 for start, stop in episodes],
+        dtype=int,
+    )
     return ProjectedMatchResult(
         score_pt=score_pt,
-        peak_indices=peaks,
-        onsets=times[peaks],
-        event_codes=np.where(score_pt[peaks] >= 0, 1, 2).astype(int),
+        center_indices=centers,
+        onsets=times[centers],
+        event_codes=np.where(score_pt[centers] >= 0, 1, 2).astype(int),
+        episode_onsets=times[episode_starts],
+        durations=(episode_stops - episode_starts) / sfreq,
+        baseline_center_pt=baseline_center_pt,
+        baseline_scale_pt=baseline_scale_pt,
     )
 
 
 def projected_matches_to_annotations(
     result: ProjectedMatchResult,
 ) -> mne.Annotations:
-    """Convert projected-pT matches to polarity-aware point annotations."""
+    """Convert projected-pT episodes to polarity-aware duration annotations."""
+    descriptions = np.where(
+        result.event_codes == EVENT_ID[POSITIVE_DESCRIPTION],
+        POSITIVE_DESCRIPTION,
+        NEGATIVE_DESCRIPTION,
+    )
+    return mne.Annotations(
+        onset=result.episode_onsets,
+        duration=result.durations,
+        description=descriptions,
+        orig_time=None,
+    )
+
+
+def projected_matches_to_event_annotations(
+    result: ProjectedMatchResult,
+) -> mne.Annotations:
+    """Convert episode midpoints to point annotations for event conversion."""
     descriptions = np.where(
         result.event_codes == EVENT_ID[POSITIVE_DESCRIPTION],
         POSITIVE_DESCRIPTION,
@@ -1361,22 +1497,44 @@ def run_calibration(args: argparse.Namespace) -> None:
     print("Calibration complete. No threshold was selected.", flush=True)
 
 
+def resolve_classification_projector(
+    projector: Path | None,
+    compensation_grade: int,
+) -> Path:
+    """Select an explicit projector or the packaged grade-specific default."""
+    if projector is not None:
+        return Path(projector)
+    try:
+        return DEFAULT_CLASSIFICATION_PROJECTORS[compensation_grade]
+    except KeyError:
+        grades = ", ".join(str(grade) for grade in DEFAULT_CLASSIFICATION_PROJECTORS)
+        raise ValueError(
+            "no default projector is available for compensation grade "
+            f"{compensation_grade}; use --projector explicitly "
+            f"(packaged defaults exist for grades {grades})"
+        ) from None
+
+
 def run_classification(args: argparse.Namespace) -> None:
-    """Apply an explicit projected-pT threshold to one dataset."""
+    """Find baseline-delimited projected-pT episodes in one dataset."""
     config = ProcessingConfig(
         resample_sfreq=args.resample,
         highpass=args.highpass,
         lowpass=args.lowpass,
-        compensation_grade=0,
+        compensation_grade=args.compensation_grade,
         remove_dc=True,
         n_jobs=args.n_jobs,
+    )
+    projector_path = resolve_classification_projector(
+        args.projector,
+        args.compensation_grade,
     )
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
             message="This filename .* does not conform to MNE naming conventions",
         )
-        projectors = mne.read_proj(args.projector)
+        projectors = mne.read_proj(projector_path)
     if len(projectors) != 1:
         raise ValueError(f"expected one projector, got {len(projectors)}")
     raw, data_t = preprocess_dataset(args.dataset, config)
@@ -1389,9 +1547,13 @@ def run_classification(args: argparse.Namespace) -> None:
         min_distance=args.min_distance,
         prominence_pt=args.prominence_pt,
         edge_guard_s=filter_edge_guard_seconds(config),
+        baseline_z=args.baseline_z,
+        baseline_dwell=args.baseline_dwell,
+        min_duration=args.min_duration,
     )
     annotations = projected_matches_to_annotations(result)
-    events = annotations_to_source_events(args.dataset, annotations)
+    event_annotations = projected_matches_to_event_annotations(result)
+    events = annotations_to_source_events(args.dataset, event_annotations)
     events_path, annotations_path = output_paths(args.dataset, args.output_dir)
     write_match_outputs(
         events,
@@ -1400,13 +1562,28 @@ def run_classification(args: argparse.Namespace) -> None:
         annotations_path,
         overwrite=args.overwrite,
     )
-    print("onset_s   projected_pT   code")
-    for peak, onset, code in zip(
-        result.peak_indices,
+    print(
+        f"Projector: {projector_path} "
+        f"(compensation grade {args.compensation_grade})"
+    )
+    print(
+        f"Baseline: {result.baseline_center_pt:+.6f} pT, "
+        f"robust sigma={result.baseline_scale_pt:.6f} pT, "
+        f"band=+/-{args.baseline_z * result.baseline_scale_pt:.6f} pT"
+    )
+    print("start_s   center_s   end_s     duration_s  midpoint_pT   code")
+    for center_index, start, center, duration, code in zip(
+        result.center_indices,
+        result.episode_onsets,
         result.onsets,
+        result.durations,
         result.event_codes,
     ):
-        print(f"{onset:8.3f}  {result.score_pt[peak]:+12.6f}  {code}")
+        print(
+            f"{start:8.3f}  {center:8.3f}  {start + duration:8.3f}  "
+            f"{duration:10.3f}  "
+            f"{result.score_pt[center_index]:+11.6f}  {code}"
+        )
     print(f"Wrote {events_path}")
     print(f"Wrote {annotations_path}")
 
@@ -1453,10 +1630,27 @@ def parse_args() -> argparse.Namespace:
         help="Classify one dataset with an explicit projected-pT threshold",
     )
     classify.add_argument("--dataset", type=Path, required=True)
-    classify.add_argument("--projector", type=Path, required=True)
+    classify.add_argument(
+        "--projector",
+        type=Path,
+        default=None,
+        help=(
+            "Optional projector override; defaults to the packaged grade-0 "
+            "or grade-3 projector selected by --compensation-grade"
+        ),
+    )
     classify.add_argument("--threshold-pt", type=float, required=True)
     classify.add_argument("--min-distance", type=float, default=0.5)
     classify.add_argument("--prominence-pt", type=float, default=0.0)
+    classify.add_argument("--baseline-z", type=float, default=3.0)
+    classify.add_argument("--baseline-dwell", type=float, default=0.25)
+    classify.add_argument(
+        "--min-duration",
+        type=float,
+        default=DEFAULT_MIN_DURATION,
+        help="Minimum baseline-delimited episode duration in seconds",
+    )
+    classify.add_argument("--compensation-grade", type=int, default=0)
     classify.add_argument("--output-dir", type=Path, default=None)
     classify.add_argument("--overwrite", action="store_true")
     _add_processing_arguments(classify)
