@@ -315,6 +315,11 @@ def test_surface_stc_artifact_tracks_and_loads_both_hemispheres(tmp_path):
 
 def test_artifact_entity_overrides_are_validated(tmp_path):
     template = _template(tmp_path)
+    fsaverage = template.artifact(
+        "stc", description="stim", space="fsaverage"
+    )
+    assert "space-fsaverage_desc-stim_stc" in fsaverage.path.name
+
     with pytest.raises(ValueError, match="unsupported entities"):
         template.artifact("stc", run="02", bogus="value")
     with pytest.raises(KeyError, match="unknown or unavailable"):

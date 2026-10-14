@@ -122,7 +122,7 @@ def test_build_gui_component_block_contains_expected_template_values(sample_entr
     block = build_gui_component_block(sample_entries)
 
     assert "# GUI entries >>" in block
-    assert "dataset_path = pathlib.Path(sys.argv[1])" in block
+    assert "dataset_path = pathlib.Path(sys.argv[1])" not in block
     assert "# GUI entries <<" in block
     assert "project = 'beamformer_test'" in block
     assert "epo_tmin = -0.25" in block
@@ -296,7 +296,23 @@ def test_write_script_via_dialog_writes_template_output(qapp, monkeypatch, tmp_p
     assert "conds_OI = ['rest', 'task']" in written_text
     assert "use_muscle_detection = True" in written_text
     assert "if use_muscle_detection:" in written_text
-    assert "_musc_annot = annotate_muscle_zscore" in written_text
+    assert "muscle_annotations, _ = annotate_muscle_zscore" in written_text
+
+
+def test_real_template_renders_as_direct_compilable_script(sample_entries):
+    script_text = render_beamformer_script(sample_entries)
+
+    compile(script_text, "generated_beamformer.py", "exec")
+    assert "from nih2mne.proc.megcore_utils import (" in script_text
+    assert "def main(" not in script_text
+    assert "if __name__ ==" not in script_text
+    assert "def git_blob_hash(" not in script_text
+    assert "def normalize_beamfilt_ori(" not in script_text
+    assert "template.artifact(\"stc\", description=condition)" in script_text
+    assert 'space="fsaverage"' in script_text
+    assert script_text.index("if len(sys.argv) != 2:") < script_text.index(
+        "primary = get_bids_path_from_fname"
+    )
 
 
 def test_script_save_path_uses_megcore_datproc_start_dir_and_bids_task(qapp):

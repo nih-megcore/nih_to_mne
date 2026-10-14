@@ -39,9 +39,12 @@ def slurm_context() -> tuple[int, str | None]:
     job_id = os.getenv("SLURM_JOB_ID")
     if not job_id:
         return -1, None
-    result = subprocess.run(
-        ["scontrol", "show", "job", job_id], capture_output=True, text=True
-    )
+    try:
+        result = subprocess.run(
+            ["scontrol", "show", "job", job_id], capture_output=True, text=True
+        )
+    except OSError:
+        return int(os.getenv("SLURM_CPUS_PER_TASK", "1")), None
     stdout = next(
         (
             token.removeprefix("StdOut=")
@@ -67,13 +70,13 @@ def make_logger(path: Path, *, logger_name: str) -> logging.Logger:
     return logger
 
 
-def load_or_make(record, make, save, logger):
+def load_or_make(record, make, save, logger, *, overwrite=False):
     """Load an existing template artifact or create and save it."""
 
-    if record.exists:
+    if record.exists and not overwrite:
         logger.info("Using existing %s: %s", record.key, record.path)
         return record.load_file()
-    if record.path.exists():
+    if record.status == "invalid" and not overwrite:
         raise RuntimeError(
             f"Invalid {record.key} artifact at {record.path}: "
             f"{'; '.join(record.validation_errors)}"
@@ -92,6 +95,16 @@ def load_or_make(record, make, save, logger):
 def save_filtered(raw, data_record, json_record, overwrite, logger):
     """Save filtered data and the filter recipe sidecar."""
 
+    invalid_records = [
+        record for record in (data_record, json_record) if record.status == "invalid"
+    ]
+    if invalid_records and not overwrite:
+        details = "; ".join(
+            f"{record.key}: {', '.join(record.validation_errors)}"
+            for record in invalid_records
+        )
+        raise RuntimeError(f"Invalid filtered artifact pair: {details}")
+
     data_record.path.parent.mkdir(parents=True, exist_ok=True)
     if overwrite or not data_record.path.exists():
         raw.save(data_record.path, overwrite=overwrite)
@@ -105,8 +118,6 @@ def save_filtered(raw, data_record, json_record, overwrite, logger):
             encoding="utf-8",
         )
         logger.info("Saved filter metadata: %s", json_record.path)
-    elif json_record.status == "invalid":
-        logger.warning("Keeping invalid filter metadata: %s", json_record.path)
 
 
 def save_if_requested(value, record, save, overwrite, logger):
@@ -156,19 +167,32 @@ def normalize_beamfilt_ori(forward, filters) -> None:
 
 
 def ensure_dataset_description(
-    record, name: str, logger, *, generated_by: str
+    record,
+    name: str,
+    logger,
+    *,
+    generated_by: str,
+    generated_by_version: str | None = None,
+    overwrite: bool = False,
 ) -> None:
     """Create a derivative dataset description when one is missing."""
 
-    if record.exists:
+    if record.exists and not overwrite:
         return
-    if record.path.exists():
-        logger.warning("Keeping invalid dataset description: %s", record.path)
-        return
+    if record.status == "invalid" and not overwrite:
+        raise RuntimeError(
+            f"Invalid dataset description at {record.path}: "
+            f"{'; '.join(record.validation_errors)}"
+        )
     record.path.parent.mkdir(parents=True, exist_ok=True)
+    generator = {"Name": generated_by}
+    if generated_by_version is not None:
+        generator["Version"] = generated_by_version
     mne_bids.make_dataset_description(
         path=record.path.parent,
         name=name,
         dataset_type="derivative",
-        generated_by=[{"Name": generated_by}],
+        generated_by=[generator],
+        overwrite=overwrite,
     )
+    logger.info("Created dataset description: %s", record.path)

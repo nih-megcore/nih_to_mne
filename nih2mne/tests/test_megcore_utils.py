@@ -51,6 +51,17 @@ def test_slurm_context_reads_worker_count_and_output(monkeypatch):
     ]
 
 
+def test_slurm_context_tolerates_missing_scontrol(monkeypatch):
+    monkeypatch.setenv("SLURM_JOB_ID", "123")
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", "4")
+
+    def fail(*args, **kwargs):
+        raise FileNotFoundError("scontrol")
+
+    monkeypatch.setattr(megcore_utils.subprocess, "run", fail)
+    assert megcore_utils.slurm_context() == (4, None)
+
+
 def test_make_logger_uses_caller_identity_and_replaces_handlers(tmp_path):
     logger_name = "nih2mne.tests.megcore_utils"
     logger = logging.getLogger(logger_name)
@@ -102,6 +113,23 @@ def test_load_or_make_creates_missing_artifact(tmp_path):
     assert record.path.parent.is_dir()
 
 
+def test_load_or_make_overwrites_valid_artifact(tmp_path):
+    record = _record(tmp_path / "artifact.fif", exists=True, status="present")
+    record.load_file = lambda: pytest.fail("load should not be called")
+    saved = []
+
+    result = megcore_utils.load_or_make(
+        record,
+        lambda: "replacement",
+        lambda value, path: saved.append((value, path)),
+        logging.getLogger("test_overwrite"),
+        overwrite=True,
+    )
+
+    assert result == "replacement"
+    assert saved == [("replacement", record.path)]
+
+
 def test_load_or_make_rejects_invalid_artifact(tmp_path):
     path = tmp_path / "artifact.fif"
     path.touch()
@@ -140,6 +168,43 @@ def test_save_filtered_writes_data_and_metadata(tmp_path):
     )
 
     assert calls == [(data_record.path, False)]
+    assert json.loads(json_record.path.read_text()) == json_record.expected_metadata
+
+
+def test_save_filtered_rejects_invalid_pair_without_overwrite(tmp_path):
+    data_record = _record(
+        tmp_path / "raw.fif", status="invalid", errors=["expected a regular file"]
+    )
+    json_record = _record(tmp_path / "raw.json")
+    json_record.expected_metadata = {}
+
+    with pytest.raises(RuntimeError, match="Invalid filtered artifact pair"):
+        megcore_utils.save_filtered(
+            SimpleNamespace(save=lambda *args, **kwargs: None),
+            data_record,
+            json_record,
+            False,
+            logging.getLogger("test"),
+        )
+
+
+def test_save_filtered_repairs_invalid_pair_with_overwrite(tmp_path):
+    data_record = _record(tmp_path / "raw.fif", status="invalid", errors=["bad data"])
+    json_record = _record(
+        tmp_path / "raw.json", status="invalid", errors=["bad metadata"]
+    )
+    json_record.expected_metadata = {"SoftwareFilters": {"HighpassCutoffHz": 1}}
+    calls = []
+
+    megcore_utils.save_filtered(
+        SimpleNamespace(save=lambda path, overwrite: calls.append((path, overwrite))),
+        data_record,
+        json_record,
+        True,
+        logging.getLogger("test"),
+    )
+
+    assert calls == [(data_record.path, True)]
     assert json.loads(json_record.path.read_text()) == json_record.expected_metadata
 
 
@@ -220,6 +285,7 @@ def test_ensure_dataset_description_uses_caller_identity(tmp_path, monkeypatch):
         "preprocessing",
         logging.getLogger("test"),
         generated_by="airpuff_v7",
+        generated_by_version="7.0",
     )
 
     assert calls == [
@@ -227,6 +293,49 @@ def test_ensure_dataset_description_uses_caller_identity(tmp_path, monkeypatch):
             "path": record.path.parent,
             "name": "preprocessing",
             "dataset_type": "derivative",
-            "generated_by": [{"Name": "airpuff_v7"}],
+            "generated_by": [{"Name": "airpuff_v7", "Version": "7.0"}],
+            "overwrite": False,
         }
     ]
+
+
+def test_ensure_dataset_description_rejects_invalid_without_overwrite(tmp_path):
+    record = _record(
+        tmp_path / "dataset_description.json",
+        status="invalid",
+        errors=["DatasetType must be derivative"],
+    )
+
+    with pytest.raises(RuntimeError, match="DatasetType must be derivative"):
+        megcore_utils.ensure_dataset_description(
+            record,
+            "project",
+            logging.getLogger("test"),
+            generated_by="routine",
+        )
+
+
+def test_ensure_dataset_description_repairs_invalid_with_overwrite(
+    tmp_path, monkeypatch
+):
+    record = _record(
+        tmp_path / "dataset_description.json",
+        status="invalid",
+        errors=["invalid JSON"],
+    )
+    calls = []
+    monkeypatch.setattr(
+        megcore_utils.mne_bids,
+        "make_dataset_description",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    megcore_utils.ensure_dataset_description(
+        record,
+        "project",
+        logging.getLogger("test"),
+        generated_by="routine",
+        overwrite=True,
+    )
+
+    assert calls[0]["overwrite"] is True
