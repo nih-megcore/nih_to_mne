@@ -25,7 +25,7 @@ Layout:
 # FT_Render_Glyph ``raster overflow`` errors with Matplotlib 3.11.
 from matplotlib import ft2font as _matplotlib_ft2font
 
-from nih2mne.GUI.qt_compat import QtCore, QtWidgets
+from nih2mne.GUI.qt_compat import QtCore, QtGui, QtWidgets
 
 QApplication = QtWidgets.QApplication
 QMainWindow = QtWidgets.QMainWindow
@@ -58,6 +58,14 @@ import pandas as pd
 import hashlib
 from pathlib import Path
 import ast
+import math
+import re
+
+from nih2mne.proc.derivative_review import (
+    ProcessingScriptError,
+    analyze_processing_script,
+    evaluate_dataset,
+)
 
 DATPROC_DIR = op.expanduser('~/megcore/datproc')
 
@@ -709,6 +717,304 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
             QMessageBox.warning(self, 'Submission Failed',
                                 'No slurm jobs were submitted. Check terminal output for details.')
 
+
+def _natural_key(value):
+    """Return a stable, human-friendly sorting key for BIDS labels."""
+    return [int(part) if part.isdigit() else part.lower()
+            for part in re.split(r'(\d+)', str(value))]
+
+
+def _dataset_run(dataset):
+    """Return a display run label from a project MEG dataset."""
+    try:
+        from mne_bids import get_bids_path_from_fname
+
+        run = get_bids_path_from_fname(str(dataset.rel_path), check=False).run
+    except (AttributeError, TypeError, ValueError):
+        run = None
+    return 'No run' if run in (None, '') else f'run-{run}'
+
+
+class RotatedSubjectLabel(QWidget):
+    """Compact BIDS subject heading painted at exactly 45 degrees."""
+
+    angle = 45
+
+    def __init__(self, text, parent=None):
+        super().__init__(parent)
+        self.text = str(text)
+        self.setToolTip(self.text)
+        self.setAccessibleName(self.text)
+        self.setMinimumHeight(90)
+
+    def sizeHint(self):
+        metrics = QtGui.QFontMetrics(self.font())
+        rect = metrics.boundingRect(self.text)
+        radians = math.radians(self.angle)
+        width = abs(rect.width() * math.cos(radians)) + abs(rect.height() * math.sin(radians))
+        height = abs(rect.width() * math.sin(radians)) + abs(rect.height() * math.cos(radians))
+        return QtCore.QSize(max(36, int(width) + 12), max(90, int(height) + 12))
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        render_hints = getattr(QtGui.QPainter, 'RenderHint', QtGui.QPainter)
+        painter.setRenderHint(render_hints.Antialiasing)
+        painter.translate(7, self.height() - 7)
+        painter.rotate(-self.angle)
+        painter.drawText(0, 0, self.text)
+
+
+class DerivativeIndicator(QWidget):
+    """Green valid-output marker or red, slashed unavailable marker."""
+
+    def __init__(self, present, tooltip='', parent=None):
+        super().__init__(parent)
+        self.present = bool(present)
+        self.setToolTip(tooltip)
+        self.setAccessibleName('present' if self.present else 'missing or invalid')
+        self.setMinimumSize(18, 18)
+        self.setMaximumHeight(28)
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        render_hints = getattr(QtGui.QPainter, 'RenderHint', QtGui.QPainter)
+        painter.setRenderHint(render_hints.Antialiasing)
+        rect = self.rect().adjusted(2, 2, -2, -2)
+        color = QtGui.QColor('#2ca02c' if self.present else '#d62728')
+        painter.fillRect(rect, color)
+        painter.setPen(QtGui.QPen(QtGui.QColor('#1b1b1b'), 1))
+        painter.drawRect(rect)
+        if not self.present:
+            painter.setPen(QtGui.QPen(QtGui.QColor('white'), 2))
+            painter.drawLine(rect.bottomLeft(), rect.topRight())
+
+
+class ProcReviewDialog(QtWidgets.QDialog):
+    """Review ordered derivative completeness across a BIDS project."""
+
+    def __init__(self, project_window, processing_script, parent=None):
+        super().__init__(parent or project_window)
+        self.project_window = project_window
+        self.bids_project = project_window.bids_project
+        self.processing_script = str(processing_script)
+        self.spec = analyze_processing_script(processing_script)
+        self.page = 0
+        self.indicators = []
+        self.subject_labels = []
+        self.setWindowTitle('ProcReview')
+        self.resize(900, 650)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(QLabel(f'Script: {self.processing_script}'))
+        roots = ', '.join(
+            op.join(str(self.bids_project.bids_root), 'derivatives', name)
+            for name in self.spec.derivative_names
+        )
+        self.l_output_roots = QLabel(f'Derivative folders: {roots}')
+        self.l_output_roots.setWordWrap(True)
+        main_layout.addWidget(self.l_output_roots)
+
+        controls = QHBoxLayout()
+        controls.addWidget(QLabel('Task'))
+        self.b_task = QComboBox()
+        self.b_task.addItems(project_window.get_available_task_names())
+        controls.addWidget(self.b_task)
+        controls.addWidget(QLabel('Run'))
+        self.b_run = QComboBox()
+        controls.addWidget(self.b_run)
+        controls.addWidget(QLabel('Subjects/page'))
+        self.b_subjects_per_page = QLineEdit('10')
+        self.b_subjects_per_page.setValidator(QtGui.QIntValidator(1, 999, self))
+        self.b_subjects_per_page.setMaximumWidth(55)
+        controls.addWidget(self.b_subjects_per_page)
+        self.b_hide_no_task = QCheckBox('Hide No-Task Subjects')
+        controls.addWidget(self.b_hide_no_task)
+        controls.addStretch(1)
+        main_layout.addLayout(controls)
+
+        self.scroll = QtWidgets.QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        main_layout.addWidget(self.scroll, 1)
+
+        navigation = QHBoxLayout()
+        self.b_prev = QPushButton('Prev')
+        self.b_next = QPushButton('Next')
+        self.b_refresh = QPushButton('Refresh')
+        self.l_page = QLabel('0 / 0')
+        navigation.addWidget(self.b_prev)
+        navigation.addWidget(self.b_next)
+        navigation.addWidget(self.l_page)
+        navigation.addStretch(1)
+        navigation.addWidget(self.b_refresh)
+        main_layout.addLayout(navigation)
+
+        self.b_task.currentIndexChanged.connect(self._task_changed)
+        self.b_run.currentIndexChanged.connect(self._reset_and_refresh)
+        self.b_hide_no_task.toggled.connect(self._reset_and_refresh)
+        self.b_subjects_per_page.editingFinished.connect(self._reset_and_refresh)
+        self.b_prev.clicked.connect(self.previous_page)
+        self.b_next.clicked.connect(self.next_page)
+        self.b_refresh.clicked.connect(self.refresh)
+        self._select_initial_task()
+        self._task_changed()
+
+    def _select_initial_task(self):
+        tasks = [self.b_task.itemText(index) for index in range(self.b_task.count())]
+        prefix = Path(self.processing_script).name.split('_', 1)[0]
+        current = getattr(self.project_window, 'selected_task', '')
+        preferred = prefix if prefix in tasks else current if current in tasks else None
+        if preferred is not None:
+            self.b_task.setCurrentText(preferred)
+
+    def _task_changed(self):
+        previous = self.b_run.currentText()
+        runs = {
+            _dataset_run(dataset)
+            for info in self.bids_project.subjects.values()
+            for dataset in info.meg_list
+            if dataset.task == self.b_task.currentText()
+        }
+        self.b_run.blockSignals(True)
+        self.b_run.clear()
+        self.b_run.addItem('All')
+        self.b_run.addItems(sorted(runs, key=_natural_key))
+        if previous in {'All', *runs}:
+            self.b_run.setCurrentText(previous)
+        self.b_run.blockSignals(False)
+        self._reset_and_refresh()
+
+    def _page_size(self):
+        try:
+            return max(1, int(self.b_subjects_per_page.text()))
+        except ValueError:
+            self.b_subjects_per_page.setText('10')
+            return 10
+
+    def _subjects(self):
+        subjects = sorted(self.bids_project.subjects, key=_natural_key)
+        if self.b_hide_no_task.isChecked():
+            task = self.b_task.currentText()
+            subjects = [
+                subject for subject in subjects
+                if any(dataset.task == task
+                       for dataset in self.bids_project.subjects[subject].meg_list)
+            ]
+        return subjects
+
+    def _datasets(self, subject):
+        task = self.b_task.currentText()
+        selected_run = self.b_run.currentText()
+        datasets = [dataset for dataset in self.bids_project.subjects[subject].meg_list
+                    if dataset.task == task]
+        if selected_run != 'All':
+            datasets = [dataset for dataset in datasets
+                        if _dataset_run(dataset) == selected_run]
+        return sorted(datasets, key=lambda dataset: (_natural_key(_dataset_run(dataset)),
+                                                     str(dataset.rel_path)))
+
+    def _reset_and_refresh(self, *args):
+        self.page = 0
+        self.refresh()
+
+    def previous_page(self):
+        if self.page > 0:
+            self.page -= 1
+            self.refresh()
+
+    def next_page(self):
+        total_pages = self._total_pages()
+        if self.page + 1 < total_pages:
+            self.page += 1
+            self.refresh()
+
+    def _total_pages(self):
+        count = len(self._subjects())
+        return math.ceil(count / self._page_size()) if count else 0
+
+    def _tooltip(self, subject, dataset, evaluated=None, error=None):
+        run = _dataset_run(dataset) if dataset is not None else 'unavailable'
+        lines = [f'Subject: {subject}', f'Task: {self.b_task.currentText()}', f'Run: {run}']
+        if evaluated is not None:
+            record = evaluated.record
+            lines.extend([f'Artifact: {evaluated.request.label}',
+                          f'Status: {record.status}', f'Path: {record.path}'])
+            if record.component_paths:
+                lines.append('Components: ' + ', '.join(map(str, record.component_paths)))
+            lines.extend(record.validation_errors)
+        elif error:
+            lines.extend(['Status: unavailable', str(error)])
+        return '\n'.join(lines)
+
+    def refresh(self):
+        subjects = self._subjects()
+        total_pages = self._total_pages()
+        if total_pages == 0:
+            self.page = 0
+        else:
+            self.page = min(self.page, total_pages - 1)
+        start = self.page * self._page_size()
+        page_subjects = subjects[start:start + self._page_size()]
+
+        content = QWidget()
+        grid = QGridLayout(content)
+        grid.setContentsMargins(6, 6, 6, 6)
+        grid.setHorizontalSpacing(3)
+        grid.setVerticalSpacing(2)
+        grid.addWidget(QLabel('Derivative'), 0, 0, 2, 1)
+        self.indicators = []
+        self.subject_labels = []
+        columns = []
+        column = 1
+        for subject in page_subjects:
+            datasets = self._datasets(subject)
+            if not datasets:
+                datasets = [None]
+            label = RotatedSubjectLabel(subject)
+            self.subject_labels.append(label)
+            grid.addWidget(label, 0, column, 1, len(datasets))
+            for dataset in datasets:
+                run_label = QLabel(_dataset_run(dataset) if dataset is not None else '—')
+                alignment = getattr(QtCore.Qt, 'AlignmentFlag', QtCore.Qt)
+                run_label.setAlignment(alignment.AlignCenter)
+                grid.addWidget(run_label, 1, column)
+                columns.append((column, subject, dataset))
+                grid.setColumnStretch(column, 1)
+                column += 1
+
+        for row, request in enumerate(self.spec.outputs, start=2):
+            name = QLabel(request.label)
+            name.setToolTip(request.label)
+            grid.addWidget(name, row, 0)
+
+        for column, subject, dataset in columns:
+            error = None
+            evaluated_items = ()
+            if dataset is not None:
+                try:
+                    evaluated_items = evaluate_dataset(self.spec, dataset.rel_path)
+                except Exception as exc:
+                    error = exc
+            for offset, request in enumerate(self.spec.outputs):
+                evaluated = evaluated_items[offset] if offset < len(evaluated_items) else None
+                present = evaluated is not None and evaluated.record.exists
+                indicator = DerivativeIndicator(
+                    present,
+                    self._tooltip(subject, dataset, evaluated=evaluated, error=error or 'No matching dataset'),
+                )
+                self.indicators.append(indicator)
+                grid.addWidget(indicator, offset + 2, column)
+
+        grid.setColumnMinimumWidth(0, 185)
+        grid.setRowStretch(len(self.spec.outputs) + 2, 1)
+        old_content = self.scroll.takeWidget()
+        if old_content is not None:
+            old_content.deleteLater()
+        self.scroll.setWidget(content)
+        self.l_page.setText(f'{self.page + 1} / {total_pages}' if total_pages else '0 / 0')
+        self.b_prev.setEnabled(self.page > 0)
+        self.b_next.setEnabled(self.page + 1 < total_pages)
+
+
 ## Create subject tile
 class Subject_Tile(QWidget):
     # SubjidButton -- MEG () MRI () FS ()
@@ -1142,6 +1448,9 @@ class BIDS_Project_Window(QMainWindow):
         self.b_project_datproc = QPushButton('Batch Datproc')
         self.b_project_datproc.clicked.connect(self.open_project_datproc_dialog)
         top_buttons_layout.addWidget(self.b_project_datproc)
+        self.b_proc_review = QPushButton('ProcReview')
+        self.b_proc_review.clicked.connect(self.open_proc_review_dialog)
+        top_buttons_layout.addWidget(self.b_proc_review)
         self.b_out_project_chooser = QComboBox()
         #Add Project output directory
         # tmp_ = glob.glob('*', root_dir=op.join(self.bids_project.bids_root, 'derivatives'))
@@ -1275,6 +1584,31 @@ class BIDS_Project_Window(QMainWindow):
     def open_project_datproc_dialog(self):
         self.project_datproc_dialog = ProjectDatprocSubmissionDialog(self)
         self.project_datproc_dialog.exec()
+
+    def open_proc_review_dialog(self):
+        """Choose a template processing script and open its derivative review."""
+        processing_file, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            'Select processing script to review',
+            DATPROC_DIR,
+            'Python scripts (*.py)',
+        )
+        if not processing_file:
+            return
+        try:
+            self.proc_review_dialog = ProcReviewDialog(
+                self,
+                processing_file,
+                parent=self,
+            )
+        except ProcessingScriptError as exc:
+            QMessageBox.warning(
+                self,
+                'Unsupported Processing Script',
+                f'{exc}\n\nOnly FilterSpec/MEGDerivativeTemplate scripts can be reviewed.',
+            )
+            return
+        self.proc_review_dialog.exec()
 
     def open_dataset_gui(self):
         """Open the dataset staging workflow for the current BIDS root."""

@@ -54,6 +54,7 @@ get_subject_processing_logfile = qt_gui_module.get_subject_processing_logfile
 get_subject_processing_status = qt_gui_module.get_subject_processing_status
 git_blob_hash = qt_gui_module.git_blob_hash
 SubjectSelectionDialog = qt_gui_module.SubjectSelectionDialog
+ProcReviewDialog = qt_gui_module.ProcReviewDialog
 
 
 class FakeEventCounts:
@@ -550,6 +551,7 @@ def test_project_window_task_filter_and_pagination(qapp):
     assert window.b_subject_number.text() == "Subject Totals: #3"
     assert window.b_current_page_idx.text() == "Page: 0 / 1"
     assert window.b_project_datproc.text() == "Batch Datproc"
+    assert window.b_proc_review.text() == "ProcReview"
     assert window.b_add_dataset.text() == "Add Dataset"
     assert not hasattr(window, "b_run_megnet")
 
@@ -576,6 +578,136 @@ def test_project_window_task_filter_and_pagination(qapp):
     qapp.processEvents()
     assert window.page_idx == 0
     assert window.subject_start_idx == 0
+
+
+def _write_review_script(path):
+    path.write_text(
+        "project = 'review'\n"
+        "recipe = FilterSpec(l_freq=1, h_freq=40)\n"
+        "template = MEGDerivativeTemplate(primary, project=project, filter_spec=recipe)\n"
+        "artifacts = template.evaluate()\n"
+        "save_if_requested(value, artifacts['epochs'], saver, False, logger)\n"
+        "record = template.artifact('stc', description='face')\n"
+        "save_if_requested(value, record, saver, False, logger)\n"
+    )
+
+
+def test_proc_review_dialog_runs_pagination_and_rotated_headers(qapp, tmp_path, monkeypatch):
+    script = tmp_path / "task_v1.py"
+    _write_review_script(script)
+    subjects = {
+        "sub-01": FakeBidsInfo(subject="sub-01"),
+        "sub-02": FakeBidsInfo(subject="sub-02"),
+        "sub-03": FakeBidsInfo(subject="sub-03"),
+    }
+    subjects["sub-01"].meg_list = [
+        FakeMegDataset(
+            "task", "run01.ds",
+            "/tmp/fake_bids/sub-01/meg/sub-01_task-task_run-01_meg.ds",
+        ),
+        FakeMegDataset(
+            "task", "run02.ds",
+            "/tmp/fake_bids/sub-01/meg/sub-01_task-task_run-02_meg.ds",
+        ),
+    ]
+    subjects["sub-02"].meg_list = []
+    subjects["sub-03"].meg_list = [
+        FakeMegDataset(
+            "task", "run01.ds",
+            "/tmp/fake_bids/sub-03/meg/sub-03_task-task_run-01_meg.ds",
+        )
+    ]
+    project = FakeProject(subjects)
+    window = BIDS_Project_Window(bids_project=project, gridsize_row=1, gridsize_col=2)
+
+    def fake_evaluate(spec, dataset):
+        return tuple(
+            SimpleNamespace(
+                request=request,
+                record=SimpleNamespace(
+                    exists=request.key == "epochs",
+                    status="present" if request.key == "epochs" else "missing",
+                    path=f"/tmp/{request.key}",
+                    component_paths=(),
+                    validation_errors=(),
+                ),
+            )
+            for request in spec.outputs
+        )
+
+    monkeypatch.setattr(qt_gui_module, "evaluate_dataset", fake_evaluate)
+    dialog = ProcReviewDialog(window, script)
+    dialog.b_subjects_per_page.setText("2")
+    dialog._reset_and_refresh()
+
+    assert dialog.b_task.currentText() == "task"
+    assert [dialog.b_run.itemText(index) for index in range(dialog.b_run.count())] == [
+        "All", "run-01", "run-02"
+    ]
+    assert dialog.l_page.text() == "1 / 2"
+    assert [label.text for label in dialog.subject_labels] == ["sub-01", "sub-02"]
+    assert all(label.angle == 45 for label in dialog.subject_labels)
+    assert len(dialog.indicators) == 6  # two runs plus one no-task placeholder, two outputs
+    assert sum(indicator.present for indicator in dialog.indicators) == 2
+
+    dialog.next_page()
+    assert dialog.l_page.text() == "2 / 2"
+    assert [label.text for label in dialog.subject_labels] == ["sub-03"]
+    dialog.b_hide_no_task.setChecked(True)
+    assert dialog.l_page.text() == "1 / 1"
+
+
+def test_proc_review_global_run_filter_keeps_subject_scope(qapp, tmp_path, monkeypatch):
+    script = tmp_path / "task_v1.py"
+    _write_review_script(script)
+    subjects = {
+        "sub-01": FakeBidsInfo(subject="sub-01"),
+        "sub-02": FakeBidsInfo(subject="sub-02"),
+    }
+    subjects["sub-01"].meg_list = [FakeMegDataset(
+        "task", "run01.ds", "/tmp/sub-01_task-task_run-01_meg.ds"
+    )]
+    subjects["sub-02"].meg_list = [FakeMegDataset(
+        "task", "run02.ds", "/tmp/sub-02_task-task_run-02_meg.ds"
+    )]
+    window = BIDS_Project_Window(bids_project=FakeProject(subjects), gridsize_row=1, gridsize_col=2)
+    monkeypatch.setattr(qt_gui_module, "evaluate_dataset", lambda spec, dataset: ())
+    dialog = ProcReviewDialog(window, script)
+
+    dialog.b_run.setCurrentText("run-01")
+
+    assert [label.text for label in dialog.subject_labels] == ["sub-01", "sub-02"]
+    assert len(dialog.indicators) == 4
+
+
+def test_proc_review_button_chooses_script_and_opens_dialog(qapp, tmp_path, monkeypatch):
+    script = tmp_path / "task_v1.py"
+    _write_review_script(script)
+    window = BIDS_Project_Window(
+        bids_project=FakeProject({"sub-01": FakeBidsInfo(subject="sub-01")}),
+        gridsize_row=1,
+        gridsize_col=1,
+    )
+    calls = []
+
+    class FakeReviewDialog:
+        def __init__(self, project_window, processing_script, parent=None):
+            calls.append((project_window, processing_script, parent))
+
+        def exec(self):
+            calls.append("exec")
+
+    monkeypatch.setattr(
+        qt_gui_module.QtWidgets.QFileDialog,
+        "getOpenFileName",
+        lambda *args, **kwargs: (str(script), "Python scripts (*.py)"),
+    )
+    monkeypatch.setattr(qt_gui_module, "ProcReviewDialog", FakeReviewDialog)
+
+    window.open_proc_review_dialog()
+
+    assert calls[0] == (window, str(script), window)
+    assert calls[1] == "exec"
 
 
 def test_add_dataset_opens_one_window_for_current_root(
