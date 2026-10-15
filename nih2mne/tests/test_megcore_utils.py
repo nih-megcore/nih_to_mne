@@ -110,6 +110,34 @@ def test_load_or_make_loads_valid_artifact(tmp_path, caplog):
     ) == "loaded"
 
 
+def test_load_or_make_logs_and_reraises_original_load_error(tmp_path):
+    record = _record(
+        tmp_path / "artifact.fif", exists=True, status="valid"
+    )
+    original = OSError("MNE read failed")
+    record.load_file = lambda: (_ for _ in ()).throw(original)
+    log_path = tmp_path / "pipeline.log"
+    logger = megcore_utils.make_logger(log_path, logger_name="test_load_error")
+
+    try:
+        with pytest.raises(OSError, match="MNE read failed") as error:
+            megcore_utils.load_or_make(
+                record,
+                lambda: pytest.fail("make should not be called"),
+                lambda value, path: pytest.fail("save should not be called"),
+                logger,
+            )
+        assert error.value is original
+        logged = log_path.read_text(encoding="utf-8")
+        assert f"Failed to load artifact: {record.path}" in logged
+        assert "Traceback (most recent call last):" in logged
+        assert "OSError: MNE read failed" in logged
+    finally:
+        for handler in logger.handlers:
+            handler.close()
+        logger.handlers.clear()
+
+
 def test_load_or_make_creates_missing_artifact(tmp_path):
     record = _record(tmp_path / "nested" / "artifact.fif")
     saved = []
@@ -154,17 +182,29 @@ def test_load_or_make_rejects_invalid_artifact(tmp_path):
         )
 
 
-def test_load_or_make_wraps_creation_errors(tmp_path):
+def test_load_or_make_logs_and_reraises_original_creation_error(tmp_path):
     record = _record(tmp_path / "artifact.fif")
+    original = ValueError("creation failed")
+    log_path = tmp_path / "pipeline.log"
+    logger = megcore_utils.make_logger(log_path, logger_name="test_creation_error")
 
     def fail():
-        raise ValueError("creation failed")
+        raise original
 
-    with pytest.raises(RuntimeError, match="Failed to create artifact") as error:
-        megcore_utils.load_or_make(
-            record, fail, lambda value, target: None, logging.getLogger("test")
-        )
-    assert isinstance(error.value.__cause__, ValueError)
+    try:
+        with pytest.raises(ValueError, match="creation failed") as error:
+            megcore_utils.load_or_make(
+                record, fail, lambda value, target: None, logger
+            )
+        assert error.value is original
+        logged = log_path.read_text(encoding="utf-8")
+        assert f"Failed to create artifact: {record.path}" in logged
+        assert "Traceback (most recent call last):" in logged
+        assert "ValueError: creation failed" in logged
+    finally:
+        for handler in logger.handlers:
+            handler.close()
+        logger.handlers.clear()
 
 
 def test_load_or_make_writes_portable_provenance_for_created_artifact(tmp_path):
@@ -211,7 +251,7 @@ def test_provenance_rejects_external_input_before_derivative_creation(tmp_path):
     )
     made = []
 
-    with pytest.raises(RuntimeError, match="Failed to create forward") as error:
+    with pytest.raises(ValueError, match="outside the BIDS root") as error:
         megcore_utils.load_or_make(
             record,
             lambda: made.append(True),
@@ -221,8 +261,8 @@ def test_provenance_rejects_external_input_before_derivative_creation(tmp_path):
         )
 
     assert made == []
-    assert isinstance(error.value.__cause__, ValueError)
-    assert "outside the BIDS root" in str(error.value.__cause__)
+    assert isinstance(error.value, ValueError)
+    assert "outside the BIDS root" in str(error.value)
 
 
 def test_load_or_make_does_not_backfill_reused_artifact(tmp_path):
@@ -362,6 +402,31 @@ def test_save_if_requested_preserves_valid_and_rejects_invalid(tmp_path):
             "value", invalid, lambda value, path: saved.append(path), False,
             logging.getLogger("test"),
         )
+
+
+def test_save_if_requested_logs_and_reraises_original_save_error(tmp_path):
+    record = _record(tmp_path / "artifact.fif")
+    original = OSError("MNE save failed")
+    log_path = tmp_path / "pipeline.log"
+    logger = megcore_utils.make_logger(log_path, logger_name="test_save_error")
+
+    def fail(value, path):
+        raise original
+
+    try:
+        with pytest.raises(OSError, match="MNE save failed") as error:
+            megcore_utils.save_if_requested(
+                "value", record, fail, False, logger
+            )
+        assert error.value is original
+        logged = log_path.read_text(encoding="utf-8")
+        assert f"Failed to save artifact: {record.path}" in logged
+        assert "Traceback (most recent call last):" in logged
+        assert "OSError: MNE save failed" in logged
+    finally:
+        for handler in logger.handlers:
+            handler.close()
+        logger.handlers.clear()
 
 
 def test_save_if_requested_writes_h5_provenance_sidecar(tmp_path):

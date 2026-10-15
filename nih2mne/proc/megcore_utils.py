@@ -319,14 +319,20 @@ def load_or_make(
     Raises
     ------
     RuntimeError
-        If a non-overwritten artifact is invalid, or if construction,
-        directory creation, or saving fails. Creation failures retain the
-        original exception as their cause and are written to ``logger``.
+        If a non-overwritten artifact is invalid.
+    Exception
+        Any exception raised while loading, constructing, saving, or recording
+        provenance for the artifact is written to ``logger`` with its full
+        traceback and then re-raised unchanged.
     """
 
     if record.exists and not overwrite:
         logger.info("Using existing %s: %s", record.key, record.path)
-        return record.load_file()
+        try:
+            return record.load_file()
+        except Exception:
+            logger.exception("Failed to load %s: %s", record.key, record.path)
+            raise
     if record.status == "invalid" and not overwrite:
         raise RuntimeError(
             f"Invalid {record.key} artifact at {record.path}: "
@@ -349,9 +355,9 @@ def load_or_make(
                 repair_invalid=True,
             )
         return value
-    except Exception as error:
+    except Exception:
         logger.exception("Failed to create %s: %s", record.key, record.path)
-        raise RuntimeError(f"Failed to create {record.key}: {record.path}") from error
+        raise
 
 
 def save_filtered(
@@ -424,9 +430,10 @@ def save_if_requested(
 
     The provenance sidecar is written only after ``save(value, record.path)``
     succeeds. A valid cached output remains untouched when overwrite is false.
+    Save and provenance exceptions are logged with their full tracebacks and
+    re-raised unchanged.
     """
 
-    record.path.parent.mkdir(parents=True, exist_ok=True)
     if record.exists and not overwrite:
         logger.info("Keeping existing %s: %s", record.key, record.path)
         return
@@ -436,6 +443,7 @@ def save_if_requested(
             f"{'; '.join(record.validation_errors)}"
         )
     try:
+        record.path.parent.mkdir(parents=True, exist_ok=True)
         portable_inputs = (
             _portable_inputs(provenance) if provenance is not None else None
         )
@@ -449,9 +457,9 @@ def save_if_requested(
                 repair_invalid=True,
             )
         logger.info("Saved %s: %s", record.key, record.path)
-    except Exception as error:
+    except Exception:
         logger.exception("Failed to save %s: %s", record.key, record.path)
-        raise RuntimeError(f"Failed to save {record.key}: {record.path}") from error
+        raise
 
 
 def check_covariance(name: str, covariance, logger) -> None:

@@ -399,11 +399,28 @@ def _same_path(first: str | Path, second: str | Path) -> bool:
 
 
 def _error_section(text: str) -> str:
-    """Return the final traceback or ERROR section from a log excerpt."""
+    """Return the final complete traceback chain or ERROR log section."""
 
-    traceback_at = text.rfind("Traceback (most recent call last):")
+    traceback_header = "Traceback (most recent call last):"
+    traceback_at = text.rfind(traceback_header)
     if traceback_at >= 0:
-        return text[traceback_at:].strip()
+        chain_start = traceback_at
+        chain_separator = re.compile(
+            r"\n(?:The above exception was the direct cause of the following "
+            r"exception|During handling of the above exception, another "
+            r"exception occurred):\s*\Z"
+        )
+        while True:
+            separator = chain_separator.search(text[:chain_start])
+            if separator is None:
+                break
+            previous_traceback = text.rfind(
+                traceback_header, 0, separator.start()
+            )
+            if previous_traceback < 0:
+                break
+            chain_start = previous_traceback
+        return text[chain_start:].strip()
     lines = text.splitlines()
     error_lines = [
         index for index, line in enumerate(lines)

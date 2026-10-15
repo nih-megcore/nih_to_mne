@@ -147,6 +147,37 @@ def test_find_processing_failure_follows_matching_slurm_error(tmp_path):
     assert "ValueError: no events" in report.display_text
 
 
+def test_find_processing_failure_preserves_complete_chained_traceback(tmp_path):
+    spec, script, dataset, log_dir = _failure_fixture(tmp_path)
+    process_hash = _git_hash(script)
+    stdout = tmp_path / "logdir" / "job.o"
+    stderr = stdout.with_suffix(".e")
+    stderr.parent.mkdir()
+    stderr.write_text(
+        "Traceback (most recent call last):\n"
+        "  File 'mne/source_space.py', line 10, in setup_source_space\n"
+        "ValueError: source space creation failed\n\n"
+        "The above exception was the direct cause of the following exception:\n\n"
+        "Traceback (most recent call last):\n"
+        "  File 'task_v1.py', line 12, in <module>\n"
+        "RuntimeError: Failed to create src\n",
+        encoding="utf-8",
+    )
+    (log_dir / "task_v1.log").write_text(
+        f"INFO START name=task_v1 version=1 hash={process_hash}\n"
+        f"INFO Primary input: {dataset}\n"
+        f"INFO SLURM_LOGFILE_PATH :: {stdout}\n",
+        encoding="utf-8",
+    )
+
+    report = find_processing_failure(spec, dataset)
+
+    assert report.details.startswith("Traceback")
+    assert "mne/source_space.py" in report.details
+    assert "ValueError: source space creation failed" in report.details
+    assert "RuntimeError: Failed to create src" in report.details
+
+
 def test_find_processing_failure_uses_legacy_log_only_when_unambiguous(tmp_path):
     spec, script, dataset, log_dir = _failure_fixture(tmp_path)
     process_hash = _git_hash(script)
