@@ -724,6 +724,8 @@ def test_proc_review_first_failure_opens_logged_error(qapp, tmp_path, monkeypatc
         if isinstance(indicator, DerivativeFailureButton)
     ]
     assert len(failure_buttons) == 1
+    assert failure_buttons[0].emphasis_width == 4
+    assert failure_buttons[0].minimumHeight() == 22
 
     failure_buttons[0].click()
 

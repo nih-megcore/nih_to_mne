@@ -794,13 +794,14 @@ class DerivativeFailureButton(QtWidgets.QAbstractButton):
     """Clickable version of the first failed derivative indicator."""
 
     present = False
+    emphasis_width = 4
 
     def __init__(self, tooltip='', parent=None):
         super().__init__(parent)
         self.setToolTip(tooltip)
         self.setAccessibleName('first missing or invalid derivative; click to review error')
-        self.setMinimumSize(18, 18)
-        self.setMaximumHeight(28)
+        self.setMinimumSize(22, 22)
+        self.setMaximumHeight(30)
         cursor_shape = getattr(QtCore.Qt, 'CursorShape', QtCore.Qt)
         self.setCursor(cursor_shape.PointingHandCursor)
 
@@ -808,12 +809,12 @@ class DerivativeFailureButton(QtWidgets.QAbstractButton):
         painter = QtGui.QPainter(self)
         render_hints = getattr(QtGui.QPainter, 'RenderHint', QtGui.QPainter)
         painter.setRenderHint(render_hints.Antialiasing)
-        rect = self.rect().adjusted(2, 2, -2, -2)
-        painter.fillRect(rect, QtGui.QColor('#d62728'))
+        rect = self.rect().adjusted(3, 3, -3, -3)
+        painter.fillRect(rect, QtGui.QColor('#e00000'))
         pen_color = '#111111' if not self.hasFocus() else '#f5c542'
-        painter.setPen(QtGui.QPen(QtGui.QColor(pen_color), 2))
+        painter.setPen(QtGui.QPen(QtGui.QColor(pen_color), self.emphasis_width))
         painter.drawRect(rect)
-        painter.setPen(QtGui.QPen(QtGui.QColor('white'), 2))
+        painter.setPen(QtGui.QPen(QtGui.QColor('white'), 3))
         painter.drawLine(rect.bottomLeft(), rect.topRight())
 
 
