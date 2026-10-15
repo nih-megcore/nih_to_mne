@@ -55,6 +55,7 @@ get_subject_processing_status = qt_gui_module.get_subject_processing_status
 git_blob_hash = qt_gui_module.git_blob_hash
 SubjectSelectionDialog = qt_gui_module.SubjectSelectionDialog
 ProcReviewDialog = qt_gui_module.ProcReviewDialog
+DerivativeFailureButton = qt_gui_module.DerivativeFailureButton
 
 
 class FakeEventCounts:
@@ -640,7 +641,9 @@ def test_proc_review_dialog_runs_pagination_and_rotated_headers(qapp, tmp_path, 
     dialog.b_subjects_per_page.setText("2")
     dialog._reset_and_refresh()
 
-    assert dialog.b_task.currentText() == "task"
+    assert dialog.task == "task"
+    assert dialog.l_task.text() == "Task: task"
+    assert not hasattr(dialog, "b_task")
     assert [dialog.b_run.itemText(index) for index in range(dialog.b_run.count())] == [
         "All", "run-01", "run-02"
     ]
@@ -649,6 +652,8 @@ def test_proc_review_dialog_runs_pagination_and_rotated_headers(qapp, tmp_path, 
     assert all(label.angle == 45 for label in dialog.subject_labels)
     assert len(dialog.indicators) == 6  # two runs plus one no-task placeholder, two outputs
     assert sum(indicator.present for indicator in dialog.indicators) == 2
+    assert sum(isinstance(indicator, DerivativeFailureButton)
+               for indicator in dialog.indicators) == 2
 
     dialog.next_page()
     assert dialog.l_page.text() == "2 / 2"
@@ -678,6 +683,68 @@ def test_proc_review_global_run_filter_keeps_subject_scope(qapp, tmp_path, monke
 
     assert [label.text for label in dialog.subject_labels] == ["sub-01", "sub-02"]
     assert len(dialog.indicators) == 4
+
+
+def test_proc_review_first_failure_opens_logged_error(qapp, tmp_path, monkeypatch):
+    script = tmp_path / "task_v1.py"
+    _write_review_script(script)
+    bids_info = FakeBidsInfo(subject="sub-01")
+    bids_info.meg_list = [FakeMegDataset(
+        "task", "run01.ds", "/tmp/fake_bids/sub-01/meg/sub-01_task-task_run-01_meg.ds"
+    )]
+    window = BIDS_Project_Window(
+        bids_project=FakeProject({"sub-01": bids_info}),
+        gridsize_row=1,
+        gridsize_col=1,
+    )
+
+    def fake_evaluate(spec, dataset):
+        return tuple(
+            SimpleNamespace(
+                request=request,
+                record=SimpleNamespace(
+                    exists=False,
+                    status="missing",
+                    path=f"/tmp/{request.key}",
+                    component_paths=(),
+                    validation_errors=(),
+                ),
+            )
+            for request in spec.outputs
+        )
+
+    report = SimpleNamespace(display_text="Traceback\nValueError: no events")
+    monkeypatch.setattr(qt_gui_module, "evaluate_dataset", fake_evaluate)
+    monkeypatch.setattr(qt_gui_module, "find_processing_failure", lambda *args, **kwargs: report)
+    monkeypatch.setattr(qt_gui_module.ProcessingFailureDialog, "exec", lambda self: 0)
+    dialog = ProcReviewDialog(window, script)
+
+    failure_buttons = [
+        indicator for indicator in dialog.indicators
+        if isinstance(indicator, DerivativeFailureButton)
+    ]
+    assert len(failure_buttons) == 1
+
+    failure_buttons[0].click()
+
+    displayed = dialog.failure_dialog.error_text.toPlainText()
+    assert "ValueError: no events" in displayed
+    assert "First failed derivative: epochs" in [
+        label.text() for label in dialog.failure_dialog.findChildren(qt_gui_module.QLabel)
+    ][0]
+
+
+def test_proc_review_rejects_script_task_missing_from_project(qapp, tmp_path):
+    script = tmp_path / "unknown_v1.py"
+    _write_review_script(script)
+    window = BIDS_Project_Window(
+        bids_project=FakeProject({"sub-01": FakeBidsInfo(subject="sub-01")}),
+        gridsize_row=1,
+        gridsize_col=1,
+    )
+
+    with pytest.raises(qt_gui_module.ProcessingScriptError, match="not present"):
+        ProcReviewDialog(window, script)
 
 
 def test_proc_review_button_chooses_script_and_opens_dialog(qapp, tmp_path, monkeypatch):

@@ -9,6 +9,8 @@ semantics as the processing routine itself.
 from __future__ import annotations
 
 import ast
+import hashlib
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -72,6 +74,28 @@ class EvaluatedArtifact:
 
     request: ArtifactRequest
     record: ArtifactRecord
+
+
+@dataclass(frozen=True)
+class ProcessingFailureReport:
+    """Error information attributable to one processing-script execution."""
+
+    summary: str
+    details: str
+    application_log: Path | None = None
+    execution_log: Path | None = None
+    error_found: bool = False
+
+    @property
+    def display_text(self) -> str:
+        lines = [self.summary]
+        if self.application_log is not None:
+            lines.extend(("", f"Application log: {self.application_log}"))
+        if self.execution_log is not None:
+            lines.append(f"Execution log: {self.execution_log}")
+        if self.details:
+            lines.extend(("", self.details.rstrip()))
+        return "\n".join(lines)
 
 
 _MISSING = object()
@@ -351,11 +375,198 @@ def evaluate_dataset(spec: ProcessingReviewSpec, dataset: str | Path) -> tuple[E
     return tuple(records)
 
 
+_START_RE = re.compile(
+    r"START\s+::\s*(?P<legacy>[0-9a-f]+)|"
+    r"START\b[^\n]*?\bhash=(?P<current>[0-9a-f]+)",
+    re.IGNORECASE,
+)
+_PRIMARY_RE = re.compile(r"Primary input:\s*(?P<path>.+?)\s*$", re.MULTILINE)
+_SLURM_RE = re.compile(r"SLURM_LOGFILE_PATH\s*::\s*(?P<path>.+?)\s*$", re.MULTILINE)
+
+
+def _script_hash(path: Path) -> str:
+    data = path.read_bytes()
+    return hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+
+
+def _same_path(first: str | Path, second: str | Path) -> bool:
+    try:
+        first_path = Path(first).expanduser().resolve(strict=False)
+        second_path = Path(second).expanduser().resolve(strict=False)
+        return first_path == second_path
+    except (OSError, RuntimeError):
+        return str(first) == str(second)
+
+
+def _error_section(text: str) -> str:
+    """Return the final traceback or ERROR section from a log excerpt."""
+
+    traceback_at = text.rfind("Traceback (most recent call last):")
+    if traceback_at >= 0:
+        return text[traceback_at:].strip()
+    lines = text.splitlines()
+    error_lines = [
+        index for index, line in enumerate(lines)
+        if re.search(r"\bERROR\b", line)
+    ]
+    if error_lines:
+        return "\n".join(lines[error_lines[-1]:]).strip()
+    return ""
+
+
+def _execution_error(attempt: str) -> tuple[Path | None, str]:
+    matches = list(_SLURM_RE.finditer(attempt))
+    if not matches:
+        return None, ""
+    stdout_path = Path(matches[-1].group("path").strip()).expanduser()
+    candidates = []
+    if stdout_path.suffix == ".o":
+        candidates.append(stdout_path.with_suffix(".e"))
+    candidates.append(stdout_path)
+    last_read = None
+    for candidate in candidates:
+        try:
+            text = candidate.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        last_read = candidate
+        section = _error_section(text)
+        if section:
+            return candidate, section
+        if text.strip() and candidate.suffix == ".e":
+            return candidate, text.strip()
+    return last_read, ""
+
+
+def _log_modification_time(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def find_processing_failure(
+    spec: ProcessingReviewSpec,
+    dataset: str | Path,
+    *,
+    allow_legacy_fallback: bool = False,
+) -> ProcessingFailureReport:
+    """Find the latest logged failure for this script and exact BIDS dataset.
+
+    Logs are only associated when their START marker contains the selected
+    script's current Git blob hash.  Logs predating primary-input records may
+    be used only when the caller knows the subject/task selection is unique.
+    """
+
+    dataset = Path(dataset).expanduser()
+    try:
+        primary = get_bids_path_from_fname(str(dataset), check=False)
+        root = Path(primary.root)
+        subject = f"sub-{primary.subject}"
+    except (TypeError, ValueError, AttributeError) as error:
+        return ProcessingFailureReport(
+            "The dataset path could not be decoded, so its processing log "
+            "cannot be located.",
+            str(error),
+        )
+
+    try:
+        process_hash = _script_hash(spec.script)
+    except OSError as error:
+        return ProcessingFailureReport(
+            "The selected script could not be hashed, so an execution cannot "
+            "be matched safely.",
+            str(error),
+        )
+
+    log_dir = root / "derivatives" / spec.project / "logging" / subject
+    attempts = []
+    logfiles = (
+        sorted(log_dir.glob("*.log"), key=_log_modification_time)
+        if log_dir.is_dir()
+        else ()
+    )
+    for logfile in logfiles:
+        try:
+            text = logfile.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        starts = list(_START_RE.finditer(text))
+        for index, start in enumerate(starts):
+            logged_hash = start.group("legacy") or start.group("current")
+            if logged_hash.lower() != process_hash.lower():
+                continue
+            end = starts[index + 1].start() if index + 1 < len(starts) else len(text)
+            excerpt = text[start.start():end]
+            primary_match = _PRIMARY_RE.search(excerpt)
+            logged_primary = primary_match.group("path").strip() if primary_match else None
+            attempts.append((logfile, excerpt, logged_primary))
+
+    exact = [item for item in attempts if item[2] and _same_path(item[2], dataset)]
+    if exact:
+        candidates = exact
+    else:
+        identified = [item for item in attempts if item[2]]
+        legacy = [item for item in attempts if item[2] is None]
+        if identified:
+            return ProcessingFailureReport(
+                "Matching script executions were logged, but none were for this dataset.",
+                f"Searched {log_dir} for script hash {process_hash}.",
+            )
+        if legacy and not allow_legacy_fallback:
+            return ProcessingFailureReport(
+                "A legacy execution was found, but its log does not identify the input run.",
+                "This subject has multiple matching datasets, so displaying "
+                "that error could attribute it to the wrong run.",
+                application_log=legacy[-1][0],
+            )
+        candidates = legacy
+
+    if not candidates:
+        return ProcessingFailureReport(
+            "No execution log matched this dataset and the selected version of the script.",
+            f"Searched {log_dir} for script hash {process_hash}.",
+        )
+
+    application_log, attempt, _ = candidates[-1]
+    finish_pattern = (
+        rf"FINISHED(?:\s+::|\b[^\n]*?\bhash=)\s*"
+        rf"{re.escape(process_hash)}"
+    )
+    finished = bool(re.search(finish_pattern, attempt, re.IGNORECASE))
+    if finished:
+        return ProcessingFailureReport(
+            "The latest matching execution finished successfully, but this artifact is now missing or invalid.",
+            "The derivative may have been removed, changed, or become incomplete after processing finished.",
+            application_log=application_log,
+        )
+
+    execution_log, details = _execution_error(attempt)
+    if not details:
+        details = _error_section(attempt)
+    if details:
+        return ProcessingFailureReport(
+            "The latest matching execution stopped before the pipeline completed.",
+            details,
+            application_log=application_log,
+            execution_log=execution_log,
+            error_found=True,
+        )
+    return ProcessingFailureReport(
+        "The latest matching execution stopped, but no logged traceback was found.",
+        "The job may have been interrupted before Python recorded an exception.",
+        application_log=application_log,
+        execution_log=execution_log,
+    )
+
+
 __all__ = [
     "ArtifactRequest",
     "EvaluatedArtifact",
     "ProcessingReviewSpec",
     "ProcessingScriptError",
+    "ProcessingFailureReport",
     "analyze_processing_script",
     "evaluate_dataset",
+    "find_processing_failure",
 ]

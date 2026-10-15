@@ -65,6 +65,7 @@ from nih2mne.proc.derivative_review import (
     ProcessingScriptError,
     analyze_processing_script,
     evaluate_dataset,
+    find_processing_failure,
 )
 
 DATPROC_DIR = op.expanduser('~/megcore/datproc')
@@ -789,6 +790,61 @@ class DerivativeIndicator(QWidget):
             painter.drawLine(rect.bottomLeft(), rect.topRight())
 
 
+class DerivativeFailureButton(QtWidgets.QAbstractButton):
+    """Clickable version of the first failed derivative indicator."""
+
+    present = False
+
+    def __init__(self, tooltip='', parent=None):
+        super().__init__(parent)
+        self.setToolTip(tooltip)
+        self.setAccessibleName('first missing or invalid derivative; click to review error')
+        self.setMinimumSize(18, 18)
+        self.setMaximumHeight(28)
+        cursor_shape = getattr(QtCore.Qt, 'CursorShape', QtCore.Qt)
+        self.setCursor(cursor_shape.PointingHandCursor)
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        render_hints = getattr(QtGui.QPainter, 'RenderHint', QtGui.QPainter)
+        painter.setRenderHint(render_hints.Antialiasing)
+        rect = self.rect().adjusted(2, 2, -2, -2)
+        painter.fillRect(rect, QtGui.QColor('#d62728'))
+        pen_color = '#111111' if not self.hasFocus() else '#f5c542'
+        painter.setPen(QtGui.QPen(QtGui.QColor(pen_color), 2))
+        painter.drawRect(rect)
+        painter.setPen(QtGui.QPen(QtGui.QColor('white'), 2))
+        painter.drawLine(rect.bottomLeft(), rect.topRight())
+
+
+class ProcessingFailureDialog(QtWidgets.QDialog):
+    """Scrollable display of an error attributed to a failed derivative."""
+
+    def __init__(self, subject, task, run, artifact, status, report, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f'Processing failure: {subject} {run}')
+        self.resize(800, 520)
+        layout = QVBoxLayout(self)
+        heading = QLabel(
+            f'Subject: {subject}    Task: {task}    Run: {run}\n'
+            f'First failed derivative: {artifact}    Status: {status}'
+        )
+        heading.setTextInteractionFlags(
+            getattr(QtCore.Qt, 'TextInteractionFlag', QtCore.Qt).TextSelectableByMouse
+        )
+        layout.addWidget(heading)
+        self.error_text = QtWidgets.QPlainTextEdit()
+        self.error_text.setReadOnly(True)
+        self.error_text.setPlainText(report.display_text)
+        layout.addWidget(self.error_text, 1)
+        close_button = QPushButton('Close')
+        close_button.clicked.connect(self.accept)
+        button_layout = QHBoxLayout()
+        button_layout.addStretch(1)
+        button_layout.addWidget(close_button)
+        layout.addLayout(button_layout)
+
+
 class ProcReviewDialog(QtWidgets.QDialog):
     """Review ordered derivative completeness across a BIDS project."""
 
@@ -798,6 +854,20 @@ class ProcReviewDialog(QtWidgets.QDialog):
         self.bids_project = project_window.bids_project
         self.processing_script = str(processing_script)
         self.spec = analyze_processing_script(processing_script)
+        available_tasks = project_window.get_available_task_names()
+        script_task = Path(self.processing_script).stem.split('_', 1)[0]
+        matching_tasks = [
+            task for task in available_tasks
+            if task.lower() == script_task.lower()
+        ]
+        if not matching_tasks:
+            choices = ', '.join(available_tasks) if available_tasks else '(none)'
+            raise ProcessingScriptError(
+                f"Script {Path(self.processing_script).name!r} identifies task "
+                f"{script_task!r}, which is not present in this BIDS project. "
+                f"Available tasks: {choices}"
+            )
+        self.task = matching_tasks[0]
         self.page = 0
         self.indicators = []
         self.subject_labels = []
@@ -815,10 +885,8 @@ class ProcReviewDialog(QtWidgets.QDialog):
         main_layout.addWidget(self.l_output_roots)
 
         controls = QHBoxLayout()
-        controls.addWidget(QLabel('Task'))
-        self.b_task = QComboBox()
-        self.b_task.addItems(project_window.get_available_task_names())
-        controls.addWidget(self.b_task)
+        self.l_task = QLabel(f'Task: {self.task}')
+        controls.addWidget(self.l_task)
         controls.addWidget(QLabel('Run'))
         self.b_run = QComboBox()
         controls.addWidget(self.b_run)
@@ -848,38 +916,25 @@ class ProcReviewDialog(QtWidgets.QDialog):
         navigation.addWidget(self.b_refresh)
         main_layout.addLayout(navigation)
 
-        self.b_task.currentIndexChanged.connect(self._task_changed)
         self.b_run.currentIndexChanged.connect(self._reset_and_refresh)
         self.b_hide_no_task.toggled.connect(self._reset_and_refresh)
         self.b_subjects_per_page.editingFinished.connect(self._reset_and_refresh)
         self.b_prev.clicked.connect(self.previous_page)
         self.b_next.clicked.connect(self.next_page)
         self.b_refresh.clicked.connect(self.refresh)
-        self._select_initial_task()
-        self._task_changed()
+        self._populate_runs()
 
-    def _select_initial_task(self):
-        tasks = [self.b_task.itemText(index) for index in range(self.b_task.count())]
-        prefix = Path(self.processing_script).name.split('_', 1)[0]
-        current = getattr(self.project_window, 'selected_task', '')
-        preferred = prefix if prefix in tasks else current if current in tasks else None
-        if preferred is not None:
-            self.b_task.setCurrentText(preferred)
-
-    def _task_changed(self):
-        previous = self.b_run.currentText()
+    def _populate_runs(self):
         runs = {
             _dataset_run(dataset)
             for info in self.bids_project.subjects.values()
             for dataset in info.meg_list
-            if dataset.task == self.b_task.currentText()
+            if dataset.task == self.task
         }
         self.b_run.blockSignals(True)
         self.b_run.clear()
         self.b_run.addItem('All')
         self.b_run.addItems(sorted(runs, key=_natural_key))
-        if previous in {'All', *runs}:
-            self.b_run.setCurrentText(previous)
         self.b_run.blockSignals(False)
         self._reset_and_refresh()
 
@@ -893,19 +948,17 @@ class ProcReviewDialog(QtWidgets.QDialog):
     def _subjects(self):
         subjects = sorted(self.bids_project.subjects, key=_natural_key)
         if self.b_hide_no_task.isChecked():
-            task = self.b_task.currentText()
             subjects = [
                 subject for subject in subjects
-                if any(dataset.task == task
+                if any(dataset.task == self.task
                        for dataset in self.bids_project.subjects[subject].meg_list)
             ]
         return subjects
 
     def _datasets(self, subject):
-        task = self.b_task.currentText()
         selected_run = self.b_run.currentText()
         datasets = [dataset for dataset in self.bids_project.subjects[subject].meg_list
-                    if dataset.task == task]
+                    if dataset.task == self.task]
         if selected_run != 'All':
             datasets = [dataset for dataset in datasets
                         if _dataset_run(dataset) == selected_run]
@@ -933,7 +986,7 @@ class ProcReviewDialog(QtWidgets.QDialog):
 
     def _tooltip(self, subject, dataset, evaluated=None, error=None):
         run = _dataset_run(dataset) if dataset is not None else 'unavailable'
-        lines = [f'Subject: {subject}', f'Task: {self.b_task.currentText()}', f'Run: {run}']
+        lines = [f'Subject: {subject}', f'Task: {self.task}', f'Run: {run}']
         if evaluated is not None:
             record = evaluated.record
             lines.extend([f'Artifact: {evaluated.request.label}',
@@ -944,6 +997,27 @@ class ProcReviewDialog(QtWidgets.QDialog):
         elif error:
             lines.extend(['Status: unavailable', str(error)])
         return '\n'.join(lines)
+
+    def _show_processing_failure(self, subject, dataset, request, status):
+        matching_count = sum(
+            item.task == self.task
+            for item in self.bids_project.subjects[subject].meg_list
+        )
+        report = find_processing_failure(
+            self.spec,
+            dataset.rel_path,
+            allow_legacy_fallback=matching_count == 1,
+        )
+        self.failure_dialog = ProcessingFailureDialog(
+            subject,
+            self.task,
+            _dataset_run(dataset),
+            request.label,
+            status,
+            report,
+            parent=self,
+        )
+        self.failure_dialog.exec()
 
     def refresh(self):
         subjects = self._subjects()
@@ -994,13 +1068,32 @@ class ProcReviewDialog(QtWidgets.QDialog):
                     evaluated_items = evaluate_dataset(self.spec, dataset.rel_path)
                 except Exception as exc:
                     error = exc
+            first_failure = next(
+                (
+                    offset for offset, evaluated in enumerate(evaluated_items)
+                    if not evaluated.record.exists
+                ),
+                0 if dataset is not None and error is not None else None,
+            )
             for offset, request in enumerate(self.spec.outputs):
                 evaluated = evaluated_items[offset] if offset < len(evaluated_items) else None
                 present = evaluated is not None and evaluated.record.exists
-                indicator = DerivativeIndicator(
-                    present,
-                    self._tooltip(subject, dataset, evaluated=evaluated, error=error or 'No matching dataset'),
+                tooltip = self._tooltip(
+                    subject,
+                    dataset,
+                    evaluated=evaluated,
+                    error=error or 'No matching dataset',
                 )
+                if offset == first_failure:
+                    indicator = DerivativeFailureButton(tooltip + '\nClick to review the logged error.')
+                    status = evaluated.record.status if evaluated is not None else 'unavailable'
+                    indicator.clicked.connect(
+                        lambda checked=False, subject=subject, dataset=dataset,
+                        request=request, status=status:
+                        self._show_processing_failure(subject, dataset, request, status)
+                    )
+                else:
+                    indicator = DerivativeIndicator(present, tooltip)
                 self.indicators.append(indicator)
                 grid.addWidget(indicator, offset + 2, column)
 
@@ -1604,8 +1697,8 @@ class BIDS_Project_Window(QMainWindow):
         except ProcessingScriptError as exc:
             QMessageBox.warning(
                 self,
-                'Unsupported Processing Script',
-                f'{exc}\n\nOnly FilterSpec/MEGDerivativeTemplate scripts can be reviewed.',
+                'Cannot Review Processing Script',
+                str(exc),
             )
             return
         self.proc_review_dialog.exec()
