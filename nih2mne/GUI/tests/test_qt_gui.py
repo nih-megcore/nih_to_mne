@@ -736,6 +736,54 @@ def test_proc_review_first_failure_opens_logged_error(qapp, tmp_path, monkeypatc
     ][0]
 
 
+def test_processing_failure_dialog_loads_full_log_and_scrolls_to_bottom(qapp, tmp_path):
+    application_log = tmp_path / "processing.log"
+    application_log.write_text("application fallback", encoding="utf-8")
+    execution_log = tmp_path / "job.err"
+    execution_log.write_text(
+        "\n".join([f"log line {index}" for index in range(200)] + ["FINAL ERROR"]),
+        encoding="utf-8",
+    )
+    report = SimpleNamespace(
+        display_text="Short failure summary",
+        application_log=application_log,
+        execution_log=execution_log,
+    )
+    dialog = qt_gui_module.ProcessingFailureDialog(
+        "sub-01", "task", "run-01", "epochs", "missing", report
+    )
+    dialog.show()
+
+    dialog.b_load_full_log.click()
+    qapp.processEvents()
+
+    displayed = dialog.error_text.toPlainText()
+    assert f"Full log: {execution_log}" in displayed
+    assert "FINAL ERROR" in displayed
+    scrollbar = dialog.error_text.verticalScrollBar()
+    assert scrollbar.value() == scrollbar.maximum()
+
+
+def test_processing_failure_dialog_falls_back_to_application_log(qapp, tmp_path):
+    application_log = tmp_path / "processing.log"
+    application_log.write_text("application log contents", encoding="utf-8")
+    report = SimpleNamespace(
+        display_text="Short failure summary",
+        application_log=application_log,
+        execution_log=tmp_path / "missing-job.err",
+    )
+    dialog = qt_gui_module.ProcessingFailureDialog(
+        "sub-01", "task", "run-01", "epochs", "missing", report
+    )
+
+    dialog.b_load_full_log.click()
+    qapp.processEvents()
+
+    displayed = dialog.error_text.toPlainText()
+    assert f"Full log: {application_log}" in displayed
+    assert "application log contents" in displayed
+
+
 def test_proc_review_rejects_script_task_missing_from_project(qapp, tmp_path):
     script = tmp_path / "unknown_v1.py"
     _write_review_script(script)

@@ -823,6 +823,7 @@ class ProcessingFailureDialog(QtWidgets.QDialog):
 
     def __init__(self, subject, task, run, artifact, status, report, parent=None):
         super().__init__(parent)
+        self.report = report
         self.setWindowTitle(f'Processing failure: {subject} {run}')
         self.resize(800, 520)
         layout = QVBoxLayout(self)
@@ -838,12 +839,53 @@ class ProcessingFailureDialog(QtWidgets.QDialog):
         self.error_text.setReadOnly(True)
         self.error_text.setPlainText(report.display_text)
         layout.addWidget(self.error_text, 1)
+        self.b_load_full_log = QPushButton('Load Full Log')
+        self.b_load_full_log.setToolTip(
+            'Load the full execution log, or the application log if no '
+            'execution log is available'
+        )
+        self.b_load_full_log.clicked.connect(self.load_full_log)
         close_button = QPushButton('Close')
         close_button.clicked.connect(self.accept)
         button_layout = QHBoxLayout()
+        button_layout.addWidget(self.b_load_full_log)
         button_layout.addStretch(1)
         button_layout.addWidget(close_button)
         layout.addLayout(button_layout)
+
+    def load_full_log(self):
+        """Load the most relevant complete log and reveal its final lines."""
+        candidates = (
+            getattr(self.report, 'execution_log', None),
+            getattr(self.report, 'application_log', None),
+        )
+        attempted = []
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            log_path = Path(candidate)
+            attempted.append(log_path)
+            try:
+                log_text = log_path.read_text(encoding='utf-8', errors='replace')
+            except OSError:
+                continue
+            self.error_text.setPlainText(
+                f'Full log: {log_path}\n\n{log_text}'
+            )
+            QtCore.QTimer.singleShot(0, self._scroll_log_to_bottom)
+            return
+
+        if attempted:
+            paths = '\n'.join(str(path) for path in attempted)
+            message = f'Unable to read the available log file(s):\n{paths}'
+        else:
+            message = 'No full processing log is available for this failure.'
+        self.error_text.setPlainText(message)
+        QtCore.QTimer.singleShot(0, self._scroll_log_to_bottom)
+
+    def _scroll_log_to_bottom(self):
+        scrollbar = self.error_text.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
 
 class ProcReviewDialog(QtWidgets.QDialog):
