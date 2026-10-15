@@ -25,6 +25,7 @@ from nih2mne.GUI.beamformer_form_entries import (
     build_gui_component_block,
     render_beamformer_script,
 )
+from nih2mne.proc.derivative_review import analyze_processing_script
 
 
 @pytest.fixture(scope="module")
@@ -308,11 +309,24 @@ def test_real_template_renders_as_direct_compilable_script(sample_entries):
     assert "if __name__ ==" not in script_text
     assert "def git_blob_hash(" not in script_text
     assert "def normalize_beamfilt_ori(" not in script_text
+    assert "ProvenanceContext.from_script(" in script_text
+    assert script_text.count("provenance=provenance_context.derivative(") == 12
     assert "template.artifact(\"stc\", description=condition)" in script_text
     assert 'space="fsaverage"' in script_text
     assert script_text.index("if len(sys.argv) != 2:") < script_text.index(
         "primary = get_bids_path_from_fname"
     )
+
+
+def test_rendered_template_remains_proc_review_compatible(sample_entries, tmp_path):
+    script_path = tmp_path / "rest_v1.py"
+    script_path.write_text(render_beamformer_script(sample_entries), encoding="utf-8")
+
+    spec = analyze_processing_script(script_path)
+
+    assert spec.project == "beamformer_test"
+    assert spec.outputs[0].key == "preprocessing_dataset_description"
+    assert spec.outputs[-1].label == "stc: task / space-fsaverage"
 
 
 def test_script_save_path_uses_megcore_datproc_start_dir_and_bids_task(qapp):

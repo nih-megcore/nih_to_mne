@@ -10,13 +10,26 @@ import pytest
 from nih2mne.proc import megcore_utils
 
 
-def _record(path: Path, *, exists=False, status="missing", errors=()):
+def _record(path: Path, *, exists=False, status="missing", errors=(), key="artifact"):
     return SimpleNamespace(
         path=path,
         exists=exists,
         status=status,
-        key="artifact",
+        key=key,
         validation_errors=list(errors),
+    )
+
+
+def _provenance(bids_root, *, inputs):
+    context = megcore_utils.ProvenanceContext(
+        bids_root=Path(bids_root).resolve(),
+        script_filename="task_v1.py",
+        script_hash="abc123",
+        packages={"mne": "1.2.3", "mne-bids": "0.16.0", "nih2mne": "0.6.2"},
+    )
+    return context.derivative(
+        calls=["raw.filter(l_freq=10, h_freq=25, n_jobs=4)"],
+        inputs=inputs,
     )
 
 
@@ -154,6 +167,93 @@ def test_load_or_make_wraps_creation_errors(tmp_path):
     assert isinstance(error.value.__cause__, ValueError)
 
 
+def test_load_or_make_writes_portable_provenance_for_created_artifact(tmp_path):
+    bids_root = tmp_path / "bids"
+    raw_path = bids_root / "sub-01" / "meg" / "sub-01_task-test_meg.ds"
+    raw_path.mkdir(parents=True)
+    output = bids_root / "derivatives" / "project" / "sub-01_task-test_epo.fif"
+    record = _record(output, key="epochs")
+    provenance = _provenance(bids_root, inputs={"raw": raw_path})
+
+    megcore_utils.load_or_make(
+        record,
+        lambda: "epochs",
+        lambda value, path: path.write_text(value),
+        logging.getLogger("test_provenance"),
+        provenance=provenance,
+    )
+
+    sidecar = output.with_suffix(".json")
+    metadata = json.loads(sidecar.read_text())["NIH2MNEProvenance"]
+    assert metadata["Inputs"] == {
+        "raw": "{bids_root}/sub-01/meg/sub-01_task-test_meg.ds"
+    }
+    assert metadata["Script"] == {
+        "Filename": "task_v1.py",
+        "Hash": "abc123",
+        "HashType": "git-blob-sha1",
+    }
+    assert metadata["Calls"] == ["raw.filter(l_freq=10, h_freq=25, n_jobs=4)"]
+    assert metadata["Packages"]["nih2mne"] == "0.6.2"
+    assert metadata["ProcessingDateTime"].endswith("Z")
+    assert str(bids_root) not in sidecar.read_text()
+
+
+def test_provenance_rejects_external_input_before_derivative_creation(tmp_path):
+    bids_root = tmp_path / "bids"
+    record = _record(
+        bids_root / "derivatives" / "project" / "artifact.fif",
+        key="forward",
+    )
+    provenance = _provenance(
+        bids_root,
+        inputs={"raw": tmp_path / "external" / "raw.ds"},
+    )
+    made = []
+
+    with pytest.raises(RuntimeError, match="Failed to create forward") as error:
+        megcore_utils.load_or_make(
+            record,
+            lambda: made.append(True),
+            lambda value, path: None,
+            logging.getLogger("test_external_provenance"),
+            provenance=provenance,
+        )
+
+    assert made == []
+    assert isinstance(error.value.__cause__, ValueError)
+    assert "outside the BIDS root" in str(error.value.__cause__)
+
+
+def test_load_or_make_does_not_backfill_reused_artifact(tmp_path):
+    bids_root = tmp_path / "bids"
+    output = bids_root / "derivatives" / "project" / "artifact.fif"
+    output.parent.mkdir(parents=True)
+    output.touch()
+    record = _record(output, exists=True, status="present", key="forward")
+    record.load_file = lambda: "cached"
+    provenance = _provenance(bids_root, inputs={"raw": bids_root / "raw.ds"})
+
+    result = megcore_utils.load_or_make(
+        record,
+        lambda: pytest.fail("make should not be called"),
+        lambda value, path: pytest.fail("save should not be called"),
+        logging.getLogger("test_no_backfill"),
+        provenance=provenance,
+    )
+
+    assert result == "cached"
+    assert not output.with_suffix(".json").exists()
+
+
+def test_surface_stc_provenance_uses_base_json_path(tmp_path):
+    record = _record(tmp_path / "sub-01_desc-face_stc", key="stc")
+
+    assert megcore_utils.provenance_sidecar_path(record) == (
+        tmp_path / "sub-01_desc-face_stc.json"
+    )
+
+
 def test_save_filtered_writes_data_and_metadata(tmp_path):
     data_record = _record(tmp_path / "nested" / "raw.fif")
     json_record = _record(tmp_path / "nested" / "raw.json")
@@ -208,6 +308,43 @@ def test_save_filtered_repairs_invalid_pair_with_overwrite(tmp_path):
     assert json.loads(json_record.path.read_text()) == json_record.expected_metadata
 
 
+def test_save_filtered_merges_provenance_into_derivative_json(tmp_path):
+    bids_root = tmp_path / "bids"
+    raw_input = bids_root / "sub-01" / "meg" / "sub-01_task-test_meg.ds"
+    raw_input.mkdir(parents=True)
+    data_record = _record(
+        bids_root / "derivatives" / "project" / "sub-01_proc-filt_meg.fif",
+        key="filtered_raw",
+    )
+    json_record = _record(
+        data_record.path.with_suffix(".json"), key="filtered_raw_json"
+    )
+    json_record.expected_metadata = {
+        "Sources": ["bids::sub-01/meg/sub-01_task-test_meg.ds"],
+        "SoftwareFilters": {"MNE-Python": {"HighpassCutoffHz": 10}},
+    }
+    provenance = _provenance(bids_root, inputs={"raw": raw_input})
+    raw_sidecar = raw_input.parent / "sub-01_task-test_meg.json"
+    raw_sidecar.write_text('{"RawMetadata": true}\n')
+
+    megcore_utils.save_filtered(
+        SimpleNamespace(save=lambda path, overwrite: path.write_text("filtered")),
+        data_record,
+        json_record,
+        False,
+        logging.getLogger("test_filtered_provenance"),
+        provenance=provenance,
+    )
+
+    metadata = json.loads(json_record.path.read_text())
+    assert metadata["Sources"] == json_record.expected_metadata["Sources"]
+    assert metadata["SoftwareFilters"] == json_record.expected_metadata["SoftwareFilters"]
+    assert metadata["NIH2MNEProvenance"]["Inputs"]["raw"].startswith(
+        "{bids_root}/"
+    )
+    assert json.loads(raw_sidecar.read_text()) == {"RawMetadata": True}
+
+
 def test_save_if_requested_preserves_valid_and_rejects_invalid(tmp_path):
     saved = []
     valid = _record(tmp_path / "valid.fif", exists=True, status="valid")
@@ -225,6 +362,28 @@ def test_save_if_requested_preserves_valid_and_rejects_invalid(tmp_path):
             "value", invalid, lambda value, path: saved.append(path), False,
             logging.getLogger("test"),
         )
+
+
+def test_save_if_requested_writes_h5_provenance_sidecar(tmp_path):
+    bids_root = tmp_path / "bids"
+    epochs = bids_root / "derivatives" / "project" / "sub-01_epo.fif"
+    output = bids_root / "derivatives" / "project" / "sub-01_lcmv.h5"
+    record = _record(output, key="lcmv")
+    provenance = _provenance(bids_root, inputs={"epochs": epochs})
+
+    megcore_utils.save_if_requested(
+        "filters",
+        record,
+        lambda value, path: path.write_text(value),
+        False,
+        logging.getLogger("test_save_provenance"),
+        provenance=provenance,
+    )
+
+    metadata = json.loads(output.with_suffix(".json").read_text())
+    assert metadata["NIH2MNEProvenance"]["Inputs"] == {
+        "epochs": "{bids_root}/derivatives/project/sub-01_epo.fif"
+    }
 
 
 @pytest.mark.parametrize(
