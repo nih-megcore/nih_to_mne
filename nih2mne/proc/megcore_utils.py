@@ -112,13 +112,26 @@ def _portable_bids_path(path: str | Path, bids_root: Path) -> str:
     candidate = Path(path).expanduser()
     if not candidate.is_absolute():
         candidate = bids_root / candidate
-    resolved = candidate.resolve(strict=False)
+
+    # Check the BIDS-facing paths before resolving symlinks. A project may
+    # intentionally link a subject or derivative directory to storage outside
+    # the project tree, while its portable identity remains below bids_root.
+    lexical_root = Path(os.path.abspath(bids_root))
+    lexical_candidate = Path(os.path.abspath(candidate))
     try:
-        relative = resolved.relative_to(bids_root)
-    except ValueError as error:
-        raise ValueError(
-            f"provenance input is outside the BIDS root {bids_root}: {resolved}"
-        ) from error
+        relative = lexical_candidate.relative_to(lexical_root)
+    except ValueError:
+        # Also support a bids_root that is itself a symlink and callers that
+        # supply a path through that link rather than its resolved target.
+        resolved_root = lexical_root.resolve(strict=False)
+        resolved_candidate = lexical_candidate.resolve(strict=False)
+        try:
+            relative = resolved_candidate.relative_to(resolved_root)
+        except ValueError as error:
+            raise ValueError(
+                f"provenance input is outside the BIDS root {bids_root}: "
+                f"{lexical_candidate} (resolves to {resolved_candidate})"
+            ) from error
     if relative.is_absolute() or ".." in relative.parts:
         raise ValueError(f"provenance input is not portable: {path}")
     if relative == Path("."):

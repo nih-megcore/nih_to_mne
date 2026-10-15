@@ -42,6 +42,44 @@ def test_git_blob_hash(tmp_path):
     assert megcore_utils.git_blob_hash(script) == expected
 
 
+def test_portable_path_preserves_linked_directory_below_bids_root(tmp_path):
+    bids_root = tmp_path / "bids"
+    external_subjects = tmp_path / "shared" / "subjects"
+    external_subjects.mkdir(parents=True)
+    freesurfer = bids_root / "derivatives" / "freesurfer"
+    freesurfer.parent.mkdir(parents=True)
+    freesurfer.symlink_to(external_subjects, target_is_directory=True)
+    subject = freesurfer / "sub-01"
+
+    context = megcore_utils.ProvenanceContext(
+        bids_root=bids_root,
+        script_filename="task_v1.py",
+        script_hash="abc123",
+    )
+
+    assert context.portable_path(subject) == (
+        "{bids_root}/derivatives/freesurfer/sub-01"
+    )
+
+
+def test_portable_path_supports_symlinked_bids_root(tmp_path):
+    actual_root = tmp_path / "actual-bids"
+    subject = actual_root / "sub-01" / "meg"
+    subject.mkdir(parents=True)
+    linked_root = tmp_path / "linked-bids"
+    linked_root.symlink_to(actual_root, target_is_directory=True)
+
+    context = megcore_utils.ProvenanceContext(
+        bids_root=linked_root,
+        script_filename="task_v1.py",
+        script_hash="abc123",
+    )
+
+    assert context.portable_path(linked_root / "sub-01" / "meg") == (
+        "{bids_root}/sub-01/meg"
+    )
+
+
 def test_slurm_context_outside_slurm(monkeypatch):
     monkeypatch.delenv("SLURM_JOB_ID", raising=False)
     assert megcore_utils.slurm_context() == (-1, None)
