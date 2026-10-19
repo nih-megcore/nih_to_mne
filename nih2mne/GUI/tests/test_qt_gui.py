@@ -541,7 +541,10 @@ def test_batch_datproc_skips_unready_subject_and_reports_mri(
         str(valid_mri),
     )
     summary = messages[0][1]
-    assert f"sub-01: Submitted batch job 321 (MRI: {valid_mri}; QA: GOOD)" in summary
+    assert "sub-01" in summary.splitlines()
+    assert "Submitted batch job 321" not in summary
+    assert str(valid_mri) not in summary
+    assert "QA: GOOD" not in summary
     assert "Skipped for MRI readiness: 1 subject(s)" in summary
     assert summary.count("sub-02: multiple MRIs are unresolved") == 1
 

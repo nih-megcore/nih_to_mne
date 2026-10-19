@@ -779,16 +779,15 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
                                          mem=mem, threads=threads,
                                          time_limit=self.b_time.text().strip())
             if outcode != None:
-                submitted_jobs.append((subject, str(outcode).strip(), mri_path))
+                submitted_jobs.append(subject)
             else:
                 failed_jobs.append(subject)
 
         if len(submitted_jobs) > 0:
             summary = [f'Submitted {len(submitted_jobs)} datproc jobs for task {self.get_selected_task()}']
-            for subject, outcode, mri_path in submitted_jobs[:5]:
-                summary.append(
-                    f'{subject}: {outcode} (MRI: {mri_path}; QA: GOOD)')
-            if len(submitted_jobs) > 5:
+            submitted_subjects = list(dict.fromkeys(submitted_jobs))
+            summary.extend(submitted_subjects[:5])
+            if len(submitted_subjects) > 5:
                 summary.append('...')
             if len(failed_jobs) > 0:
                 summary.append(f'Failed submissions: {len(failed_jobs)}')
