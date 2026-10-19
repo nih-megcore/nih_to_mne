@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import shlex
 import sys
 from types import SimpleNamespace
 import types
@@ -53,6 +54,7 @@ get_task_datproc_files = qt_gui_module.get_task_datproc_files
 get_subject_processing_logfile = qt_gui_module.get_subject_processing_logfile
 get_subject_processing_status = qt_gui_module.get_subject_processing_status
 git_blob_hash = qt_gui_module.git_blob_hash
+get_datproc_mri = qt_gui_module.get_datproc_mri
 SubjectSelectionDialog = qt_gui_module.SubjectSelectionDialog
 ProcReviewDialog = qt_gui_module.ProcReviewDialog
 DerivativeFailureButton = qt_gui_module.DerivativeFailureButton
@@ -149,6 +151,11 @@ def test_subject_tile_status_and_task_filter(qapp):
     assert tile.color("Meg") == "green"
     assert tile.color("Mri") == "green"
     assert tile.color("FS") == "green"
+    assert tile.mri == bids_info.mri
+
+    bids_info.mri = "/tmp/reselected_T1w.nii.gz"
+
+    assert tile.mri == "/tmp/reselected_T1w.nii.gz"
 
 
 def test_subject_tile_marks_missing_data_bad(qapp):
@@ -381,13 +388,194 @@ def test_get_task_datproc_files_filters_by_task_prefix(tmp_path):
     assert get_task_datproc_files("rest", datproc_dir=str(tmp_path)) == ["rest_v2.py", "rest_v1.sh"]
 
 
-def test_build_datproc_command_uses_python_for_py_files():
-    py_cmd = build_datproc_command("/tmp/rest_v2.py", "/tmp/sub-01_task-rest_meg.ds")
-    shell_cmd = build_datproc_command("/tmp/rest_v2.sh", "/tmp/sub-01_task-rest_meg.ds")
+def test_build_datproc_command_includes_quoted_mri():
+    py_cmd = build_datproc_command(
+        "/tmp/rest process.py",
+        "/tmp/sub 01/sub-01_task-rest_meg.ds",
+        "/tmp/sub 01/sub-01_T1w.nii.gz",
+    )
+    shell_cmd = build_datproc_command(
+        "/tmp/rest process.sh",
+        "/tmp/sub 01/sub-01_task-rest_meg.ds",
+        "/tmp/sub 01/sub-01_T1w.nii.gz",
+    )
 
-    assert py_cmd.endswith("/tmp/rest_v2.py /tmp/sub-01_task-rest_meg.ds")
-    assert ".py" in py_cmd
-    assert shell_cmd == "/tmp/rest_v2.sh /tmp/sub-01_task-rest_meg.ds"
+    assert shlex.split(py_cmd)[-3:] == [
+        "/tmp/sub 01/sub-01_task-rest_meg.ds",
+        "-mri",
+        "/tmp/sub 01/sub-01_T1w.nii.gz",
+    ]
+    assert shlex.split(py_cmd)[1] == "/tmp/rest process.py"
+    assert shlex.split(shell_cmd) == [
+        "/tmp/rest process.sh",
+        "/tmp/sub 01/sub-01_task-rest_meg.ds",
+        "-mri",
+        "/tmp/sub 01/sub-01_T1w.nii.gz",
+    ]
+
+
+@pytest.mark.parametrize(
+    "mri,mri_qa,error_text",
+    [
+        (None, "No MRIs", "no MRI is selected"),
+        ("Multiple", "Undetermined", "multiple MRIs are unresolved"),
+        ("missing_T1w.nii.gz", "GOOD", "selected MRI does not exist"),
+        ("existing_T1w.nii.gz", "BAD", "MRI fiducial QA is 'BAD'"),
+    ],
+)
+def test_get_datproc_mri_rejects_unready_inputs(tmp_path, mri, mri_qa, error_text):
+    if mri == "existing_T1w.nii.gz":
+        mri = str(tmp_path / mri)
+        (tmp_path / "existing_T1w.nii.gz").touch()
+    bids_info = FakeBidsInfo(mri=mri, mri_json_qa=mri_qa)
+
+    with pytest.raises(ValueError, match=error_text):
+        get_datproc_mri(bids_info)
+
+
+def test_single_datproc_submits_selected_mri_and_reports_it(
+        tmp_path, qapp, monkeypatch):
+    processing_file = tmp_path / "rest_v1.py"
+    processing_file.write_text("")
+    mri = tmp_path / "sub-01_T1w.nii.gz"
+    mri.touch()
+    bids_info = FakeBidsInfo(mri=str(mri), mri_json_qa="GOOD")
+    subject_gui = Subject_GUI(bids_info)
+    submitted = []
+    messages = []
+
+    def fake_submit(processing_path, dataset_path, mri_path, **kwargs):
+        submitted.append((processing_path, dataset_path, mri_path, kwargs))
+        return "Submitted batch job 123"
+
+    monkeypatch.setattr(qt_gui_module, "submit_datproc_job", fake_submit)
+    monkeypatch.setattr(
+        qt_gui_module.QMessageBox,
+        "information",
+        lambda parent, title, message: messages.append((title, message)),
+    )
+    dialog = qt_gui_module.DatprocSubmissionDialog(subject_gui)
+    dialog.b_datproc_dir.setText(str(tmp_path))
+    dialog.refresh_matches()
+
+    assert shlex.split(dialog.l_cmd_preview.text())[-2:] == ["-mri", str(mri)]
+    assert dialog.b_submit.isEnabled()
+
+    dialog.submit_job()
+
+    assert submitted[0][:3] == (
+        str(processing_file),
+        bids_info.meg_list[0].rel_path,
+        str(mri),
+    )
+    assert "MRI: " + str(mri) in messages[0][1]
+    assert "MRI QA: GOOD" in messages[0][1]
+
+
+def test_single_datproc_blocks_failed_mri_qa(tmp_path, qapp, monkeypatch):
+    (tmp_path / "rest_v1.py").write_text("")
+    mri = tmp_path / "sub-01_T1w.nii.gz"
+    mri.touch()
+    bids_info = FakeBidsInfo(mri=str(mri), mri_json_qa="BAD")
+    subject_gui = Subject_GUI(bids_info)
+    warnings = []
+    monkeypatch.setattr(
+        qt_gui_module.QMessageBox,
+        "warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+    dialog = qt_gui_module.DatprocSubmissionDialog(subject_gui)
+    dialog.b_datproc_dir.setText(str(tmp_path))
+    dialog.refresh_matches()
+
+    assert not dialog.b_submit.isEnabled()
+    assert "MRI fiducial QA is 'BAD'" in dialog.l_cmd_preview.text()
+
+    dialog.submit_job()
+
+    assert warnings == [("MRI Not Ready", "sub-01: MRI fiducial QA is 'BAD'")]
+
+
+def test_batch_datproc_skips_unready_subject_and_reports_mri(
+        tmp_path, qapp, monkeypatch):
+    processing_file = tmp_path / "rest_v1.py"
+    processing_file.write_text("")
+    valid_mri = tmp_path / "sub-01_T1w.nii.gz"
+    valid_mri.touch()
+    valid = FakeBidsInfo(
+        subject="sub-01", mri=str(valid_mri), mri_json_qa="GOOD")
+    skipped = FakeBidsInfo(
+        subject="sub-02", mri="Multiple", mri_json_qa="Undetermined")
+    skipped.meg_list.append(FakeMegDataset(
+        "rest", "rest_run-02.ds", "/tmp/sub-02/rest_run-02.ds"))
+    project = FakeProject({"sub-01": valid, "sub-02": skipped})
+    window = BIDS_Project_Window(
+        bids_project=project, gridsize_row=1, gridsize_col=2)
+    submitted = []
+    messages = []
+
+    def fake_submit(processing_path, dataset_path, mri_path, **kwargs):
+        submitted.append((processing_path, dataset_path, mri_path, kwargs))
+        return "Submitted batch job 321"
+
+    monkeypatch.setattr(qt_gui_module, "submit_datproc_job", fake_submit)
+    monkeypatch.setattr(
+        qt_gui_module.QMessageBox,
+        "information",
+        lambda parent, title, message: messages.append((title, message)),
+    )
+    dialog = qt_gui_module.ProjectDatprocSubmissionDialog(window)
+    dialog.b_datproc_dir.setText(str(tmp_path))
+    dialog.refresh_matches()
+
+    assert shlex.split(dialog.l_cmd_preview.text().splitlines()[0])[-2:] == [
+        "-mri", str(valid_mri)]
+    assert "MRI skipped: 1" in dialog.l_dataset_count.text()
+
+    dialog.submit_jobs()
+
+    assert len(submitted) == 1
+    assert submitted[0][:3] == (
+        str(processing_file),
+        valid.meg_list[0].rel_path,
+        str(valid_mri),
+    )
+    summary = messages[0][1]
+    assert f"sub-01: Submitted batch job 321 (MRI: {valid_mri}; QA: GOOD)" in summary
+    assert "Skipped for MRI readiness: 1 subject(s)" in summary
+    assert summary.count("sub-02: multiple MRIs are unresolved") == 1
+
+
+def test_batch_datproc_with_no_ready_mri_submits_nothing(
+        tmp_path, qapp, monkeypatch):
+    (tmp_path / "rest_v1.py").write_text("")
+    bids_info = FakeBidsInfo(
+        subject="sub-01", mri=None, mri_json_qa="No MRIs")
+    window = BIDS_Project_Window(
+        bids_project=FakeProject({"sub-01": bids_info}),
+        gridsize_row=1,
+        gridsize_col=1,
+    )
+    warnings = []
+    monkeypatch.setattr(
+        qt_gui_module,
+        "submit_datproc_job",
+        lambda *args, **kwargs: pytest.fail("an MRI-invalid job was submitted"),
+    )
+    monkeypatch.setattr(
+        qt_gui_module.QMessageBox,
+        "warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+    dialog = qt_gui_module.ProjectDatprocSubmissionDialog(window)
+    dialog.b_datproc_dir.setText(str(tmp_path))
+    dialog.refresh_matches()
+
+    dialog.submit_jobs()
+
+    assert warnings[0][0] == "No Processing-Ready MRIs"
+    assert "No slurm jobs were submitted" in warnings[0][1]
+    assert "sub-01: no MRI is selected" in warnings[0][1]
 
 
 def test_collect_task_datasets_returns_all_matching_project_datasets():

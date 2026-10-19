@@ -172,16 +172,39 @@ def get_task_datproc_files(task_name, datproc_dir=DATPROC_DIR):
     return sorted(matching_files, reverse=True)
 
 
-def build_datproc_command(processing_file, dataset_fname):
-    if (processing_file == None) or (dataset_fname == None):
-        raise ValueError('processing_file and dataset_fname are required')
+def get_datproc_mri(bids_info):
+    """Return the QA-selected MRI path when it is ready for processing."""
 
-    quoted_processing_file = shlex.quote(processing_file)
-    quoted_dataset = shlex.quote(dataset_fname)
+    subject = getattr(bids_info, 'subject', 'Unknown subject')
+    mri_fname = getattr(bids_info, 'mri', None)
+    if mri_fname is None:
+        raise ValueError(f'{subject}: no MRI is selected')
+    if mri_fname == 'Multiple':
+        raise ValueError(f'{subject}: multiple MRIs are unresolved')
+
+    mri_fname = os.fspath(mri_fname)
+    mri_qa = getattr(bids_info, 'mri_json_qa', None)
+    if mri_qa != 'GOOD':
+        raise ValueError(f'{subject}: MRI fiducial QA is {mri_qa!r}')
+    if not op.isfile(mri_fname):
+        raise ValueError(f'{subject}: selected MRI does not exist: {mri_fname}')
+    return mri_fname
+
+
+def build_datproc_command(processing_file, dataset_fname, mri_fname):
+    if ((processing_file == None) or (dataset_fname == None) or
+            (mri_fname == None)):
+        raise ValueError(
+            'processing_file, dataset_fname, and mri_fname are required')
+
+    quoted_processing_file = shlex.quote(os.fspath(processing_file))
+    quoted_dataset = shlex.quote(os.fspath(dataset_fname))
+    quoted_mri = shlex.quote(os.fspath(mri_fname))
     if str(processing_file).endswith('.py'):
-        return f'{shlex.quote(sys.executable)} {quoted_processing_file} {quoted_dataset}'
+        return (f'{shlex.quote(sys.executable)} {quoted_processing_file} '
+                f'{quoted_dataset} -mri {quoted_mri}')
     else:
-        return f'{quoted_processing_file} {quoted_dataset}'
+        return f'{quoted_processing_file} {quoted_dataset} -mri {quoted_mri}'
 
 
 def collect_task_datasets(bids_project, task_name):
@@ -196,9 +219,10 @@ def collect_task_datasets(bids_project, task_name):
     return matched_datasets
 
 
-def submit_datproc_job(processing_file, dataset_fname, subject_name, task_name,
+def submit_datproc_job(processing_file, dataset_fname, mri_fname,
+                       subject_name, task_name,
                        log_root=None, mem=8, threads=2, time_limit='24:00:00'):
-    cmd = build_datproc_command(processing_file, dataset_fname)
+    cmd = build_datproc_command(processing_file, dataset_fname, mri_fname)
     if log_root == None:
         log_root = os.getcwd()
     logfile_prefix = f'datproc_{subject_name}_{task_name}'
@@ -386,9 +410,12 @@ class DatprocSubmissionDialog(QtWidgets.QDialog):
             self.l_cmd_preview.setText('No matching processing file selected')
             return
         try:
-            cmd = build_datproc_command(processing_path, dataset_path)
-        except ValueError:
-            cmd = 'Invalid processing file or dataset'
+            mri_path = get_datproc_mri(self.bids_info)
+            cmd = build_datproc_command(processing_path, dataset_path, mri_path)
+            self.b_submit.setEnabled(True)
+        except ValueError as error:
+            self.b_submit.setEnabled(False)
+            cmd = f'Cannot submit datproc: {error}'
         self.l_cmd_preview.setText(cmd)
 
     def submit_job(self):
@@ -405,6 +432,12 @@ class DatprocSubmissionDialog(QtWidgets.QDialog):
             return
 
         try:
+            mri_path = get_datproc_mri(self.bids_info)
+        except ValueError as error:
+            QMessageBox.warning(self, 'MRI Not Ready', str(error))
+            return
+
+        try:
             mem = int(self.b_mem.text().strip())
             threads = int(self.b_threads.text().strip())
         except ValueError:
@@ -414,7 +447,7 @@ class DatprocSubmissionDialog(QtWidgets.QDialog):
 
         dataset = self.subject_gui.get_current_meg_dataset()
         log_root = getattr(self.bids_info, 'bids_root', os.getcwd())
-        outcode = submit_datproc_job(processing_path, dataset.rel_path,
+        outcode = submit_datproc_job(processing_path, dataset.rel_path, mri_path,
                                      subject_name=self.bids_info.subject,
                                      task_name=dataset.task,
                                      log_root=log_root,
@@ -422,7 +455,9 @@ class DatprocSubmissionDialog(QtWidgets.QDialog):
                                      time_limit=self.b_time.text().strip())
         if outcode != None:
             QMessageBox.information(self, 'Submitted',
-                                    f'Submitted job for task {dataset.task}\n{str(outcode).strip()}')
+                                    f'Submitted job for task {dataset.task}\n'
+                                    f'{str(outcode).strip()}\n'
+                                    f'MRI: {mri_path}\nMRI QA: GOOD')
             self.accept()
         else:
             QMessageBox.warning(self, 'Submission Failed',
@@ -533,6 +568,28 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
         datasets = self.get_selected_task_datasets()
         return [item for item in datasets if item[0] in self.selected_subjects]
 
+    def partition_selected_datasets(self):
+        """Split selected datasets into runnable jobs and MRI-skipped subjects."""
+
+        runnable = []
+        skipped = {}
+        for subject, bids_info, dataset in self.get_selected_datasets():
+            try:
+                mri_path = get_datproc_mri(bids_info)
+            except ValueError as error:
+                skipped.setdefault(subject, str(error))
+                continue
+            runnable.append((subject, bids_info, dataset, mri_path))
+        return runnable, skipped
+
+    @staticmethod
+    def format_mri_skips(skipped):
+        if not skipped:
+            return []
+        lines = [f'Skipped for MRI readiness: {len(skipped)} subject(s)']
+        lines.extend(skipped.values())
+        return lines
+
     def on_processing_file_changed(self):
         self.selected_processing_hash = None
         self.update_summary()
@@ -639,9 +696,12 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
     def update_summary(self):
         datasets = self.get_selected_task_datasets()
         selected_datasets = self.get_selected_datasets()
+        runnable, skipped = self.partition_selected_datasets()
+        runnable_subjects = {subject for subject, _, _, _ in runnable}
         self.l_dataset_count.setText(
             f'Matching datasets in project: {len(datasets)} '
-            f'(subjects selected: {len(self.selected_subjects)}/{len(self.matched_subjects)})'
+            f'(subjects selected: {len(self.selected_subjects)}/{len(self.matched_subjects)}; '
+            f'runnable: {len(runnable_subjects)}; MRI skipped: {len(skipped)})'
         )
         self.b_select_subjects.setEnabled(len(self.matched_subjects) > 0)
         self.b_submit.setEnabled((self.get_selected_processing_path() != None) and
@@ -657,8 +717,17 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
             self.l_cmd_preview.setText('No subjects are selected for batch processing')
             return
 
-        _, _, dset = selected_datasets[0]
-        self.l_cmd_preview.setText(build_datproc_command(processing_path, dset.rel_path))
+        if len(runnable) == 0:
+            self.l_cmd_preview.setText(
+                '\n'.join(['No selected subjects have a processing-ready MRI'] +
+                          self.format_mri_skips(skipped)))
+            return
+
+        _, _, dset, mri_path = runnable[0]
+        preview = build_datproc_command(processing_path, dset.rel_path, mri_path)
+        if skipped:
+            preview += f'\nMRI-skipped subjects: {len(skipped)}'
+        self.l_cmd_preview.setText(preview)
 
     def submit_jobs(self):
         datproc_dir = self.b_datproc_dir.text().strip()
@@ -675,10 +744,20 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
         if not self.confirm_processing_file_unchanged():
             return
 
-        datasets = self.get_selected_datasets()
-        if len(datasets) == 0:
+        selected_datasets = self.get_selected_datasets()
+        if len(selected_datasets) == 0:
             QMessageBox.warning(self, 'No Selected Datasets',
                                 f'No selected project datasets were found for task {self.get_selected_task()}')
+            return
+
+        datasets, skipped_subjects = self.partition_selected_datasets()
+        if len(datasets) == 0:
+            QMessageBox.warning(
+                self,
+                'No Processing-Ready MRIs',
+                '\n'.join(['No slurm jobs were submitted.'] +
+                          self.format_mri_skips(skipped_subjects)),
+            )
             return
 
         try:
@@ -692,31 +771,38 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
         log_root = getattr(self.bids_project, 'bids_root', os.getcwd())
         submitted_jobs = []
         failed_jobs = []
-        for subject, _, dset in datasets:
-            outcode = submit_datproc_job(processing_path, dset.rel_path,
+        for subject, _, dset, mri_path in datasets:
+            outcode = submit_datproc_job(processing_path, dset.rel_path, mri_path,
                                          subject_name=subject,
                                          task_name=dset.task,
                                          log_root=log_root,
                                          mem=mem, threads=threads,
                                          time_limit=self.b_time.text().strip())
             if outcode != None:
-                submitted_jobs.append((subject, str(outcode).strip()))
+                submitted_jobs.append((subject, str(outcode).strip(), mri_path))
             else:
                 failed_jobs.append(subject)
 
         if len(submitted_jobs) > 0:
             summary = [f'Submitted {len(submitted_jobs)} datproc jobs for task {self.get_selected_task()}']
-            for subject, outcode in submitted_jobs[:5]:
-                summary.append(f'{subject}: {outcode}')
+            for subject, outcode, mri_path in submitted_jobs[:5]:
+                summary.append(
+                    f'{subject}: {outcode} (MRI: {mri_path}; QA: GOOD)')
             if len(submitted_jobs) > 5:
                 summary.append('...')
             if len(failed_jobs) > 0:
                 summary.append(f'Failed submissions: {len(failed_jobs)}')
+                summary.extend(f'{subject}: SLURM submission failed'
+                               for subject in failed_jobs)
+            summary.extend(self.format_mri_skips(skipped_subjects))
             QMessageBox.information(self, 'Submitted', '\n'.join(summary))
             self.accept()
         else:
-            QMessageBox.warning(self, 'Submission Failed',
-                                'No slurm jobs were submitted. Check terminal output for details.')
+            summary = ['No slurm jobs were submitted. Check terminal output for details.']
+            summary.extend(f'{subject}: SLURM submission failed'
+                           for subject in failed_jobs)
+            summary.extend(self.format_mri_skips(skipped_subjects))
+            QMessageBox.warning(self, 'Submission Failed', '\n'.join(summary))
 
 
 def _natural_key(value):
@@ -1198,6 +1284,12 @@ class Subject_Tile(QWidget):
             tmp.setStyleSheet(f"background-color: {color}")
             layout.addWidget(tmp)
         self.setLayout(layout)
+
+    @property
+    def mri(self):
+        """Return the current QA-selected MRI for this subject."""
+
+        return self.bids_info.mri
     
     def clicked(self):
         '''This will eventually open the subject QA'''

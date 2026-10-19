@@ -290,7 +290,7 @@ def test_write_script_via_dialog_writes_template_output(qapp, monkeypatch, tmp_p
     assert written_path == str(save_path)
     assert "#%% << INSERT GUI COMPONENTS HERE >>" not in written_text
     assert "# GUI entries >>" in written_text
-    assert "dataset_path = pathlib.Path(sys.argv[1])" in written_text
+    assert "dataset_path, mri_path, argument_parser = _parse_arguments()" in written_text
     assert "project = 'beamformer_test'" in written_text
     assert "# GUI entries <<" in written_text
     assert "beam_reg = 0.05" in written_text
@@ -313,7 +313,13 @@ def test_real_template_renders_as_direct_compilable_script(sample_entries):
     assert script_text.count("provenance=provenance_context.derivative(") == 12
     assert "template.artifact(\"stc\", description=condition)" in script_text
     assert 'space="fsaverage"' in script_text
-    assert script_text.index("if len(sys.argv) != 2:") < script_text.index(
+    assert "import argparse" in script_text
+    assert 'parser.add_argument(\n        "-meg"' in script_text
+    assert 'parser.add_argument(\n        "-mri"' in script_text
+    assert "logger.info(\"MRI input: %s\", anat.fpath)" in script_text
+    assert script_text.index(
+        "dataset_path, mri_path, argument_parser = _parse_arguments()"
+    ) < script_text.index(
         "primary = get_bids_path_from_fname"
     )
 
