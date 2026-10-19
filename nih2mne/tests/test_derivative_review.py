@@ -42,6 +42,7 @@ def test_analyzer_is_static_and_preserves_output_order(tmp_path):
     assert spec.project == "review"
     assert spec.filter_kwargs == {"l_freq": 1, "h_freq": 40, "notch_freqs": (60,)}
     assert spec.noise_entities == {"task": "EmptyRoom", "run": "01"}
+    assert spec.discover_emptyroom is False
     assert [request.label for request in spec.outputs] == [
         "project_dataset_description",
         "bem",
@@ -52,6 +53,34 @@ def test_analyzer_is_static_and_preserves_output_order(tmp_path):
         "stc: house",
         "stc: house / space-fsaverage",
     ]
+
+
+def test_dynamic_emptyroom_finder_is_reviewed_without_executing_script(
+    tmp_path, monkeypatch
+):
+    script = tmp_path / "task_v1.py"
+    script.write_text(
+        "project = 'review'\n"
+        "recipe = FilterSpec(l_freq=1, h_freq=40)\n"
+        "noise = find_emptyroom_dataset(primary)\n"
+        "template = MEGDerivativeTemplate(primary, project=project, "
+        "filter_spec=recipe, noise=noise)\n"
+        "artifacts = template.evaluate()\n"
+        "save_if_requested(value, artifacts['noise_covariance'], saver, False, logger)\n"
+    )
+    raw = tmp_path / "bids" / "sub-01" / "meg" / "sub-01_task-task_meg.ds"
+    raw.mkdir(parents=True)
+    spec = analyze_processing_script(script)
+    monkeypatch.setattr(
+        "nih2mne.proc.derivative_review.find_emptyroom_dataset",
+        lambda primary: primary.copy().update(task="NoIsE", run="03"),
+    )
+
+    evaluated = evaluate_dataset(spec, raw)
+
+    assert spec.noise_entities is None
+    assert spec.discover_emptyroom is True
+    assert "task-NoIsE_run-03" in evaluated[0].record.path.name
 
 
 def test_analyzer_rejects_legacy_and_dynamic_scripts(tmp_path):

@@ -24,6 +24,7 @@ __all__ = [
     "ProvenanceContext",
     "check_covariance",
     "ensure_dataset_description",
+    "find_emptyroom_dataset",
     "git_blob_hash",
     "load_or_make",
     "make_logger",
@@ -36,6 +37,162 @@ __all__ = [
 
 
 _PROVENANCE_KEY = "NIH2MNEProvenance"
+
+
+def _emptyroom_keywords(task_keywords: Sequence[str] | None) -> tuple[str, ...]:
+    """Normalize caller-supplied or configured empty-room task keywords."""
+
+    if task_keywords is None:
+        from nih2mne.config import DEFAULTS
+
+        try:
+            task_keywords = DEFAULTS["processing"]["emptyroom_task_keywords"]
+        except (KeyError, TypeError) as error:
+            raise ValueError(
+                "defaults.yml must define processing.emptyroom_task_keywords"
+            ) from error
+    if isinstance(task_keywords, (str, bytes)):
+        raise TypeError("empty-room task keywords must be a sequence of strings")
+
+    normalized = []
+    for keyword in task_keywords:
+        if not isinstance(keyword, str) or not keyword.strip():
+            raise ValueError("empty-room task keywords must be non-empty strings")
+        value = keyword.strip().casefold()
+        if value not in normalized:
+            normalized.append(value)
+    if not normalized:
+        raise ValueError("at least one empty-room task keyword is required")
+    return tuple(normalized)
+
+
+def _matching_emptyroom_candidates(
+    meg_directories: Sequence[Path], keywords: Sequence[str]
+) -> list[mne_bids.BIDSPath]:
+    """Return matching BIDS CTF datasets from the supplied MEG directories."""
+
+    candidates = []
+    seen = set()
+    for meg_directory in meg_directories:
+        datasets = sorted(
+            meg_directory.glob("*.ds"), key=lambda path: str(path).casefold()
+        )
+        for dataset in datasets:
+            if not dataset.is_dir():
+                continue
+            resolved = dataset.resolve(strict=False)
+            if resolved in seen:
+                continue
+            try:
+                bids_path = mne_bids.get_bids_path_from_fname(dataset, check=False)
+            except (TypeError, ValueError):
+                continue
+            task = bids_path.task
+            if task is None or not any(
+                keyword in task.casefold() for keyword in keywords
+            ):
+                continue
+            seen.add(resolved)
+            candidates.append(bids_path)
+    return candidates
+
+
+def _ctf_recording_duration(dataset: Path) -> float:
+    """Read a CTF header and return its recording duration in seconds."""
+
+    import mne
+
+    raw = mne.io.read_raw_ctf(
+        dataset,
+        preload=False,
+        system_clock="ignore",
+        clean_names=True,
+        verbose="ERROR",
+    )
+    try:
+        return float(raw.n_times) / float(raw.info["sfreq"])
+    finally:
+        raw.close()
+
+
+def _longest_readable_emptyroom(
+    candidates: Sequence[mne_bids.BIDSPath],
+) -> tuple[mne_bids.BIDSPath | None, list[str]]:
+    """Select the longest readable candidate and retain failures for reporting."""
+
+    readable = []
+    failures = []
+    for candidate in candidates:
+        try:
+            duration = _ctf_recording_duration(Path(candidate.fpath))
+        except Exception as error:
+            failures.append(f"{candidate.fpath}: {error}")
+            continue
+        readable.append((duration, str(candidate.fpath).casefold(), candidate))
+    if not readable:
+        return None, failures
+    readable.sort(key=lambda item: (-item[0], item[1]))
+    return readable[0][2], failures
+
+
+def find_emptyroom_dataset(
+    primary: mne_bids.BIDSPath,
+    task_keywords: Sequence[str] | None = None,
+) -> mne_bids.BIDSPath:
+    """Find the longest empty-room recording associated with ``primary``.
+
+    Matching CTF datasets are first sought beside the primary dataset. If no
+    readable local match exists, all MEG directories below ``sub-EmptyRoom``
+    are searched without requiring its session or run to match the primary.
+    Task-keyword matching is case-insensitive.
+    """
+
+    if not isinstance(primary, mne_bids.BIDSPath):
+        raise TypeError("primary must be an mne_bids.BIDSPath")
+    if primary.root is None or primary.fpath is None:
+        raise ValueError("primary must identify a dataset within a BIDS root")
+
+    keywords = _emptyroom_keywords(task_keywords)
+    local_directory = Path(primary.fpath).parent
+    local_candidates = _matching_emptyroom_candidates([local_directory], keywords)
+    selected, local_failures = _longest_readable_emptyroom(local_candidates)
+    if selected is not None:
+        return selected
+
+    bids_root = Path(primary.root)
+    fallback_subjects = sorted(
+        (
+            path
+            for path in bids_root.glob("sub-*")
+            if path.is_dir() and path.name.casefold() == "sub-emptyroom"
+        ),
+        key=lambda path: str(path).casefold(),
+    )
+    fallback_meg_directories = sorted(
+        (
+            path
+            for subject in fallback_subjects
+            for path in subject.rglob("meg")
+            if path.is_dir()
+        ),
+        key=lambda path: str(path).casefold(),
+    )
+    fallback_candidates = _matching_emptyroom_candidates(
+        fallback_meg_directories, keywords
+    )
+    selected, fallback_failures = _longest_readable_emptyroom(fallback_candidates)
+    if selected is not None:
+        return selected
+
+    locations = [str(local_directory), str(bids_root / "sub-EmptyRoom")]
+    message = (
+        "No readable empty-room CTF dataset was found; searched "
+        f"{', '.join(locations)} for task keywords {list(keywords)!r}."
+    )
+    failures = local_failures + fallback_failures
+    if failures:
+        message += " Read failures: " + "; ".join(failures)
+    raise FileNotFoundError(message)
 
 
 def _package_versions() -> Mapping[str, str]:

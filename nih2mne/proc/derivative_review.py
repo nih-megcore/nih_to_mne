@@ -18,6 +18,7 @@ from typing import Any, Mapping
 from mne_bids import get_bids_path_from_fname
 
 from nih2mne.bids_templates import ArtifactRecord, FilterSpec, MEGDerivativeTemplate
+from nih2mne.proc.megcore_utils import find_emptyroom_dataset
 
 
 class ProcessingScriptError(ValueError):
@@ -53,6 +54,7 @@ class ProcessingReviewSpec:
     project: str
     filter_kwargs: Mapping[str, Any]
     noise_entities: Mapping[str, Any] | None
+    discover_emptyroom: bool
     space: str | None
     outputs: tuple[ArtifactRequest, ...]
 
@@ -288,12 +290,12 @@ class _Analyzer:
             self.outputs.append(request)
 
 
-def _noise_entities(
+def _noise_configuration(
     tree: ast.AST,
     template_kwargs: Mapping[str, Any] | None,
     values: Mapping[str, Any],
-) -> Mapping[str, Any] | None:
-    """Recover entities from ``primary.copy().update(...)`` without execution."""
+) -> tuple[Mapping[str, Any] | None, bool]:
+    """Recover the statically declared noise-input strategy."""
 
     template_call = None
     for node in ast.walk(tree):
@@ -301,10 +303,10 @@ def _noise_entities(
             template_call = node
             break
     if template_call is None:
-        return None
+        return None, False
     noise_node = next((kw.value for kw in template_call.keywords if kw.arg == "noise"), None)
     if noise_node is None:
-        return None
+        return None, False
     if isinstance(noise_node, ast.Name):
         for node in ast.walk(tree):
             if not isinstance(node, ast.Assign):
@@ -312,11 +314,31 @@ def _noise_entities(
             if not any(isinstance(target, ast.Name) and target.id == noise_node.id for target in node.targets):
                 continue
             if isinstance(node.value, ast.Call) and _call_name(node.value.func) == "update":
-                return _literal_keywords(node.value, values, "noise BIDSPath update")
+                return (
+                    _literal_keywords(node.value, values, "noise BIDSPath update"),
+                    False,
+                )
+            if (
+                isinstance(node.value, ast.Call)
+                and _call_name(node.value.func) == "find_emptyroom_dataset"
+            ):
+                valid_primary = (
+                    len(node.value.args) == 1
+                    and isinstance(node.value.args[0], ast.Name)
+                    and node.value.args[0].id == "primary"
+                    and not node.value.keywords
+                )
+                if not valid_primary:
+                    raise ProcessingScriptError(
+                        "find_emptyroom_dataset must be called as "
+                        "find_emptyroom_dataset(primary)"
+                    )
+                return None, True
     if template_kwargs and isinstance(template_kwargs.get("noise_entities"), Mapping):
-        return dict(template_kwargs["noise_entities"])
+        return dict(template_kwargs["noise_entities"]), False
     raise ProcessingScriptError(
-        "the MEGDerivativeTemplate noise input must use a static BIDSPath update"
+        "the MEGDerivativeTemplate noise input must use a static BIDSPath update "
+        "or find_emptyroom_dataset(primary)"
     )
 
 
@@ -345,11 +367,15 @@ def analyze_processing_script(script: str | Path) -> ProcessingReviewSpec:
     space = analyzer.template_kwargs.get("space")
     if space is not None and not isinstance(space, str):
         raise ProcessingScriptError("MEGDerivativeTemplate space must be a string or None")
+    noise_entities, discover_emptyroom = _noise_configuration(
+        tree, analyzer.template_kwargs, analyzer.values
+    )
     return ProcessingReviewSpec(
         script=path,
         project=project,
         filter_kwargs=dict(analyzer.filter_kwargs),
-        noise_entities=_noise_entities(tree, analyzer.template_kwargs, analyzer.values),
+        noise_entities=noise_entities,
+        discover_emptyroom=discover_emptyroom,
         space=space,
         outputs=tuple(analyzer.outputs),
     )
@@ -360,7 +386,9 @@ def evaluate_dataset(spec: ProcessingReviewSpec, dataset: str | Path) -> tuple[E
 
     primary = get_bids_path_from_fname(str(dataset), check=False)
     noise = None
-    if spec.noise_entities is not None:
+    if spec.discover_emptyroom:
+        noise = find_emptyroom_dataset(primary)
+    elif spec.noise_entities is not None:
         noise = primary.copy().update(**dict(spec.noise_entities))
     template = MEGDerivativeTemplate(
         primary,

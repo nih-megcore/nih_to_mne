@@ -2,12 +2,168 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
 
 import numpy as np
 import pytest
+from mne_bids import BIDSPath
 
 from nih2mne.proc import megcore_utils
+
+
+def _raw_bids_path(root, *, subject="01", session="01", task="test", run="01"):
+    return BIDSPath(
+        root=root,
+        subject=subject,
+        session=session,
+        task=task,
+        run=run,
+        datatype="meg",
+        suffix="meg",
+        extension=".ds",
+    )
+
+
+def _make_dataset(bids_path):
+    Path(bids_path.fpath).mkdir(parents=True)
+    return bids_path
+
+
+def test_find_emptyroom_dataset_matches_case_and_selects_longest_local(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "bids"
+    primary = _make_dataset(_raw_bids_path(root))
+    short = _make_dataset(
+        _raw_bids_path(root, task="NoIsE", run="02")
+    )
+    longest = _make_dataset(
+        _raw_bids_path(root, task="EMPTYroom", run="03")
+    )
+    durations = {Path(short.fpath): 100.0, Path(longest.fpath): 360.0}
+    monkeypatch.setattr(
+        megcore_utils,
+        "_ctf_recording_duration",
+        lambda path: durations[path],
+    )
+
+    selected = megcore_utils.find_emptyroom_dataset(
+        primary, task_keywords=["empty", "noise"]
+    )
+
+    assert Path(selected.fpath) == Path(longest.fpath)
+
+
+def test_find_emptyroom_dataset_reads_keywords_from_defaults(tmp_path, monkeypatch):
+    root = tmp_path / "bids"
+    primary = _make_dataset(_raw_bids_path(root))
+    expected = _make_dataset(_raw_bids_path(root, task="Ambient", run="02"))
+    fake_config = ModuleType("nih2mne.config")
+    fake_config.DEFAULTS = {
+        "processing": {"emptyroom_task_keywords": ["ambient"]}
+    }
+    monkeypatch.setitem(sys.modules, "nih2mne.config", fake_config)
+    monkeypatch.setattr(
+        megcore_utils,
+        "_ctf_recording_duration",
+        lambda path: 100.0,
+    )
+
+    selected = megcore_utils.find_emptyroom_dataset(primary)
+
+    assert Path(selected.fpath) == Path(expected.fpath)
+
+
+def test_find_emptyroom_dataset_skips_unreadable_candidate(tmp_path, monkeypatch):
+    root = tmp_path / "bids"
+    primary = _make_dataset(_raw_bids_path(root))
+    broken = _make_dataset(_raw_bids_path(root, task="noise", run="02"))
+    expected = _make_dataset(_raw_bids_path(root, task="noise", run="03"))
+
+    def duration(path):
+        if path == Path(broken.fpath):
+            raise OSError("bad CTF header")
+        return 100.0
+
+    monkeypatch.setattr(megcore_utils, "_ctf_recording_duration", duration)
+
+    selected = megcore_utils.find_emptyroom_dataset(primary, ["noise"])
+
+    assert Path(selected.fpath) == Path(expected.fpath)
+
+
+def test_find_emptyroom_dataset_prefers_any_readable_local_match(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "bids"
+    primary = _make_dataset(_raw_bids_path(root))
+    local = _make_dataset(_raw_bids_path(root, task="noise", run="02"))
+    fallback = _make_dataset(
+        _raw_bids_path(
+            root,
+            subject="EmptyRoom",
+            session="different",
+            task="noise",
+            run="99",
+        )
+    )
+    durations = {Path(local.fpath): 50.0, Path(fallback.fpath): 500.0}
+    monkeypatch.setattr(
+        megcore_utils,
+        "_ctf_recording_duration",
+        lambda path: durations[path],
+    )
+
+    selected = megcore_utils.find_emptyroom_dataset(primary, ["noise"])
+
+    assert Path(selected.fpath) == Path(local.fpath)
+
+
+def test_find_emptyroom_dataset_uses_longest_fallback_across_sessions(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "bids"
+    primary = _make_dataset(_raw_bids_path(root))
+    first = _make_dataset(
+        _raw_bids_path(
+            root, subject="EmptyRoom", session="A", task="noise", run="01"
+        )
+    )
+    longest = _make_dataset(
+        _raw_bids_path(
+            root, subject="EmptyRoom", session="B", task="EmptyRoom", run="07"
+        )
+    )
+    durations = {Path(first.fpath): 100.0, Path(longest.fpath): 300.0}
+    monkeypatch.setattr(
+        megcore_utils,
+        "_ctf_recording_duration",
+        lambda path: durations[path],
+    )
+
+    selected = megcore_utils.find_emptyroom_dataset(primary, ["empty", "noise"])
+
+    assert Path(selected.fpath) == Path(longest.fpath)
+
+
+def test_find_emptyroom_dataset_skips_unreadable_and_reports_total_failure(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "bids"
+    primary = _make_dataset(_raw_bids_path(root))
+    broken = _make_dataset(_raw_bids_path(root, task="noise", run="02"))
+
+    def fail(path):
+        raise OSError("bad CTF header")
+
+    monkeypatch.setattr(megcore_utils, "_ctf_recording_duration", fail)
+
+    with pytest.raises(FileNotFoundError, match="bad CTF header") as error:
+        megcore_utils.find_emptyroom_dataset(primary, ["noise"])
+
+    assert str(Path(broken.fpath)) in str(error.value)
+    assert str(root / "sub-EmptyRoom") in str(error.value)
 
 
 def _record(path: Path, *, exists=False, status="missing", errors=(), key="artifact"):

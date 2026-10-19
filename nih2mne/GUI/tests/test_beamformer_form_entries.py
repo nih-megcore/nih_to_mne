@@ -305,6 +305,9 @@ def test_real_template_renders_as_direct_compilable_script(sample_entries):
 
     compile(script_text, "generated_beamformer.py", "exec")
     assert "from nih2mne.proc.megcore_utils import (" in script_text
+    assert "find_emptyroom_dataset," in script_text
+    assert "noise = find_emptyroom_dataset(primary)" in script_text
+    assert "er_run" not in script_text
     assert "def main(" not in script_text
     assert "if __name__ ==" not in script_text
     assert "def git_blob_hash(" not in script_text

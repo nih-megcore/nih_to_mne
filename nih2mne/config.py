@@ -32,8 +32,10 @@ def _get_default_options():
                 'zfill_ses': 2,
                 }
     LOGGING = {'meg_dataset_gui': None}
+    PROCESSING = {'emptyroom_task_keywords': ['empty', 'noise']}
     defaults = {'BIDS_gen': BIDS_GEN,
-                'logging': LOGGING}
+                'logging': LOGGING,
+                'processing': PROCESSING}
     return defaults
 
 def _get_defaults_fname():

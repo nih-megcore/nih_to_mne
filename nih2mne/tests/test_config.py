@@ -26,6 +26,9 @@ def test_initialize_defaults_creates_megcore_directories(tmp_path, monkeypatch):
     assert saved_defaults['BIDS_gen']['zfill_run'] == 2
     assert saved_defaults['BIDS_gen']['zfill_ses'] == 2
     assert saved_defaults['logging'] == {'meg_dataset_gui': None}
+    assert saved_defaults['processing']['emptyroom_task_keywords'] == [
+        'empty', 'noise'
+    ]
 
 
 def test_existing_defaults_are_synchronized_with_padding_options(
@@ -46,3 +49,6 @@ def test_existing_defaults_are_synchronized_with_padding_options(
     saved_defaults = yaml.safe_load(config_path.read_text(encoding='utf-8'))
     assert saved_defaults['BIDS_gen']['zfill_run'] == 2
     assert saved_defaults['BIDS_gen']['zfill_ses'] == 2
+    assert saved_defaults['processing']['emptyroom_task_keywords'] == [
+        'empty', 'noise'
+    ]

@@ -226,7 +226,6 @@ def build_gui_component_block(entries: BeamformerFormEntries) -> str:
         "epo_baseline = None",
         f"f_min = {entries.fmin}",
         f"f_max = {entries.fmax}",
-        "er_run = '01'",
         "",
         f"reject_dict = dict(mag={entries.threshold_rejection})",
         "cov_cv = 5",
