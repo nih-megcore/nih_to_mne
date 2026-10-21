@@ -1049,6 +1049,11 @@ class ProcReviewDialog(QtWidgets.QDialog):
         self.page = 0
         self.indicators = []
         self.subject_labels = []
+        self.subject_buttons = []
+        self.path_fields = []
+        self.qa_buttons = []
+        self.focused_subject = None
+        self._focus_return_page = 0
         self._evaluation_cache = {}
         self._pending_evaluations = set()
         self._active_evaluation_tasks = {}
@@ -1073,7 +1078,8 @@ class ProcReviewDialog(QtWidgets.QDialog):
         controls = QHBoxLayout()
         self.l_task = QLabel(f'Task: {self.task}')
         controls.addWidget(self.l_task)
-        controls.addWidget(QLabel('Run'))
+        self.l_overview_run = QLabel('Overview run')
+        controls.addWidget(self.l_overview_run)
         self.b_run = QComboBox()
         controls.addWidget(self.b_run)
         controls.addWidget(QLabel('Subjects/page'))
@@ -1102,6 +1108,20 @@ class ProcReviewDialog(QtWidgets.QDialog):
         controls.addWidget(self.b_failure_step)
         controls.addStretch(1)
         main_layout.addLayout(controls)
+
+        focus_controls = QHBoxLayout()
+        self.l_focused_subject = QLabel('')
+        self.l_subject_run = QLabel('Subject run')
+        self.b_subject_run = QComboBox()
+        self.b_show_all = QPushButton('Show All Subjects')
+        self.b_show_all.setToolTip('Return to the subject overview')
+        focus_controls.addWidget(self.l_focused_subject)
+        focus_controls.addWidget(self.l_subject_run)
+        focus_controls.addWidget(self.b_subject_run)
+        focus_controls.addStretch(1)
+        focus_controls.addWidget(self.b_show_all)
+        main_layout.addLayout(focus_controls)
+        self._set_focus_controls_visible(False)
 
         self.l_scan_status = QLabel('')
         main_layout.addWidget(self.l_scan_status)
@@ -1132,7 +1152,20 @@ class ProcReviewDialog(QtWidgets.QDialog):
         self.b_prev.clicked.connect(self.previous_page)
         self.b_next.clicked.connect(self.next_page)
         self.b_refresh.clicked.connect(self.rescan)
+        self.b_subject_run.currentIndexChanged.connect(
+            lambda index: self.refresh()
+        )
+        self.b_show_all.clicked.connect(self._clear_subject_focus)
         self._populate_runs()
+
+    def _set_focus_controls_visible(self, visible):
+        for widget in (
+            self.l_focused_subject,
+            self.l_subject_run,
+            self.b_subject_run,
+            self.b_show_all,
+        ):
+            widget.setVisible(visible)
 
     def _populate_runs(self):
         runs = {
@@ -1183,13 +1216,108 @@ class ProcReviewDialog(QtWidgets.QDialog):
 
     def _datasets(self, subject):
         selected_run = self.b_run.currentText()
-        datasets = [dataset for dataset in self.bids_project.subjects[subject].meg_list
-                    if dataset.task == self.task]
+        datasets = self._subject_datasets(subject)
         if selected_run != 'All':
             datasets = [dataset for dataset in datasets
                         if _dataset_run(dataset) == selected_run]
-        return sorted(datasets, key=lambda dataset: (_natural_key(_dataset_run(dataset)),
-                                                     str(dataset.rel_path)))
+        return datasets
+
+    def _subject_datasets(self, subject):
+        datasets = [
+            dataset
+            for dataset in self.bids_project.subjects[subject].meg_list
+            if dataset.task == self.task
+        ]
+        return sorted(
+            datasets,
+            key=lambda dataset: (
+                _natural_key(_dataset_run(dataset)), str(dataset.rel_path)
+            ),
+        )
+
+    def _focused_dataset(self):
+        key = self.b_subject_run.currentData()
+        if key is None or self.focused_subject is None:
+            return None
+        return next(
+            (
+                dataset
+                for dataset in self._subject_datasets(self.focused_subject)
+                if self._dataset_key(dataset) == key
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _focused_run_label(dataset, include_session=False):
+        run = _dataset_run(dataset)
+        if not include_session:
+            return run
+        path = Path(dataset.rel_path)
+        session = next(
+            (part for part in path.parts if part.startswith('ses-')),
+            None,
+        )
+        return f'{session}: {run}' if session is not None else f'{run}: {path.name}'
+
+    def _populate_subject_runs(self):
+        datasets = (
+            self._subject_datasets(self.focused_subject)
+            if self.focused_subject is not None else []
+        )
+        run_counts = {}
+        for dataset in datasets:
+            run = _dataset_run(dataset)
+            run_counts[run] = run_counts.get(run, 0) + 1
+        duplicate_runs = {run for run, count in run_counts.items() if count > 1}
+        labels = [
+            self._focused_run_label(
+                dataset,
+                include_session=_dataset_run(dataset) in duplicate_runs,
+            )
+            for dataset in datasets
+        ]
+        label_counts = {}
+        for label in labels:
+            label_counts[label] = label_counts.get(label, 0) + 1
+        preferred_run = self.b_run.currentText()
+        preferred_index = 0
+        preferred_found = False
+        self.b_subject_run.blockSignals(True)
+        self.b_subject_run.clear()
+        for index, (dataset, label) in enumerate(zip(datasets, labels)):
+            if label_counts[label] > 1:
+                label = f'{label}: {Path(dataset.rel_path).name}'
+            self.b_subject_run.addItem(
+                label,
+                self._dataset_key(dataset),
+            )
+            if not preferred_found and _dataset_run(dataset) == preferred_run:
+                preferred_index = index
+                preferred_found = True
+        if datasets:
+            self.b_subject_run.setCurrentIndex(preferred_index)
+        self.b_subject_run.blockSignals(False)
+
+    def _toggle_subject_focus(self, subject):
+        if self.focused_subject == subject:
+            self._clear_subject_focus()
+            return
+        self._focus_return_page = self.page
+        self.focused_subject = subject
+        self.l_focused_subject.setText(f'Subject: {subject}')
+        self._populate_subject_runs()
+        self._set_focus_controls_visible(True)
+        self.refresh()
+
+    def _clear_subject_focus(self):
+        self.focused_subject = None
+        self.page = self._focus_return_page
+        self.b_subject_run.blockSignals(True)
+        self.b_subject_run.clear()
+        self.b_subject_run.blockSignals(False)
+        self._set_focus_controls_visible(False)
+        self.refresh()
 
     def _dataset_first_failure(self, dataset):
         cached = self._evaluation_cache.get(self._dataset_key(dataset))
@@ -1363,6 +1491,96 @@ class ProcReviewDialog(QtWidgets.QDialog):
             lines.extend(['Status: unavailable', str(error)])
         return '\n'.join(lines)
 
+    def _derivative_relative_path(self, path):
+        path = Path(path)
+        root = Path(self.bids_project.bids_root)
+        try:
+            relative = path.relative_to(root)
+        except ValueError:
+            relative = None
+        if relative is not None and relative.parts[:1] == ('derivatives',):
+            return str(relative)
+        try:
+            derivative_index = path.parts.index('derivatives')
+        except ValueError:
+            return str(path)
+        return str(Path(*path.parts[derivative_index:]))
+
+    def _artifact_path_text(self, evaluated, pending=False, error=None):
+        if pending:
+            return 'Evaluation pending'
+        if evaluated is None:
+            return f'Unavailable: {error}' if error else 'Unavailable'
+        record = evaluated.record
+        paths = record.component_paths or (record.path,)
+        return '\n'.join(self._derivative_relative_path(path) for path in paths)
+
+    @staticmethod
+    def _compact_indicator(indicator):
+        indicator.setFixedSize(16, 16)
+        return indicator
+
+    def _evaluation_display(self, subject, dataset):
+        error = None
+        evaluated_items = ()
+        pending = False
+        if dataset is not None:
+            cached = self._evaluation_cache.get(self._dataset_key(dataset))
+            if cached is None:
+                pending = True
+            else:
+                evaluated_items, error = cached
+        if dataset is None or pending:
+            first_failure = None
+        else:
+            first_failure = next(
+                (
+                    offset for offset in range(len(self.spec.outputs))
+                    if (
+                        offset >= len(evaluated_items)
+                        or not evaluated_items[offset].record.exists
+                    )
+                ),
+                0 if error is not None else None,
+            )
+        return evaluated_items, error, pending, first_failure
+
+    def _make_indicator(
+        self, subject, dataset, request, evaluated, error, pending,
+        first_failure, offset, compact=False,
+    ):
+        present = evaluated is not None and evaluated.record.exists
+        if pending:
+            tooltip = self._tooltip(
+                subject, dataset, error='Evaluation pending'
+            )
+            indicator = PendingDerivativeIndicator(tooltip)
+        else:
+            tooltip = self._tooltip(
+                subject,
+                dataset,
+                evaluated=evaluated,
+                error=error or 'No matching dataset',
+            )
+            if offset == first_failure:
+                indicator = DerivativeFailureButton(
+                    tooltip + '\nClick to review the logged error.'
+                )
+                status = (
+                    evaluated.record.status
+                    if evaluated is not None else 'unavailable'
+                )
+                indicator.clicked.connect(
+                    lambda checked=False, subject=subject, dataset=dataset,
+                    request=request, status=status:
+                    self._show_processing_failure(
+                        subject, dataset, request, status
+                    )
+                )
+            else:
+                indicator = DerivativeIndicator(present, tooltip)
+        return self._compact_indicator(indicator) if compact else indicator
+
     def _show_processing_failure(self, subject, dataset, request, status):
         matching_count = sum(
             item.task == self.task
@@ -1384,8 +1602,125 @@ class ProcReviewDialog(QtWidgets.QDialog):
         )
         self.failure_dialog.exec()
 
+    def _replace_scroll_content(self, content):
+        old_content = self.scroll.takeWidget()
+        if old_content is not None:
+            old_content.deleteLater()
+        self.scroll.setWidget(content)
+
+    def _refresh_focused_subject(self):
+        subject = self.focused_subject
+        dataset = self._focused_dataset()
+        self.indicators = []
+        self.subject_labels = []
+        self.subject_buttons = []
+        self.path_fields = []
+        self.qa_buttons = []
+        self._displayed_dataset_keys = set()
+        if dataset is not None:
+            key = self._dataset_key(dataset)
+            self._displayed_dataset_keys.add(key)
+            self._queue_evaluation(dataset, priority=2)
+
+        content = QWidget()
+        grid = QGridLayout(content)
+        grid.setContentsMargins(6, 6, 6, 6)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(5)
+
+        subject_button = QPushButton(subject)
+        subject_button.setToolTip('Click to return to all subjects')
+        subject_button.clicked.connect(
+            lambda checked=False, subject=subject:
+            self._toggle_subject_focus(subject)
+        )
+        self.subject_buttons.append(subject_button)
+        grid.addWidget(subject_button, 0, 0, 1, 4)
+        grid.addWidget(QLabel('Processing step'), 1, 0)
+        grid.addWidget(QLabel('Status'), 1, 1)
+        grid.addWidget(QLabel('Output path'), 1, 2)
+        grid.addWidget(QLabel('Q/A'), 1, 3)
+
+        evaluated_items, error, pending, first_failure = (
+            self._evaluation_display(subject, dataset)
+        )
+        no_wrap = getattr(
+            QtWidgets.QPlainTextEdit,
+            'LineWrapMode',
+            QtWidgets.QPlainTextEdit,
+        ).NoWrap
+        for offset, request in enumerate(self.spec.outputs):
+            row = offset + 2
+            evaluated = (
+                evaluated_items[offset]
+                if offset < len(evaluated_items) else None
+            )
+            name = QLabel(request.label)
+            name.setToolTip(request.label)
+            grid.addWidget(name, row, 0)
+
+            indicator = self._make_indicator(
+                subject,
+                dataset,
+                request,
+                evaluated,
+                error,
+                pending,
+                first_failure,
+                offset,
+                compact=True,
+            )
+            self.indicators.append(indicator)
+            alignment = getattr(QtCore.Qt, 'AlignmentFlag', QtCore.Qt)
+            grid.addWidget(indicator, row, 1, alignment.AlignLeft)
+
+            path_text = self._artifact_path_text(
+                evaluated, pending=pending, error=error
+            )
+            path_field = QtWidgets.QPlainTextEdit()
+            path_field.setReadOnly(True)
+            path_field.setLineWrapMode(no_wrap)
+            path_field.setPlainText(path_text)
+            path_field.setToolTip(path_text)
+            path_field.setAccessibleName(f'{request.label} output path')
+            scrollbar_policy = getattr(
+                QtCore.Qt, 'ScrollBarPolicy', QtCore.Qt
+            )
+            path_field.setHorizontalScrollBarPolicy(
+                scrollbar_policy.ScrollBarAsNeeded
+            )
+            path_field.setVerticalScrollBarPolicy(
+                scrollbar_policy.ScrollBarAsNeeded
+            )
+            path_count = max(1, path_text.count('\n') + 1)
+            path_field.setFixedHeight(min(100, 42 + (path_count - 1) * 18))
+            self.path_fields.append(path_field)
+            grid.addWidget(path_field, row, 2)
+
+            qa_button = QPushButton('Q/A')
+            qa_button.setEnabled(False)
+            qa_button.setToolTip('QA not yet available')
+            qa_button.setAccessibleName(f'{request.label} QA')
+            self.qa_buttons.append(qa_button)
+            grid.addWidget(qa_button, row, 3)
+
+        grid.setColumnStretch(2, 1)
+        grid.setRowStretch(len(self.spec.outputs) + 2, 1)
+        self._replace_scroll_content(content)
+        self.l_page.setText(f'Focused: {subject}')
+        self.b_prev.setEnabled(False)
+        self.b_next.setEnabled(False)
+        self._update_scan_status()
+        if dataset is None:
+            self.l_scan_status.setText(
+                f'No {self.task} datasets are available for {subject}'
+            )
+
     def refresh(self):
         self._update_filter_scan()
+        if self.focused_subject is not None:
+            self._refresh_focused_subject()
+            return
         subjects = self._subjects()
         total_pages = self._total_pages()
         if total_pages == 0:
@@ -1403,6 +1738,9 @@ class ProcReviewDialog(QtWidgets.QDialog):
         grid.addWidget(QLabel('Derivative'), 0, 0, 2, 1)
         self.indicators = []
         self.subject_labels = []
+        self.subject_buttons = []
+        self.path_fields = []
+        self.qa_buttons = []
         self._displayed_dataset_keys = set()
         columns = []
         column = 1
@@ -1410,9 +1748,14 @@ class ProcReviewDialog(QtWidgets.QDialog):
             datasets = self._datasets(subject)
             if not datasets:
                 datasets = [None]
-            label = RotatedSubjectLabel(subject)
-            self.subject_labels.append(label)
-            grid.addWidget(label, 0, column, 1, len(datasets))
+            subject_button = QPushButton(subject)
+            subject_button.setToolTip(f'Show processing details for {subject}')
+            subject_button.clicked.connect(
+                lambda checked=False, subject=subject:
+                self._toggle_subject_focus(subject)
+            )
+            self.subject_buttons.append(subject_button)
+            grid.addWidget(subject_button, 0, column, 1, len(datasets))
             for dataset in datasets:
                 run_label = QLabel(_dataset_run(dataset) if dataset is not None else '—')
                 alignment = getattr(QtCore.Qt, 'AlignmentFlag', QtCore.Qt)
@@ -1432,64 +1775,27 @@ class ProcReviewDialog(QtWidgets.QDialog):
             grid.addWidget(name, row, 0)
 
         for column, subject, dataset in columns:
-            error = None
-            evaluated_items = ()
-            pending = False
-            if dataset is not None:
-                cached = self._evaluation_cache.get(self._dataset_key(dataset))
-                if cached is None:
-                    pending = True
-                else:
-                    evaluated_items, error = cached
-            if dataset is None or pending:
-                first_failure = None
-            else:
-                first_failure = next(
-                    (
-                        offset for offset in range(len(self.spec.outputs))
-                        if (
-                            offset >= len(evaluated_items)
-                            or not evaluated_items[offset].record.exists
-                        )
-                    ),
-                    0 if dataset is not None and error is not None else None,
-                )
+            evaluated_items, error, pending, first_failure = (
+                self._evaluation_display(subject, dataset)
+            )
             for offset, request in enumerate(self.spec.outputs):
                 evaluated = evaluated_items[offset] if offset < len(evaluated_items) else None
-                present = evaluated is not None and evaluated.record.exists
-                if pending:
-                    tooltip = self._tooltip(
-                        subject,
-                        dataset,
-                        error='Evaluation pending',
-                    )
-                    indicator = PendingDerivativeIndicator(tooltip)
-                else:
-                    tooltip = self._tooltip(
-                        subject,
-                        dataset,
-                        evaluated=evaluated,
-                        error=error or 'No matching dataset',
-                    )
-                if not pending and offset == first_failure:
-                    indicator = DerivativeFailureButton(tooltip + '\nClick to review the logged error.')
-                    status = evaluated.record.status if evaluated is not None else 'unavailable'
-                    indicator.clicked.connect(
-                        lambda checked=False, subject=subject, dataset=dataset,
-                        request=request, status=status:
-                        self._show_processing_failure(subject, dataset, request, status)
-                    )
-                elif not pending:
-                    indicator = DerivativeIndicator(present, tooltip)
+                indicator = self._make_indicator(
+                    subject,
+                    dataset,
+                    request,
+                    evaluated,
+                    error,
+                    pending,
+                    first_failure,
+                    offset,
+                )
                 self.indicators.append(indicator)
                 grid.addWidget(indicator, offset + 2, column)
 
         grid.setColumnMinimumWidth(0, 185)
         grid.setRowStretch(len(self.spec.outputs) + 2, 1)
-        old_content = self.scroll.takeWidget()
-        if old_content is not None:
-            old_content.deleteLater()
-        self.scroll.setWidget(content)
+        self._replace_scroll_content(content)
         self.l_page.setText(f'{self.page + 1} / {total_pages}' if total_pages else '0 / 0')
         self.b_prev.setEnabled(self.page > 0)
         self.b_next.setEnabled(self.page + 1 < total_pages)

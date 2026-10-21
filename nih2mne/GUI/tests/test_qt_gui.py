@@ -793,7 +793,7 @@ def _finish_proc_review_scan(dialog, qapp):
             break
 
 
-def test_proc_review_dialog_runs_pagination_and_rotated_headers(qapp, tmp_path, monkeypatch):
+def test_proc_review_dialog_runs_pagination_and_subject_buttons(qapp, tmp_path, monkeypatch):
     script = tmp_path / "task_v1.py"
     _write_review_script(script)
     subjects = {
@@ -849,8 +849,9 @@ def test_proc_review_dialog_runs_pagination_and_rotated_headers(qapp, tmp_path, 
         "All", "run-01", "run-02"
     ]
     assert dialog.l_page.text() == "1 / 2"
-    assert [label.text for label in dialog.subject_labels] == ["sub-01", "sub-02"]
-    assert all(label.angle == 45 for label in dialog.subject_labels)
+    assert [button.text() for button in dialog.subject_buttons] == [
+        "sub-01", "sub-02"
+    ]
     assert len(dialog.indicators) == 6  # two runs plus one no-task placeholder, two outputs
     assert sum(indicator.present for indicator in dialog.indicators) == 2
     assert sum(isinstance(indicator, DerivativeFailureButton)
@@ -858,9 +859,110 @@ def test_proc_review_dialog_runs_pagination_and_rotated_headers(qapp, tmp_path, 
 
     dialog.next_page()
     assert dialog.l_page.text() == "2 / 2"
-    assert [label.text for label in dialog.subject_labels] == ["sub-03"]
+    assert [button.text() for button in dialog.subject_buttons] == ["sub-03"]
     dialog.b_hide_no_task.setChecked(True)
     assert dialog.l_page.text() == "1 / 1"
+
+
+def test_proc_review_subject_focus_shows_run_paths_and_qa_placeholders(
+    qapp, tmp_path, monkeypatch
+):
+    script = tmp_path / "task_v1.py"
+    _write_review_script(script)
+    subjects = {
+        "sub-01": FakeBidsInfo(subject="sub-01"),
+        "sub-02": FakeBidsInfo(subject="sub-02"),
+    }
+    subjects["sub-01"].meg_list = [FakeMegDataset(
+        "task", "run01.ds",
+        "/tmp/fake_bids/sub-01/meg/sub-01_task-task_run-01_meg.ds",
+    )]
+    subjects["sub-02"].meg_list = [
+        FakeMegDataset(
+            "task", "run01.ds",
+            "/tmp/fake_bids/sub-02/meg/sub-02_task-task_run-01_meg.ds",
+        ),
+        FakeMegDataset(
+            "task", "run02.ds",
+            "/tmp/fake_bids/sub-02/meg/sub-02_task-task_run-02_meg.ds",
+        ),
+    ]
+    window = BIDS_Project_Window(
+        bids_project=FakeProject(subjects), gridsize_row=1, gridsize_col=2
+    )
+
+    def fake_evaluate(spec, dataset):
+        run = "run-02" if "run-02" in str(dataset) else "run-01"
+        derivative_dir = Path(
+            f"/tmp/fake_bids/derivatives/review/sub-02/meg/{run}"
+        )
+        records = []
+        for request in spec.outputs:
+            path = derivative_dir / f"sub-02_{run}_{request.key}"
+            components = ()
+            if request.key == "stc":
+                components = (
+                    path.with_name(f"{path.name}-lh.stc"),
+                    path.with_name(f"{path.name}-rh.stc"),
+                )
+            records.append(SimpleNamespace(
+                request=request,
+                record=SimpleNamespace(
+                    exists=True,
+                    status="present",
+                    path=path,
+                    component_paths=components,
+                    validation_errors=(),
+                ),
+            ))
+        return tuple(records)
+
+    monkeypatch.setattr(qt_gui_module, "evaluate_dataset", fake_evaluate)
+    dialog = ProcReviewDialog(window, script)
+    dialog.b_subjects_per_page.setText("1")
+    dialog._reset_and_refresh()
+    dialog.b_run.setCurrentText("run-02")
+    dialog.next_page()
+    _finish_proc_review_scan(dialog, qapp)
+
+    assert dialog.l_page.text() == "2 / 2"
+    assert [button.text() for button in dialog.subject_buttons] == ["sub-02"]
+    dialog.subject_buttons[0].click()
+    _finish_proc_review_scan(dialog, qapp)
+
+    assert dialog.focused_subject == "sub-02"
+    assert dialog.l_page.text() == "Focused: sub-02"
+    assert dialog.b_run.currentText() == "run-02"
+    assert dialog.b_subject_run.count() == 2
+    assert dialog.b_subject_run.currentText() == "run-02"
+    assert not dialog.b_show_all.isHidden()
+    assert not dialog.b_prev.isEnabled()
+    assert not dialog.b_next.isEnabled()
+    assert len(dialog.path_fields) == len(dialog.spec.outputs)
+    assert all(not button.isEnabled() for button in dialog.qa_buttons)
+    assert all(button.toolTip() == "QA not yet available"
+               for button in dialog.qa_buttons)
+    assert all(indicator.width() == 16 for indicator in dialog.indicators)
+    assert dialog.path_fields[0].toPlainText().startswith("derivatives/")
+    stc_text = dialog.path_fields[1].toPlainText()
+    assert "\n" in stc_text
+    assert all(line.startswith("derivatives/") for line in stc_text.splitlines())
+    assert stc_text.endswith("-rh.stc")
+
+    dialog.b_subject_run.setCurrentText("run-01")
+    _finish_proc_review_scan(dialog, qapp)
+    assert "run-01" in dialog.path_fields[0].toPlainText()
+
+    dialog.b_show_all.click()
+    assert dialog.focused_subject is None
+    assert dialog.l_page.text() == "2 / 2"
+    assert dialog.b_show_all.isHidden()
+    assert [button.text() for button in dialog.subject_buttons] == ["sub-02"]
+
+    dialog.subject_buttons[0].click()
+    dialog.subject_buttons[0].click()
+    assert dialog.focused_subject is None
+    assert dialog.l_page.text() == "2 / 2"
 
 
 def test_proc_review_prefetches_three_pages_and_reuses_cached_results(
@@ -986,22 +1088,22 @@ def test_proc_review_filters_by_aggregate_first_failure(
     _finish_proc_review_scan(dialog, qapp)
 
     dialog.b_hide_successful.setChecked(True)
-    assert [label.text for label in dialog.subject_labels] == [
+    assert [button.text() for button in dialog.subject_buttons] == [
         "sub-02", "sub-03", "sub-04", "sub-05"
     ]
 
     dialog.b_failure_step.setCurrentText("stc: face")
-    assert [label.text for label in dialog.subject_labels] == [
+    assert [button.text() for button in dialog.subject_buttons] == [
         "sub-03", "sub-04", "sub-05"
     ]
 
     dialog.b_failure_step.setCurrentText("epochs")
-    assert [label.text for label in dialog.subject_labels] == [
+    assert [button.text() for button in dialog.subject_buttons] == [
         "sub-02", "sub-04"
     ]
 
     dialog.b_hide_no_task.setChecked(True)
-    assert [label.text for label in dialog.subject_labels] == ["sub-02"]
+    assert [button.text() for button in dialog.subject_buttons] == ["sub-02"]
 
 
 def test_proc_review_global_run_filter_keeps_subject_scope(qapp, tmp_path, monkeypatch):
@@ -1023,7 +1125,9 @@ def test_proc_review_global_run_filter_keeps_subject_scope(qapp, tmp_path, monke
 
     dialog.b_run.setCurrentText("run-01")
 
-    assert [label.text for label in dialog.subject_labels] == ["sub-01", "sub-02"]
+    assert [button.text() for button in dialog.subject_buttons] == [
+        "sub-01", "sub-02"
+    ]
     assert len(dialog.indicators) == 4
 
 
@@ -1077,6 +1181,16 @@ def test_proc_review_first_failure_opens_logged_error(qapp, tmp_path, monkeypatc
     assert "First failed derivative: epochs" in [
         label.text() for label in dialog.failure_dialog.findChildren(qt_gui_module.QLabel)
     ][0]
+
+    dialog.subject_buttons[0].click()
+    focused_failure_buttons = [
+        indicator for indicator in dialog.indicators
+        if isinstance(indicator, DerivativeFailureButton)
+    ]
+    assert len(focused_failure_buttons) == 1
+    assert focused_failure_buttons[0].width() == 16
+    focused_failure_buttons[0].click()
+    assert "ValueError: no events" in dialog.failure_dialog.error_text.toPlainText()
 
 
 def test_processing_failure_dialog_loads_full_log_and_scrolls_to_bottom(qapp, tmp_path):
