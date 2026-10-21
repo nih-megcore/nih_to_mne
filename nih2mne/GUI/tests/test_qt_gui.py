@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+from pathlib import Path
 import shlex
 import sys
 from types import SimpleNamespace
@@ -784,6 +785,14 @@ def _write_review_script(path):
     )
 
 
+def _finish_proc_review_scan(dialog, qapp):
+    dialog._thread_pool.waitForDone(5000)
+    for _ in range(20):
+        qapp.processEvents()
+        if not dialog._pending_evaluations:
+            break
+
+
 def test_proc_review_dialog_runs_pagination_and_rotated_headers(qapp, tmp_path, monkeypatch):
     script = tmp_path / "task_v1.py"
     _write_review_script(script)
@@ -831,6 +840,7 @@ def test_proc_review_dialog_runs_pagination_and_rotated_headers(qapp, tmp_path, 
     dialog = ProcReviewDialog(window, script)
     dialog.b_subjects_per_page.setText("2")
     dialog._reset_and_refresh()
+    _finish_proc_review_scan(dialog, qapp)
 
     assert dialog.task == "task"
     assert dialog.l_task.text() == "Task: task"
@@ -851,6 +861,147 @@ def test_proc_review_dialog_runs_pagination_and_rotated_headers(qapp, tmp_path, 
     assert [label.text for label in dialog.subject_labels] == ["sub-03"]
     dialog.b_hide_no_task.setChecked(True)
     assert dialog.l_page.text() == "1 / 1"
+
+
+def test_proc_review_prefetches_three_pages_and_reuses_cached_results(
+    qapp, tmp_path, monkeypatch
+):
+    script = tmp_path / "task_v1.py"
+    _write_review_script(script)
+    subjects = {}
+    for index in range(1, 7):
+        subject = f"sub-{index:02d}"
+        info = FakeBidsInfo(subject=subject)
+        info.meg_list = [FakeMegDataset(
+            "task",
+            "run01.ds",
+            f"/tmp/fake_bids/{subject}/meg/{subject}_task-task_run-01_meg.ds",
+        )]
+        subjects[subject] = info
+    window = BIDS_Project_Window(
+        bids_project=FakeProject(subjects), gridsize_row=1, gridsize_col=2
+    )
+    calls = []
+
+    def fake_evaluate(spec, dataset):
+        calls.append(str(dataset))
+        return tuple(
+            SimpleNamespace(
+                request=request,
+                record=SimpleNamespace(
+                    exists=True,
+                    status="present",
+                    path=f"/tmp/{request.key}",
+                    component_paths=(),
+                    validation_errors=(),
+                ),
+            )
+            for request in spec.outputs
+        )
+
+    monkeypatch.setattr(qt_gui_module, "evaluate_dataset", fake_evaluate)
+    dialog = ProcReviewDialog(window, script)
+    _finish_proc_review_scan(dialog, qapp)
+    dialog.b_subjects_per_page.setText("1")
+    calls.clear()
+
+    dialog.rescan()
+    assert all(
+        isinstance(indicator, qt_gui_module.PendingDerivativeIndicator)
+        for indicator in dialog.indicators
+    )
+    _finish_proc_review_scan(dialog, qapp)
+
+    assert len(calls) == 4  # current page plus the next three pages
+    assert len(set(calls)) == 4
+
+    dialog.next_page()
+    _finish_proc_review_scan(dialog, qapp)
+    assert len(calls) == 5
+
+    dialog.previous_page()
+    _finish_proc_review_scan(dialog, qapp)
+    assert len(calls) == 5
+
+    dialog.b_hide_successful.setChecked(True)
+    _finish_proc_review_scan(dialog, qapp)
+    assert len(calls) == 6  # filtering completes the project-wide scan
+    assert dialog.l_page.text() == "0 / 0"
+
+
+def test_proc_review_filters_by_aggregate_first_failure(
+    qapp, tmp_path, monkeypatch
+):
+    script = tmp_path / "task_v1.py"
+    _write_review_script(script)
+    subjects = {}
+    for index in range(1, 6):
+        subject = f"sub-{index:02d}"
+        info = FakeBidsInfo(subject=subject)
+        if index == 4:
+            info.meg_list = []
+        else:
+            info.meg_list = [FakeMegDataset(
+                "task",
+                "run01.ds",
+                f"/tmp/fake_bids/{subject}/meg/{subject}_task-task_run-01_meg.ds",
+            )]
+        if index == 5:
+            info.meg_list.append(FakeMegDataset(
+                "task",
+                "run02.ds",
+                f"/tmp/fake_bids/{subject}/meg/{subject}_task-task_run-02_meg.ds",
+            ))
+        subjects[subject] = info
+    window = BIDS_Project_Window(
+        bids_project=FakeProject(subjects), gridsize_row=1, gridsize_col=2
+    )
+
+    def fake_evaluate(spec, dataset):
+        subject = Path(dataset).name.split("_", 1)[0]
+        if subject == "sub-05":
+            present = (True, "run-02" not in str(dataset))
+        else:
+            present = {
+                "sub-01": (True, True),
+                "sub-02": (False, False),
+                "sub-03": (True, False),
+            }[subject]
+        return tuple(
+            SimpleNamespace(
+                request=request,
+                record=SimpleNamespace(
+                    exists=present[offset],
+                    status="present" if present[offset] else "missing",
+                    path=f"/tmp/{request.key}",
+                    component_paths=(),
+                    validation_errors=(),
+                ),
+            )
+            for offset, request in enumerate(spec.outputs)
+        )
+
+    monkeypatch.setattr(qt_gui_module, "evaluate_dataset", fake_evaluate)
+    dialog = ProcReviewDialog(window, script)
+    _finish_proc_review_scan(dialog, qapp)
+
+    dialog.b_hide_successful.setChecked(True)
+    assert [label.text for label in dialog.subject_labels] == [
+        "sub-02", "sub-03", "sub-04", "sub-05"
+    ]
+
+    dialog.b_failure_step.setCurrentText("stc: face")
+    assert [label.text for label in dialog.subject_labels] == [
+        "sub-03", "sub-04", "sub-05"
+    ]
+
+    dialog.b_failure_step.setCurrentText("epochs")
+    assert [label.text for label in dialog.subject_labels] == [
+        "sub-02", "sub-04"
+    ]
+
+    dialog.b_hide_no_task.setChecked(True)
+    assert [label.text for label in dialog.subject_labels] == ["sub-02"]
 
 
 def test_proc_review_global_run_filter_keeps_subject_scope(qapp, tmp_path, monkeypatch):
@@ -909,6 +1060,7 @@ def test_proc_review_first_failure_opens_logged_error(qapp, tmp_path, monkeypatc
     monkeypatch.setattr(qt_gui_module, "find_processing_failure", lambda *args, **kwargs: report)
     monkeypatch.setattr(qt_gui_module.ProcessingFailureDialog, "exec", lambda self: 0)
     dialog = ProcReviewDialog(window, script)
+    _finish_proc_review_scan(dialog, qapp)
 
     failure_buttons = [
         indicator for indicator in dialog.indicators

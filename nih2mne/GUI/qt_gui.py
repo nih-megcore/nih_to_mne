@@ -875,6 +875,26 @@ class DerivativeIndicator(QWidget):
             painter.drawLine(rect.bottomLeft(), rect.topRight())
 
 
+class PendingDerivativeIndicator(QWidget):
+    """Neutral marker shown while a derivative evaluation is queued."""
+
+    present = False
+
+    def __init__(self, tooltip='', parent=None):
+        super().__init__(parent)
+        self.setToolTip(tooltip)
+        self.setAccessibleName('evaluation pending')
+        self.setMinimumSize(18, 18)
+        self.setMaximumHeight(28)
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        rect = self.rect().adjusted(2, 2, -2, -2)
+        painter.fillRect(rect, QtGui.QColor('#9e9e9e'))
+        painter.setPen(QtGui.QPen(QtGui.QColor('#555555'), 1))
+        painter.drawRect(rect)
+
+
 class DerivativeFailureButton(QtWidgets.QAbstractButton):
     """Clickable version of the first failed derivative indicator."""
 
@@ -901,6 +921,36 @@ class DerivativeFailureButton(QtWidgets.QAbstractButton):
         painter.drawRect(rect)
         painter.setPen(QtGui.QPen(QtGui.QColor('white'), 3))
         painter.drawLine(rect.bottomLeft(), rect.topRight())
+
+
+class _ProcReviewEvaluationSignals(QtCore.QObject):
+    """Signals emitted by one background derivative evaluation."""
+
+    finished = QtCore.pyqtSignal(int, str, object, object)
+
+
+class _ProcReviewEvaluationTask(QtCore.QRunnable):
+    """Evaluate one dataset without blocking the Qt event loop."""
+
+    def __init__(self, generation, key, spec, dataset):
+        super().__init__()
+        self.generation = generation
+        self.key = key
+        self.spec = spec
+        self.dataset = dataset
+        self.signals = _ProcReviewEvaluationSignals()
+
+    @QtCore.pyqtSlot()
+    def run(self):
+        try:
+            evaluated = evaluate_dataset(self.spec, self.dataset)
+            error = None
+        except Exception as exc:
+            evaluated = ()
+            error = exc
+        self.signals.finished.emit(
+            self.generation, self.key, evaluated, error
+        )
 
 
 class ProcessingFailureDialog(QtWidgets.QDialog):
@@ -999,6 +1049,14 @@ class ProcReviewDialog(QtWidgets.QDialog):
         self.page = 0
         self.indicators = []
         self.subject_labels = []
+        self._evaluation_cache = {}
+        self._pending_evaluations = set()
+        self._active_evaluation_tasks = {}
+        self._scan_generation = 0
+        self._filter_scan_pending = False
+        self._displayed_dataset_keys = set()
+        self._thread_pool = QtCore.QThreadPool(self)
+        self._thread_pool.setMaxThreadCount(1)
         self.setWindowTitle('ProcReview')
         self.resize(900, 650)
 
@@ -1025,8 +1083,28 @@ class ProcReviewDialog(QtWidgets.QDialog):
         controls.addWidget(self.b_subjects_per_page)
         self.b_hide_no_task = QCheckBox('Hide No-Task Subjects')
         controls.addWidget(self.b_hide_no_task)
+        self.b_hide_successful = QCheckBox('Hide Successful Subjects')
+        self.b_hide_successful.setToolTip(
+            'Hide subjects completed through all visible runs, or filter by '
+            'the first failed processing step selected at right'
+        )
+        controls.addWidget(self.b_hide_successful)
+        controls.addWidget(QLabel('Failure step'))
+        self.b_failure_step = QComboBox()
+        self.b_failure_step.addItem('Any Incomplete Step', None)
+        for offset, request in enumerate(self.spec.outputs):
+            self.b_failure_step.addItem(request.label, offset)
+        self.b_failure_step.setToolTip(
+            'When successful-subject filtering is enabled, retain subjects '
+            'whose earliest failure is at this processing step'
+        )
+        self.b_failure_step.setEnabled(False)
+        controls.addWidget(self.b_failure_step)
         controls.addStretch(1)
         main_layout.addLayout(controls)
+
+        self.l_scan_status = QLabel('')
+        main_layout.addWidget(self.l_scan_status)
 
         self.scroll = QtWidgets.QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -1046,10 +1124,14 @@ class ProcReviewDialog(QtWidgets.QDialog):
 
         self.b_run.currentIndexChanged.connect(self._reset_and_refresh)
         self.b_hide_no_task.toggled.connect(self._reset_and_refresh)
+        self.b_hide_successful.toggled.connect(self._success_filter_changed)
+        self.b_failure_step.currentIndexChanged.connect(
+            self._success_filter_changed
+        )
         self.b_subjects_per_page.editingFinished.connect(self._reset_and_refresh)
         self.b_prev.clicked.connect(self.previous_page)
         self.b_next.clicked.connect(self.next_page)
-        self.b_refresh.clicked.connect(self.refresh)
+        self.b_refresh.clicked.connect(self.rescan)
         self._populate_runs()
 
     def _populate_runs(self):
@@ -1073,7 +1155,11 @@ class ProcReviewDialog(QtWidgets.QDialog):
             self.b_subjects_per_page.setText('10')
             return 10
 
-    def _subjects(self):
+    @staticmethod
+    def _dataset_key(dataset):
+        return str(Path(dataset.rel_path).expanduser().resolve(strict=False))
+
+    def _base_subjects(self):
         subjects = sorted(self.bids_project.subjects, key=_natural_key)
         if self.b_hide_no_task.isChecked():
             subjects = [
@@ -1082,6 +1168,18 @@ class ProcReviewDialog(QtWidgets.QDialog):
                        for dataset in self.bids_project.subjects[subject].meg_list)
             ]
         return subjects
+
+    def _subjects(self):
+        subjects = self._base_subjects()
+        if (
+            not self.b_hide_successful.isChecked()
+            or self._filter_scan_pending
+        ):
+            return subjects
+        return [
+            subject for subject in subjects
+            if self._subject_matches_success_filter(subject)
+        ]
 
     def _datasets(self, subject):
         selected_run = self.b_run.currentText()
@@ -1093,7 +1191,139 @@ class ProcReviewDialog(QtWidgets.QDialog):
         return sorted(datasets, key=lambda dataset: (_natural_key(_dataset_run(dataset)),
                                                      str(dataset.rel_path)))
 
+    def _dataset_first_failure(self, dataset):
+        cached = self._evaluation_cache.get(self._dataset_key(dataset))
+        if cached is None:
+            return None
+        evaluated_items, error = cached
+        if error is not None:
+            return 0
+        for offset in range(len(self.spec.outputs)):
+            if offset >= len(evaluated_items):
+                return offset
+            if not evaluated_items[offset].record.exists:
+                return offset
+        return None
+
+    def _subject_first_failure(self, subject):
+        failures = [
+            self._dataset_first_failure(dataset)
+            for dataset in self._datasets(subject)
+        ]
+        failures = [failure for failure in failures if failure is not None]
+        return min(failures) if failures else None
+
+    def _subject_matches_success_filter(self, subject):
+        datasets = self._datasets(subject)
+        if not datasets:
+            return True
+        first_failure = self._subject_first_failure(subject)
+        selected_step = self.b_failure_step.currentData()
+        if selected_step is None:
+            return first_failure is not None
+        return first_failure == int(selected_step)
+
     def _reset_and_refresh(self, *args):
+        self.page = 0
+        self.refresh()
+
+    def _success_filter_changed(self, *args):
+        self.b_failure_step.setEnabled(self.b_hide_successful.isChecked())
+        self.page = 0
+        self.refresh()
+
+    def _queue_evaluation(self, dataset, priority=0):
+        key = self._dataset_key(dataset)
+        if key in self._evaluation_cache or key in self._pending_evaluations:
+            return
+        self._pending_evaluations.add(key)
+        task = _ProcReviewEvaluationTask(
+            self._scan_generation,
+            key,
+            self.spec,
+            dataset.rel_path,
+        )
+        task.signals.finished.connect(self._evaluation_finished)
+        self._active_evaluation_tasks[(self._scan_generation, key)] = task
+        self._thread_pool.start(task, priority)
+
+    def _required_filter_datasets(self):
+        datasets = {}
+        for subject in self._base_subjects():
+            for dataset in self._datasets(subject):
+                datasets[self._dataset_key(dataset)] = dataset
+        return datasets
+
+    def _update_filter_scan(self):
+        if not self.b_hide_successful.isChecked():
+            self._filter_scan_pending = False
+            return
+        required = self._required_filter_datasets()
+        missing = [
+            dataset for key, dataset in required.items()
+            if key not in self._evaluation_cache
+        ]
+        self._filter_scan_pending = bool(missing)
+        for dataset in missing:
+            self._queue_evaluation(dataset, priority=0)
+
+    def _prefetch_page_window(self, subjects):
+        page_size = self._page_size()
+        start = self.page * page_size
+        current_end = start + page_size
+        prefetch_end = start + (4 * page_size)
+        for offset, subject in enumerate(subjects[start:prefetch_end], start=start):
+            priority = 2 if offset < current_end else 1
+            for dataset in self._datasets(subject):
+                self._queue_evaluation(dataset, priority=priority)
+
+    def _current_page_is_cached(self):
+        return all(
+            key in self._evaluation_cache
+            for key in self._displayed_dataset_keys
+        )
+
+    def _update_scan_status(self):
+        if self._filter_scan_pending:
+            required = self._required_filter_datasets()
+            complete = sum(
+                key in self._evaluation_cache for key in required
+            )
+            self.l_scan_status.setText(
+                f'Scanning for subject filter: {complete} / {len(required)}'
+            )
+        elif self._pending_evaluations:
+            self.l_scan_status.setText(
+                f'Prefetching {len(self._pending_evaluations)} dataset(s)…'
+            )
+        else:
+            self.l_scan_status.setText(
+                f'Ready — {len(self._evaluation_cache)} dataset(s) cached'
+            )
+
+    def _evaluation_finished(self, generation, key, evaluated_items, error):
+        self._active_evaluation_tasks.pop((generation, key), None)
+        if generation != self._scan_generation:
+            return
+        self._pending_evaluations.discard(key)
+        self._evaluation_cache[key] = (tuple(evaluated_items), error)
+        filter_was_pending = self._filter_scan_pending
+        self._update_filter_scan()
+        if filter_was_pending and not self._filter_scan_pending:
+            self.page = 0
+            self.refresh()
+            return
+        if key in self._displayed_dataset_keys and self._current_page_is_cached():
+            self.refresh()
+            return
+        self._update_scan_status()
+
+    def rescan(self):
+        self._scan_generation += 1
+        self._thread_pool.clear()
+        self._active_evaluation_tasks.clear()
+        self._evaluation_cache.clear()
+        self._pending_evaluations.clear()
         self.page = 0
         self.refresh()
 
@@ -1111,6 +1341,13 @@ class ProcReviewDialog(QtWidgets.QDialog):
     def _total_pages(self):
         count = len(self._subjects())
         return math.ceil(count / self._page_size()) if count else 0
+
+    def closeEvent(self, event):
+        self._scan_generation += 1
+        self._thread_pool.clear()
+        self._thread_pool.waitForDone(1000)
+        self._active_evaluation_tasks.clear()
+        super().closeEvent(event)
 
     def _tooltip(self, subject, dataset, evaluated=None, error=None):
         run = _dataset_run(dataset) if dataset is not None else 'unavailable'
@@ -1148,6 +1385,7 @@ class ProcReviewDialog(QtWidgets.QDialog):
         self.failure_dialog.exec()
 
     def refresh(self):
+        self._update_filter_scan()
         subjects = self._subjects()
         total_pages = self._total_pages()
         if total_pages == 0:
@@ -1165,6 +1403,7 @@ class ProcReviewDialog(QtWidgets.QDialog):
         grid.addWidget(QLabel('Derivative'), 0, 0, 2, 1)
         self.indicators = []
         self.subject_labels = []
+        self._displayed_dataset_keys = set()
         columns = []
         column = 1
         for subject in page_subjects:
@@ -1180,6 +1419,10 @@ class ProcReviewDialog(QtWidgets.QDialog):
                 run_label.setAlignment(alignment.AlignCenter)
                 grid.addWidget(run_label, 1, column)
                 columns.append((column, subject, dataset))
+                if dataset is not None:
+                    self._displayed_dataset_keys.add(
+                        self._dataset_key(dataset)
+                    )
                 grid.setColumnStretch(column, 1)
                 column += 1
 
@@ -1191,28 +1434,44 @@ class ProcReviewDialog(QtWidgets.QDialog):
         for column, subject, dataset in columns:
             error = None
             evaluated_items = ()
+            pending = False
             if dataset is not None:
-                try:
-                    evaluated_items = evaluate_dataset(self.spec, dataset.rel_path)
-                except Exception as exc:
-                    error = exc
-            first_failure = next(
-                (
-                    offset for offset, evaluated in enumerate(evaluated_items)
-                    if not evaluated.record.exists
-                ),
-                0 if dataset is not None and error is not None else None,
-            )
+                cached = self._evaluation_cache.get(self._dataset_key(dataset))
+                if cached is None:
+                    pending = True
+                else:
+                    evaluated_items, error = cached
+            if dataset is None or pending:
+                first_failure = None
+            else:
+                first_failure = next(
+                    (
+                        offset for offset in range(len(self.spec.outputs))
+                        if (
+                            offset >= len(evaluated_items)
+                            or not evaluated_items[offset].record.exists
+                        )
+                    ),
+                    0 if dataset is not None and error is not None else None,
+                )
             for offset, request in enumerate(self.spec.outputs):
                 evaluated = evaluated_items[offset] if offset < len(evaluated_items) else None
                 present = evaluated is not None and evaluated.record.exists
-                tooltip = self._tooltip(
-                    subject,
-                    dataset,
-                    evaluated=evaluated,
-                    error=error or 'No matching dataset',
-                )
-                if offset == first_failure:
+                if pending:
+                    tooltip = self._tooltip(
+                        subject,
+                        dataset,
+                        error='Evaluation pending',
+                    )
+                    indicator = PendingDerivativeIndicator(tooltip)
+                else:
+                    tooltip = self._tooltip(
+                        subject,
+                        dataset,
+                        evaluated=evaluated,
+                        error=error or 'No matching dataset',
+                    )
+                if not pending and offset == first_failure:
                     indicator = DerivativeFailureButton(tooltip + '\nClick to review the logged error.')
                     status = evaluated.record.status if evaluated is not None else 'unavailable'
                     indicator.clicked.connect(
@@ -1220,7 +1479,7 @@ class ProcReviewDialog(QtWidgets.QDialog):
                         request=request, status=status:
                         self._show_processing_failure(subject, dataset, request, status)
                     )
-                else:
+                elif not pending:
                     indicator = DerivativeIndicator(present, tooltip)
                 self.indicators.append(indicator)
                 grid.addWidget(indicator, offset + 2, column)
@@ -1234,6 +1493,8 @@ class ProcReviewDialog(QtWidgets.QDialog):
         self.l_page.setText(f'{self.page + 1} / {total_pages}' if total_pages else '0 / 0')
         self.b_prev.setEnabled(self.page > 0)
         self.b_next.setEnabled(self.page + 1 < total_pages)
+        self._prefetch_page_window(subjects)
+        self._update_scan_status()
 
 
 ## Create subject tile
