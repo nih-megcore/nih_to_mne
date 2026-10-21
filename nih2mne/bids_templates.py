@@ -547,7 +547,12 @@ class MEGDerivativeTemplate:
             check=False,
             **entities,
         )
-        path = Path(bids_path.fpath)
+        # ``BIDSPath.fpath`` searches the filesystem when an extension is not
+        # specified.  Surface STCs intentionally use an extensionless base
+        # path, so that lookup can incorrectly resolve the base to the
+        # neighboring provenance file (``*_stc.json``).  Derivative records
+        # describe exact destinations and must not infer an existing file.
+        path = Path(bids_path.directory) / bids_path.basename
         if spec.location == "nested":
             path = paths[spec.parent_key] / path.name
         return path

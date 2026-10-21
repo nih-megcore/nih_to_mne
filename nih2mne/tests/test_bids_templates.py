@@ -286,6 +286,13 @@ def test_surface_stc_artifact_tracks_and_loads_both_hemispheres(tmp_path):
     assert not record.exists
 
     record.path.parent.mkdir(parents=True)
+    provenance_path = record.path.with_name(f"{record.path.name}.json")
+    provenance_path.write_text("{}", encoding="utf-8")
+    with_provenance = template.artifact("stc", description="stim")
+    assert with_provenance.path == record.path
+    assert with_provenance.component_paths == record.component_paths
+    assert ".json-" not in str(with_provenance.component_paths[0])
+
     record.component_paths[0].touch()
     partial = template.artifact("stc", description="stim")
     assert partial.status == "invalid"
