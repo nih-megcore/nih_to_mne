@@ -64,6 +64,9 @@ import re
 from nih2mne.proc.derivative_review import (
     ProcessingScriptError,
     analyze_processing_script,
+    artifact_copy_text,
+    artifact_load_statement,
+    build_debug_script,
     evaluate_dataset,
     find_processing_failure,
 )
@@ -1052,8 +1055,12 @@ class ProcReviewDialog(QtWidgets.QDialog):
         self.subject_buttons = []
         self.path_fields = []
         self.qa_buttons = []
+        self.copy_path_buttons = []
+        self.copy_load_buttons = []
+        self.copy_load_all_buttons = []
         self.focused_subject = None
         self._focus_return_page = 0
+        self._clipboard_status_token = 0
         self._evaluation_cache = {}
         self._pending_evaluations = set()
         self._active_evaluation_tasks = {}
@@ -1608,6 +1615,69 @@ class ProcReviewDialog(QtWidgets.QDialog):
             old_content.deleteLater()
         self.scroll.setWidget(content)
 
+    def _copy_to_clipboard(self, text, message):
+        QApplication.clipboard().setText(text)
+        self._clipboard_status_token += 1
+        token = self._clipboard_status_token
+        self.l_scan_status.setText(message)
+
+        def restore_status():
+            if token == self._clipboard_status_token:
+                self._update_scan_status()
+
+        QTimer.singleShot(1800, restore_status)
+
+    def _copy_artifact_path(self, evaluated):
+        self._copy_to_clipboard(
+            artifact_copy_text(evaluated.record),
+            'Copied path',
+        )
+
+    def _copy_artifact_load(self, offset, evaluated):
+        variable = None
+        if offset < len(self.spec.debug_steps):
+            variable = self.spec.debug_steps[offset].variable
+        try:
+            statement = artifact_load_statement(
+                evaluated.request,
+                evaluated.record,
+                variable=variable,
+            )
+        except ValueError as error:
+            QMessageBox.warning(self, 'Copy Load Unavailable', str(error))
+            return
+        self._copy_to_clipboard(statement, 'Copied load command')
+
+    def _copy_artifact_load_all(self, offset, dataset, evaluated_items):
+        subject_info = self.bids_project.subjects[self.focused_subject]
+        try:
+            mri_path = get_datproc_mri(subject_info)
+        except ValueError:
+            mri_path = None
+        subjects_dir = getattr(subject_info, 'subjects_dir', None)
+        try:
+            script = build_debug_script(
+                self.spec,
+                dataset.rel_path,
+                offset,
+                tuple(evaluated_items),
+                mri_path=mri_path,
+                subjects_dir=subjects_dir,
+            )
+        except Exception as error:
+            QMessageBox.warning(
+                self,
+                'Copy Load All Unavailable',
+                f'Could not generate the debug script: {error}',
+            )
+            return
+        message = (
+            'Copied debug script'
+            if script.isolated
+            else 'Copied full-script fallback (not isolated)'
+        )
+        self._copy_to_clipboard(script.text, message)
+
     def _refresh_focused_subject(self):
         subject = self.focused_subject
         dataset = self._focused_dataset()
@@ -1616,6 +1686,9 @@ class ProcReviewDialog(QtWidgets.QDialog):
         self.subject_buttons = []
         self.path_fields = []
         self.qa_buttons = []
+        self.copy_path_buttons = []
+        self.copy_load_buttons = []
+        self.copy_load_all_buttons = []
         self._displayed_dataset_keys = set()
         if dataset is not None:
             key = self._dataset_key(dataset)
@@ -1635,11 +1708,14 @@ class ProcReviewDialog(QtWidgets.QDialog):
             self._toggle_subject_focus(subject)
         )
         self.subject_buttons.append(subject_button)
-        grid.addWidget(subject_button, 0, 0, 1, 4)
+        grid.addWidget(subject_button, 0, 0, 1, 7)
         grid.addWidget(QLabel('Processing step'), 1, 0)
         grid.addWidget(QLabel('Status'), 1, 1)
         grid.addWidget(QLabel('Output path'), 1, 2)
-        grid.addWidget(QLabel('Q/A'), 1, 3)
+        grid.addWidget(QLabel('CP'), 1, 3)
+        grid.addWidget(QLabel('CL'), 1, 4)
+        grid.addWidget(QLabel('CLA'), 1, 5)
+        grid.addWidget(QLabel('Q/A'), 1, 6)
 
         evaluated_items, error, pending, first_failure = (
             self._evaluation_display(subject, dataset)
@@ -1697,12 +1773,51 @@ class ProcReviewDialog(QtWidgets.QDialog):
             self.path_fields.append(path_field)
             grid.addWidget(path_field, row, 2)
 
+            cp_button = QPushButton('CP')
+            cp_button.setFixedWidth(34)
+            cp_button.setToolTip('Copy Path')
+            cp_button.setEnabled(evaluated is not None)
+            if evaluated is not None:
+                cp_button.clicked.connect(
+                    lambda checked=False, evaluated=evaluated:
+                    self._copy_artifact_path(evaluated)
+                )
+            self.copy_path_buttons.append(cp_button)
+            grid.addWidget(cp_button, row, 3)
+
+            cl_button = QPushButton('CL')
+            cl_button.setFixedWidth(34)
+            cl_button.setToolTip('Copy Load')
+            cl_button.setEnabled(evaluated is not None)
+            if evaluated is not None:
+                cl_button.clicked.connect(
+                    lambda checked=False, offset=offset, evaluated=evaluated:
+                    self._copy_artifact_load(offset, evaluated)
+                )
+            self.copy_load_buttons.append(cl_button)
+            grid.addWidget(cl_button, row, 4)
+
+            cla_button = QPushButton('CLA')
+            cla_button.setFixedWidth(42)
+            cla_button.setToolTip('Copy Load All')
+            cla_button.setEnabled(dataset is not None and evaluated is not None)
+            if dataset is not None and evaluated is not None:
+                cla_button.clicked.connect(
+                    lambda checked=False, offset=offset, dataset=dataset,
+                    evaluated_items=evaluated_items:
+                    self._copy_artifact_load_all(
+                        offset, dataset, evaluated_items
+                    )
+                )
+            self.copy_load_all_buttons.append(cla_button)
+            grid.addWidget(cla_button, row, 5)
+
             qa_button = QPushButton('Q/A')
             qa_button.setEnabled(False)
             qa_button.setToolTip('QA not yet available')
             qa_button.setAccessibleName(f'{request.label} QA')
             self.qa_buttons.append(qa_button)
-            grid.addWidget(qa_button, row, 3)
+            grid.addWidget(qa_button, row, 6)
 
         grid.setColumnStretch(2, 1)
         grid.setRowStretch(len(self.spec.outputs) + 2, 1)
@@ -1741,6 +1856,9 @@ class ProcReviewDialog(QtWidgets.QDialog):
         self.subject_buttons = []
         self.path_fields = []
         self.qa_buttons = []
+        self.copy_path_buttons = []
+        self.copy_load_buttons = []
+        self.copy_load_all_buttons = []
         self._displayed_dataset_keys = set()
         columns = []
         column = 1

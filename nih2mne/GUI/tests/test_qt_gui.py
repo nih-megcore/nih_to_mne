@@ -948,10 +948,54 @@ def test_proc_review_subject_focus_shows_run_paths_and_qa_placeholders(
     assert "\n" in stc_text
     assert all(line.startswith("derivatives/") for line in stc_text.splitlines())
     assert stc_text.endswith("-rh.stc")
+    assert len(dialog.copy_path_buttons) == len(dialog.spec.outputs)
+    assert len(dialog.copy_load_buttons) == len(dialog.spec.outputs)
+    assert len(dialog.copy_load_all_buttons) == len(dialog.spec.outputs)
+    assert all(button.toolTip() == "Copy Path"
+               for button in dialog.copy_path_buttons)
+    assert all(button.toolTip() == "Copy Load"
+               for button in dialog.copy_load_buttons)
+    assert all(button.toolTip() == "Copy Load All"
+               for button in dialog.copy_load_all_buttons)
+    assert all(button.width() == 34 for button in dialog.copy_path_buttons)
+    assert all(button.width() == 34 for button in dialog.copy_load_buttons)
+    assert all(button.width() == 42 for button in dialog.copy_load_all_buttons)
+
+    stc_stem = (
+        "/tmp/fake_bids/derivatives/review/sub-02/meg/run-02/"
+        "sub-02_run-02_stc"
+    )
+    dialog.copy_path_buttons[1].click()
+    assert QApplication.clipboard().text() == stc_stem
+    assert dialog.l_scan_status.text() == "Copied path"
+
+    dialog.copy_load_buttons[1].click()
+    assert QApplication.clipboard().text() == (
+        f"value = mne.read_source_estimate({stc_stem!r})"
+    )
+    assert dialog.l_scan_status.text() == "Copied load command"
+
+    dialog.copy_load_all_buttons[0].click()
+    copied_debug = QApplication.clipboard().text()
+    assert "WARNING: an isolated recipe could not be generated" in copied_debug
+    assert "%run " in copied_debug
+    assert dialog.l_scan_status.text() == (
+        "Copied full-script fallback (not isolated)"
+    )
 
     dialog.b_subject_run.setCurrentText("run-01")
     _finish_proc_review_scan(dialog, qapp)
     assert "run-01" in dialog.path_fields[0].toPlainText()
+
+    dialog.rescan()
+    assert all(not button.isEnabled() for button in dialog.copy_path_buttons)
+    assert all(not button.isEnabled() for button in dialog.copy_load_buttons)
+    assert all(not button.isEnabled()
+               for button in dialog.copy_load_all_buttons)
+    _finish_proc_review_scan(dialog, qapp)
+    assert all(button.isEnabled() for button in dialog.copy_path_buttons)
+    assert all(button.isEnabled() for button in dialog.copy_load_buttons)
+    assert all(button.isEnabled() for button in dialog.copy_load_all_buttons)
 
     dialog.b_show_all.click()
     assert dialog.focused_subject is None

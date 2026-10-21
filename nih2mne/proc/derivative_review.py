@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import os
 import re
+import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -47,6 +49,15 @@ class ArtifactRequest:
 
 
 @dataclass(frozen=True)
+class ArtifactDebugSpec:
+    """Static information used to reproduce one declared output."""
+
+    variable: str
+    calls: tuple[str, ...] = ()
+    dependencies: tuple[ArtifactRequest, ...] = ()
+
+
+@dataclass(frozen=True)
 class ProcessingReviewSpec:
     """Static template settings and ordered output requests from one script."""
 
@@ -57,6 +68,8 @@ class ProcessingReviewSpec:
     discover_emptyroom: bool
     space: str | None
     outputs: tuple[ArtifactRequest, ...]
+    debug_steps: tuple[ArtifactDebugSpec, ...] = ()
+    static_values: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def derivative_names(self) -> tuple[str, ...]:
@@ -76,6 +89,14 @@ class EvaluatedArtifact:
 
     request: ArtifactRequest
     record: ArtifactRecord
+
+
+@dataclass(frozen=True)
+class DebugScript:
+    """Clipboard-ready reproduction script and whether it is step-isolated."""
+
+    text: str
+    isolated: bool
 
 
 @dataclass(frozen=True)
@@ -141,6 +162,43 @@ def _safe_value(node: ast.AST, values: Mapping[str, Any]) -> Any:
     return _MISSING
 
 
+def _render_debug_string(node: ast.AST, values: Mapping[str, Any]) -> str | None:
+    """Render a static or formatted provenance call without executing it."""
+
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if not isinstance(node, ast.JoinedStr):
+        return None
+    parts = []
+    for value in node.values:
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            parts.append(value.value)
+            continue
+        if not isinstance(value, ast.FormattedValue):
+            return None
+        resolved = _safe_value(value.value, values)
+        if resolved is _MISSING:
+            rendered = ast.unparse(value.value)
+        elif value.conversion == ord("r"):
+            rendered = repr(resolved)
+        else:
+            rendered = str(resolved)
+        parts.append(rendered)
+    return "".join(parts)
+
+
+def _artifact_reference(
+    node: ast.AST,
+    values: Mapping[str, Any],
+    records: Mapping[str, ArtifactRequest],
+) -> ArtifactRequest | None:
+    """Resolve an artifact path expression used by provenance inputs."""
+
+    if isinstance(node, ast.Attribute) and node.attr in {"path", "fpath"}:
+        node = node.value
+    return _artifact_request(node, values, records)
+
+
 def _literal_keywords(call: ast.Call, values: Mapping[str, Any], context: str) -> dict[str, Any]:
     result = {}
     for keyword in call.keywords:
@@ -179,6 +237,7 @@ class _Analyzer:
     filter_kwargs: dict[str, Any] | None = None
     template_kwargs: dict[str, Any] | None = None
     outputs: list[ArtifactRequest] = field(default_factory=list)
+    debug_steps: list[ArtifactDebugSpec] = field(default_factory=list)
 
     def _bind(self, target: ast.AST, value: Any) -> None:
         if isinstance(target, ast.Name):
@@ -243,7 +302,14 @@ class _Analyzer:
                 for target in targets:
                     if isinstance(target, ast.Name):
                         self.records[target.id] = request
-            self._output_call(value_node)
+            result_variable = next(
+                (
+                    target.id for target in targets
+                    if isinstance(target, ast.Name)
+                ),
+                None,
+            )
+            self._output_call(value_node, result_variable=result_variable)
 
     def _for(self, statement: ast.For) -> None:
         iterable = _safe_value(statement.iter, self.values)
@@ -271,7 +337,75 @@ class _Analyzer:
             self.values[statement.target.id] = previous
         self.process(statement.orelse)
 
-    def _output_call(self, call: ast.Call) -> None:
+    @staticmethod
+    def _default_variable(request: ArtifactRequest) -> str:
+        variables = {
+            "fwd": "forward",
+            "filtered_raw": "raw",
+            "filtered_raw_json": "filtered_raw_metadata",
+            "covariance": "data_cov",
+            "lcmv": "filters",
+            "noise_filtered_raw": "noise_raw",
+            "noise_filtered_raw_json": "noise_filtered_raw_metadata",
+            "noise_covariance": "noise_cov",
+        }
+        if request.key == "stc":
+            description = str(request.kwargs.get("description", "result"))
+            safe_description = re.sub(r"\W+", "_", description).strip("_")
+            return f"stc_{safe_description or 'result'}"
+        return variables.get(request.key, request.key)
+
+    def _debug_spec(
+        self,
+        call: ast.Call,
+        request: ArtifactRequest,
+        result_variable: str | None,
+    ) -> ArtifactDebugSpec:
+        name = _call_name(call.func)
+        variable = result_variable
+        if name in {"save_filtered", "save_if_requested"} and call.args:
+            value = call.args[0]
+            if isinstance(value, ast.Name):
+                variable = value.id
+        if request.key.endswith("_json"):
+            variable = self._default_variable(request)
+        variable = variable or self._default_variable(request)
+
+        provenance = next(
+            (keyword.value for keyword in call.keywords
+             if keyword.arg == "provenance"),
+            None,
+        )
+        calls: list[str] = []
+        dependencies: list[ArtifactRequest] = []
+        if isinstance(provenance, ast.Call) and _call_name(provenance.func) == "derivative":
+            calls_node = next(
+                (keyword.value for keyword in provenance.keywords
+                 if keyword.arg == "calls"),
+                None,
+            )
+            if isinstance(calls_node, (ast.Tuple, ast.List)):
+                for item in calls_node.elts:
+                    rendered = _render_debug_string(item, self.values)
+                    if rendered is not None:
+                        calls.append(rendered)
+            inputs_node = next(
+                (keyword.value for keyword in provenance.keywords
+                 if keyword.arg == "inputs"),
+                None,
+            )
+            if isinstance(inputs_node, ast.Dict):
+                for value in inputs_node.values:
+                    dependency = _artifact_reference(
+                        value, self.values, self.records
+                    )
+                    if dependency is not None and dependency not in dependencies:
+                        dependencies.append(dependency)
+        return ArtifactDebugSpec(variable, tuple(calls), tuple(dependencies))
+
+    def _output_call(
+        self, call: ast.Call, result_variable: str | None = None
+    ) -> None:
         name = _call_name(call.func)
         indexes = {
             "ensure_dataset_description": (0,),
@@ -288,6 +422,9 @@ class _Analyzer:
                     f"could not resolve derivative record passed to {name}"
                 )
             self.outputs.append(request)
+            self.debug_steps.append(
+                self._debug_spec(call, request, result_variable)
+            )
 
 
 def _noise_configuration(
@@ -378,6 +515,8 @@ def analyze_processing_script(script: str | Path) -> ProcessingReviewSpec:
         discover_emptyroom=discover_emptyroom,
         space=space,
         outputs=tuple(analyzer.outputs),
+        debug_steps=tuple(analyzer.debug_steps),
+        static_values=dict(analyzer.values),
     )
 
 
@@ -401,6 +540,340 @@ def evaluate_dataset(spec: ProcessingReviewSpec, dataset: str | Path) -> tuple[E
     for request in spec.outputs:
         records.append(EvaluatedArtifact(request, template.artifact(request.key, **request.kwargs)))
     return tuple(records)
+
+
+def _absolute_path(path: str | Path) -> Path:
+    """Return a lexical absolute path without dereferencing BIDS symlinks."""
+
+    return Path(os.path.abspath(Path(path).expanduser()))
+
+
+def artifact_copy_text(record: ArtifactRecord) -> str:
+    """Return the absolute path copied by a ProcReview CP button."""
+
+    # MNE reads a surface STC from its common, extensionless stem.
+    return str(_absolute_path(record.path))
+
+
+def _default_debug_variable(request: ArtifactRequest) -> str:
+    variables = {
+        "fwd": "forward",
+        "filtered_raw": "raw",
+        "filtered_raw_json": "filtered_raw_metadata",
+        "covariance": "data_cov",
+        "lcmv": "filters",
+        "noise_filtered_raw": "noise_raw",
+        "noise_filtered_raw_json": "noise_filtered_raw_metadata",
+        "noise_covariance": "noise_cov",
+    }
+    if request.key == "stc":
+        description = str(request.kwargs.get("description", "result"))
+        description = re.sub(r"\W+", "_", description).strip("_")
+        return f"stc_{description or 'result'}"
+    return variables.get(request.key, request.key)
+
+
+def artifact_load_statement(
+    request: ArtifactRequest,
+    record: ArtifactRecord | None = None,
+    *,
+    path: str | Path | None = None,
+    variable: str | None = None,
+) -> str:
+    """Build one directly runnable artifact-loading assignment."""
+
+    if path is None:
+        if record is None:
+            raise ValueError("record or path is required")
+        path = record.path
+    path = _absolute_path(path)
+    path_literal = repr(str(path))
+    variable = variable or _default_debug_variable(request)
+    key = request.key
+
+    if key in {"raw", "noise_raw"}:
+        lower_name = path.name.lower()
+        if lower_name.endswith(".ds"):
+            expression = (
+                f"mne.io.read_raw_ctf({path_literal}, preload=True, "
+                "system_clock='ignore', clean_names=True)"
+            )
+        elif lower_name.endswith((".fif", ".fif.gz")):
+            expression = f"mne.io.read_raw_fif({path_literal}, preload=True)"
+        elif lower_name.endswith((".con", ".sqd")):
+            expression = f"mne.io.read_raw_kit({path_literal}, preload=True)"
+        elif lower_name.endswith(".pdf"):
+            expression = f"mne.io.read_raw_bti({path_literal}, preload=True)"
+        else:
+            expression = f"mne.io.read_raw({path_literal}, preload=True)"
+    elif key in {
+        "preprocessing_dataset_description", "project_dataset_description",
+        "filtered_raw_json", "noise_filtered_raw_json",
+    }:
+        expression = (
+            f"json.loads(Path({path_literal}).read_text(encoding='utf-8'))"
+        )
+    elif key in {"filtered_raw", "noise_filtered_raw"}:
+        expression = f"mne.io.read_raw_fif({path_literal}, preload=True, verbose=None)"
+    elif key in {"epochs", "noise_epochs"}:
+        expression = f"mne.read_epochs({path_literal}, preload=True, verbose=None)"
+    elif key in {"covariance", "noise_covariance"}:
+        expression = f"mne.read_cov({path_literal}, verbose=None)"
+    elif key == "bem":
+        expression = f"mne.read_bem_solution({path_literal}, verbose=None)"
+    elif key == "src":
+        expression = f"mne.read_source_spaces({path_literal}, verbose=None)"
+    elif key == "trans":
+        expression = f"mne.read_trans({path_literal}, verbose=None)"
+    elif key == "fwd":
+        expression = f"mne.read_forward_solution({path_literal}, verbose=None)"
+    elif key == "ica":
+        expression = f"mne.preprocessing.read_ica({path_literal}, verbose=None)"
+    elif key == "ica_dir":
+        expression = f"Path({path_literal})"
+    elif key == "lcmv":
+        expression = f"mne.beamformer.read_beamformer({path_literal})"
+    elif key == "stc":
+        expression = f"mne.read_source_estimate({path_literal})"
+    else:
+        raise ValueError(f"no debug loader is registered for {key!r}")
+    return f"{variable} = {expression}"
+
+
+def _runnable_calls(
+    request: ArtifactRequest, debug: ArtifactDebugSpec
+) -> tuple[str, ...] | None:
+    calls = list(debug.calls)
+    if not calls:
+        return None
+    key = request.key
+    variable = debug.variable
+    if key == "bem" and len(calls) >= 2:
+        calls[0] = f"model = {calls[0]}"
+        calls[1] = f"{variable} = {calls[1]}"
+    elif key == "epochs" and len(calls) >= 3:
+        calls[0] = f"{variable} = {calls[0]}"
+        calls[-1] = f"{variable}, reject_log = {calls[-1]}"
+    elif key == "stc":
+        if request.kwargs.get("space") == "fsaverage" and len(calls) >= 2:
+            calls[0] = f"morph = {calls[0]}"
+            calls[1] = f"{variable} = {calls[1]}"
+        elif len(calls) >= 1 and calls[0].lstrip().startswith("apply_lcmv_epochs("):
+            generator = calls[0]
+            calls = [
+                "stcs = [",
+                "    stc.apply_baseline((None, 0))",
+                f"    for stc in {generator}",
+                "]",
+                f"{variable} = stcs[0].copy()",
+                "for stc in stcs[1:]:",
+                f"    {variable} += stc",
+                f"{variable} /= len(stcs)",
+            ]
+        else:
+            return None
+    elif key in {
+        "src", "trans", "fwd", "covariance", "noise_covariance", "lcmv",
+    }:
+        calls[0] = f"{variable} = {calls[0]}"
+    elif key in {"filtered_raw", "noise_filtered_raw"}:
+        pass
+    else:
+        return None
+    source = "\n".join(calls)
+    try:
+        ast.parse(source)
+    except SyntaxError:
+        return None
+    return tuple(calls)
+
+
+def _commented_save_statement(
+    request: ArtifactRequest, record: ArtifactRecord, variable: str
+) -> str | None:
+    path_literal = repr(str(_absolute_path(record.path)))
+    key = request.key
+    if key == "bem":
+        command = f"mne.write_bem_solution({path_literal}, {variable}, overwrite=False)"
+    elif key == "src":
+        command = f"{variable}.save({path_literal}, overwrite=False)"
+    elif key == "trans":
+        command = f"mne.write_trans({path_literal}, {variable}, overwrite=False)"
+    elif key == "fwd":
+        command = f"mne.write_forward_solution({path_literal}, {variable}, overwrite=False)"
+    elif key in {"filtered_raw", "noise_filtered_raw", "epochs", "noise_epochs"}:
+        command = f"{variable}.save({path_literal}, overwrite=False)"
+    elif key in {"covariance", "noise_covariance"}:
+        command = f"{variable}.save({path_literal}, overwrite=False)"
+    elif key == "lcmv":
+        command = f"{variable}.save({path_literal}, overwrite=False)"
+    elif key == "stc":
+        command = f"{variable}.save({path_literal}, ftype='stc', overwrite=False)"
+    else:
+        return None
+    return f"# {command}"
+
+
+def _full_script_fallback(
+    spec: ProcessingReviewSpec,
+    dataset: str | Path,
+    *,
+    mri_path: str | Path | None,
+) -> DebugScript:
+    command = f"%run {shlex.quote(str(_absolute_path(spec.script)))} "
+    command += shlex.quote(str(_absolute_path(dataset)))
+    if mri_path is not None:
+        command += f" -mri {shlex.quote(str(_absolute_path(mri_path)))}"
+        mri_note = ""
+    else:
+        mri_note = "\n# No QA-selected MRI was available; the script will use automatic T1 discovery."
+    warning = (
+        "# WARNING: an isolated recipe could not be generated for this step.\n"
+        "# This reruns the full processing script from the beginning; cached steps\n"
+        "# should be reused and execution is expected to proceed only to the failing step."
+    )
+    return DebugScript(f"{warning}{mri_note}\n{command}\n", isolated=False)
+
+
+def build_debug_script(
+    spec: ProcessingReviewSpec,
+    dataset: str | Path,
+    selected_index: int,
+    evaluated_items: tuple[EvaluatedArtifact, ...],
+    *,
+    mri_path: str | Path | None = None,
+    subjects_dir: str | Path | None = None,
+) -> DebugScript:
+    """Build a self-contained IPython block for one reviewed output."""
+
+    if not (0 <= selected_index < len(evaluated_items)):
+        raise IndexError("selected output index is out of range")
+    if selected_index >= len(spec.debug_steps):
+        return _full_script_fallback(spec, dataset, mri_path=mri_path)
+
+    selected = evaluated_items[selected_index]
+    selected_debug = spec.debug_steps[selected_index]
+    calls = _runnable_calls(selected.request, selected_debug)
+    save = _commented_save_statement(
+        selected.request, selected.record, selected_debug.variable
+    )
+    if calls is None or save is None:
+        return _full_script_fallback(spec, dataset, mri_path=mri_path)
+    if any("anat" in call for call in calls) and mri_path is None:
+        return _full_script_fallback(spec, dataset, mri_path=None)
+
+    output_indexes = {
+        request: index for index, request in enumerate(spec.outputs)
+    }
+    required: set[ArtifactRequest] = set()
+
+    def add_dependencies(request: ArtifactRequest) -> None:
+        index = output_indexes.get(request)
+        if index is None or index >= len(spec.debug_steps):
+            required.add(request)
+            return
+        for dependency in spec.debug_steps[index].dependencies:
+            if dependency not in required:
+                required.add(dependency)
+                add_dependencies(dependency)
+
+    for dependency in selected_debug.dependencies:
+        required.add(dependency)
+        add_dependencies(dependency)
+
+    evaluated_by_request = {item.request: item for item in evaluated_items}
+    dependency_lines: list[str] = []
+    ordered = sorted(
+        required,
+        key=lambda request: output_indexes.get(request, -1),
+    )
+    for dependency in ordered:
+        producer_index = output_indexes.get(dependency)
+        variable = (
+            spec.debug_steps[producer_index].variable
+            if producer_index is not None and producer_index < len(spec.debug_steps)
+            else _default_debug_variable(dependency)
+        )
+        item = evaluated_by_request.get(dependency)
+        try:
+            if item is not None:
+                line = artifact_load_statement(
+                    dependency, item.record, variable=variable
+                )
+            elif dependency.key == "raw":
+                line = artifact_load_statement(
+                    dependency, path=dataset, variable=variable
+                )
+            elif dependency.key == "noise_raw":
+                primary = get_bids_path_from_fname(str(dataset), check=False)
+                noise = find_emptyroom_dataset(primary)
+                noise_path = noise.fpath if hasattr(noise, "fpath") else noise
+                line = artifact_load_statement(
+                    dependency, path=noise_path, variable=variable
+                )
+            else:
+                return _full_script_fallback(
+                    spec, dataset, mri_path=mri_path
+                )
+        except (OSError, TypeError, ValueError):
+            return _full_script_fallback(spec, dataset, mri_path=mri_path)
+        if line not in dependency_lines:
+            dependency_lines.append(line)
+
+    dataset_path = _absolute_path(dataset)
+    try:
+        primary = get_bids_path_from_fname(str(dataset_path), check=False)
+        bids_root = _absolute_path(primary.root)
+        fs_subject = f"sub-{primary.subject}"
+    except Exception:
+        return _full_script_fallback(spec, dataset, mri_path=mri_path)
+    subjects_dir = _absolute_path(
+        subjects_dir
+        or bids_root / "derivatives" / "freesurfer" / "subjects"
+    )
+    setup = [
+        "from pathlib import Path",
+        "import json",
+        "import mne",
+        "import mne_bids",
+        "import numpy as np",
+        "from autoreject import AutoReject",
+        "from mne.beamformer import apply_lcmv_epochs, make_lcmv",
+        "from nih2mne.bids_templates import FilterSpec",
+        "from nih2mne.proc.megcore_utils import normalize_beamfilt_ori",
+        "",
+        f"meg_path = Path({str(dataset_path)!r})",
+        "primary = mne_bids.get_bids_path_from_fname(str(meg_path), check=False)",
+        f"subjects_dir = Path({str(subjects_dir)!r})",
+        f"fs_subject = {fs_subject!r}",
+        "n_jobs = -1",
+        f"recipe = FilterSpec(**{dict(spec.filter_kwargs)!r})",
+    ]
+    if mri_path is not None:
+        setup.extend([
+            f"mri_path = Path({str(_absolute_path(mri_path))!r})",
+            "anat = mne_bids.get_bids_path_from_fname(str(mri_path), check=False)",
+        ])
+    if any("event_id" in call or "events" in call for call in calls):
+        conditions = (
+            spec.static_values.get("conds_OI")
+            or spec.static_values.get("conditions")
+        )
+        if not isinstance(conditions, (list, tuple)) or not conditions:
+            return _full_script_fallback(spec, dataset, mri_path=mri_path)
+        setup.extend([
+            f"conditions = {list(conditions)!r}",
+            "events, available_event_id = mne.events_from_annotations(raw)",
+            "event_id = {name: code for name, code in available_event_id.items() "
+            "if name in conditions}",
+        ])
+    sections = [
+        "\n".join(setup),
+        "# Load required inputs\n" + "\n".join(dependency_lines),
+        "# Reproduce the selected processing step\n" + "\n".join(calls),
+        "# Uncomment only if you intend to write into the derivatives tree\n" + save,
+    ]
+    return DebugScript("\n\n".join(sections) + "\n", isolated=True)
 
 
 _START_RE = re.compile(
