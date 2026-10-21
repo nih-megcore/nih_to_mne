@@ -643,6 +643,29 @@ def test_subject_selection_dialog_shows_status_labels(qapp):
     assert "(ERROR)" in labels
 
 
+def test_subject_selection_buttons_show_and_toggle_state(qapp):
+    dialog = SubjectSelectionDialog(
+        ["sub-01", "sub-02"],
+        {"sub-01"},
+    )
+    included_button = dialog.subject_buttons["sub-01"]
+    excluded_button = dialog.subject_buttons["sub-02"]
+
+    assert included_button.text() == "Included"
+    assert excluded_button.text() == "Excluded"
+    included_color = included_button.icon().pixmap(10, 10).toImage().pixelColor(5, 5)
+    excluded_color = excluded_button.icon().pixmap(10, 10).toImage().pixelColor(5, 5)
+    assert included_color.name() == qt_gui_module._INCLUDED_COLOR
+    assert excluded_color.name() == qt_gui_module._EXCLUDED_COLOR
+
+    included_button.click()
+
+    assert dialog.get_selected_subjects() == []
+    assert included_button.text() == "Excluded"
+    toggled_color = included_button.icon().pixmap(10, 10).toImage().pixelColor(5, 5)
+    assert toggled_color.name() == qt_gui_module._EXCLUDED_COLOR
+
+
 def test_read_subject_ids_file_detects_csv_header_and_normalizes(tmp_path):
     subject_file = tmp_path / "subjects.csv"
     subject_file.write_text(
@@ -689,8 +712,8 @@ def test_subject_selection_dialog_load_csv_replaces_selection_and_warns(
     dialog.load_subject_file()
 
     assert dialog.get_selected_subjects() == ["sub-01", "sub-03"]
-    assert dialog.subject_buttons["sub-01"].text() == "Exclude"
-    assert dialog.subject_buttons["sub-02"].text() == "Include"
+    assert dialog.subject_buttons["sub-01"].text() == "Included"
+    assert dialog.subject_buttons["sub-02"].text() == "Excluded"
     assert len(warnings) == 1
     assert warnings[0][1] == "Subjects Not Found"
     assert "sub-99" in warnings[0][2]

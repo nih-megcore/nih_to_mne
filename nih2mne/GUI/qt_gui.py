@@ -244,6 +244,9 @@ _SUBJECT_ID_COLUMN_NAMES = {
     'subjectid',
 }
 
+_INCLUDED_COLOR = '#2e7d32'
+_EXCLUDED_COLOR = '#c62828'
+
 
 def read_subject_ids_file(filepath):
     """Read and normalize BIDS subject IDs from a CSV or TSV file."""
@@ -293,6 +296,8 @@ class SubjectSelectionDialog(QtWidgets.QDialog):
         self.subjects = list(subjects)
         self.selected_subjects = set(selected_subjects)
         self.subject_statuses = subject_statuses or {}
+        self.included_icon = self._make_state_icon(_INCLUDED_COLOR)
+        self.excluded_icon = self._make_state_icon(_EXCLUDED_COLOR)
         self.setWindowTitle('Select Subjects')
         self.resize(420, 480)
 
@@ -325,6 +330,7 @@ class SubjectSelectionDialog(QtWidgets.QDialog):
             row_layout.addStretch()
 
             button = QPushButton()
+            button.setIconSize(QtCore.QSize(10, 10))
             button.clicked.connect(lambda _, subj=subject: self.toggle_subject(subj))
             row_layout.addWidget(button)
             self.subject_layout.addLayout(row_layout)
@@ -346,6 +352,12 @@ class SubjectSelectionDialog(QtWidgets.QDialog):
         main_layout.addLayout(bottom_buttons_layout)
 
         self.setLayout(main_layout)
+
+    @staticmethod
+    def _make_state_icon(color):
+        pixmap = QtGui.QPixmap(10, 10)
+        pixmap.fill(QtGui.QColor(color))
+        return QtGui.QIcon(pixmap)
 
     def select_all(self):
         self.selected_subjects = set(self.subjects)
@@ -412,9 +424,11 @@ class SubjectSelectionDialog(QtWidgets.QDialog):
     def refresh_buttons(self):
         for subject, button in self.subject_buttons.items():
             if subject in self.selected_subjects:
-                button.setText('Exclude')
+                button.setText('Included')
+                button.setIcon(self.included_icon)
             else:
-                button.setText('Include')
+                button.setText('Excluded')
+                button.setIcon(self.excluded_icon)
 
     def get_selected_subjects(self):
         return [subject for subject in self.subjects
