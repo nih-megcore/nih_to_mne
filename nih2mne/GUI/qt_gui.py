@@ -40,6 +40,7 @@ QLineEdit = QtWidgets.QLineEdit
 QMessageBox = QtWidgets.QMessageBox
 QCheckBox = QtWidgets.QCheckBox
 
+import csv
 import sys
 import shlex
 from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project, run_sbatch
@@ -234,6 +235,58 @@ def submit_datproc_job(processing_file, dataset_fname, mri_fname,
                       logdir=op.join(log_root, 'logdir'),
                       logfile_prefix=logfile_prefix)
 
+
+_SUBJECT_ID_COLUMN_NAMES = {
+    'bidsid',
+    'bidsids',
+    'participantid',
+    'subject',
+    'subjectid',
+}
+
+
+def read_subject_ids_file(filepath):
+    """Read and normalize BIDS subject IDs from a CSV or TSV file."""
+    with open(filepath, 'r', encoding='utf-8-sig', newline='') as fid:
+        sample = fid.read(8192)
+        fid.seek(0)
+        try:
+            delimiter = csv.Sniffer().sniff(sample, delimiters=',\t').delimiter
+        except csv.Error:
+            delimiter = '\t' if sample.count('\t') > sample.count(',') else ','
+        rows = [row for row in csv.reader(fid, delimiter=delimiter, strict=True)
+                if any(cell.strip() for cell in row)]
+
+    if not rows:
+        return []
+
+    header_index = None
+    for index, value in enumerate(rows[0]):
+        column_name = re.sub(r'[^a-z0-9]+', '', value.strip().lower())
+        if column_name in _SUBJECT_ID_COLUMN_NAMES:
+            header_index = index
+            break
+
+    column_index = 0 if header_index is None else header_index
+    data_rows = rows if header_index is None else rows[1:]
+    subject_ids = []
+    seen = set()
+    for row in data_rows:
+        if column_index >= len(row):
+            continue
+        subject = row[column_index].strip()
+        if not subject:
+            continue
+        if subject.lower().startswith('sub-'):
+            subject = f'sub-{subject[4:]}'
+        else:
+            subject = f'sub-{subject}'
+        if subject not in seen:
+            subject_ids.append(subject)
+            seen.add(subject)
+    return subject_ids
+
+
 class SubjectSelectionDialog(QtWidgets.QDialog):
     def __init__(self, subjects, selected_subjects, subject_statuses=None, parent=None):
         super().__init__(parent)
@@ -252,6 +305,9 @@ class SubjectSelectionDialog(QtWidgets.QDialog):
         self.b_unselect_all = QPushButton('Unselect All')
         self.b_unselect_all.clicked.connect(self.unselect_all)
         top_buttons_layout.addWidget(self.b_unselect_all)
+        self.b_load_csv = QPushButton('Load CSV')
+        self.b_load_csv.clicked.connect(self.load_subject_file)
+        top_buttons_layout.addWidget(self.b_load_csv)
         main_layout.addLayout(top_buttons_layout)
 
         scroll_area = QtWidgets.QScrollArea()
@@ -298,6 +354,53 @@ class SubjectSelectionDialog(QtWidgets.QDialog):
     def unselect_all(self):
         self.selected_subjects = set()
         self.refresh_buttons()
+
+    def load_subject_file(self):
+        filepath, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            'Load BIDS subject IDs',
+            '',
+            'Subject lists (*.csv *.tsv *.txt);;All files (*)',
+        )
+        if not filepath:
+            return
+
+        try:
+            requested_subjects = read_subject_ids_file(filepath)
+        except (OSError, UnicodeError, csv.Error) as error:
+            QMessageBox.warning(
+                self,
+                'Could Not Load Subject IDs',
+                f'Could not read subject IDs from:\n{filepath}\n\n{error}',
+            )
+            return
+
+        if not requested_subjects:
+            QMessageBox.warning(
+                self,
+                'No Subject IDs Found',
+                f'No BIDS subject IDs were found in:\n{filepath}',
+            )
+            return
+
+        available_subjects = set(self.subjects)
+        self.selected_subjects = {
+            subject for subject in requested_subjects
+            if subject in available_subjects
+        }
+        self.refresh_buttons()
+
+        missing_subjects = [
+            subject for subject in requested_subjects
+            if subject not in available_subjects
+        ]
+        if missing_subjects:
+            QMessageBox.warning(
+                self,
+                'Subjects Not Found',
+                'The following BIDS IDs are not present in the current '
+                'subject list:\n\n' + '\n'.join(missing_subjects),
+            )
 
     def toggle_subject(self, subject):
         if subject in self.selected_subjects:

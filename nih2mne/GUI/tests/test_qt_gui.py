@@ -643,6 +643,73 @@ def test_subject_selection_dialog_shows_status_labels(qapp):
     assert "(ERROR)" in labels
 
 
+def test_read_subject_ids_file_detects_csv_header_and_normalizes(tmp_path):
+    subject_file = tmp_path / "subjects.csv"
+    subject_file.write_text(
+        "visit,BIDS ID,notes\n1,ON02811,first\n1,sub-ON02812,second\n"
+        "1,ON02811,duplicate\n"
+    )
+
+    assert qt_gui_module.read_subject_ids_file(subject_file) == [
+        "sub-ON02811",
+        "sub-ON02812",
+    ]
+
+
+def test_read_subject_ids_file_detects_headerless_tsv(tmp_path):
+    subject_file = tmp_path / "subjects.tsv"
+    subject_file.write_text("ON02811\tinclude\nsub-ON02812\tinclude\n\t\n")
+
+    assert qt_gui_module.read_subject_ids_file(subject_file) == [
+        "sub-ON02811",
+        "sub-ON02812",
+    ]
+
+
+def test_subject_selection_dialog_load_csv_replaces_selection_and_warns(
+        tmp_path, qapp, monkeypatch):
+    subject_file = tmp_path / "subjects.csv"
+    subject_file.write_text("participant_id\n01\n03\n99\n")
+    dialog = SubjectSelectionDialog(
+        ["sub-01", "sub-02", "sub-03"],
+        {"sub-02"},
+    )
+    warnings = []
+    monkeypatch.setattr(
+        qt_gui_module.QtWidgets.QFileDialog,
+        "getOpenFileName",
+        lambda *args, **kwargs: (str(subject_file), "Subject lists (*.csv)"),
+    )
+    monkeypatch.setattr(
+        qt_gui_module.QMessageBox,
+        "warning",
+        lambda *args: warnings.append(args),
+    )
+
+    dialog.load_subject_file()
+
+    assert dialog.get_selected_subjects() == ["sub-01", "sub-03"]
+    assert dialog.subject_buttons["sub-01"].text() == "Exclude"
+    assert dialog.subject_buttons["sub-02"].text() == "Include"
+    assert len(warnings) == 1
+    assert warnings[0][1] == "Subjects Not Found"
+    assert "sub-99" in warnings[0][2]
+
+
+def test_subject_selection_dialog_cancel_load_preserves_selection(
+        qapp, monkeypatch):
+    dialog = SubjectSelectionDialog(["sub-01", "sub-02"], {"sub-02"})
+    monkeypatch.setattr(
+        qt_gui_module.QtWidgets.QFileDialog,
+        "getOpenFileName",
+        lambda *args, **kwargs: ("", ""),
+    )
+
+    dialog.load_subject_file()
+
+    assert dialog.get_selected_subjects() == ["sub-02"]
+
+
 def test_project_datproc_default_selection_excludes_success_and_error(qapp):
     project = FakeProject({
         "sub-01": FakeBidsInfo(subject="sub-01"),
