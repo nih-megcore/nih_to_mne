@@ -20,6 +20,39 @@ Set up MNE environment (conda can be substituted for mamba below if it doesn't w
 Install nih_to_mne<br>
 ```pip install git+https://github.com/nih-megcore/nih_to_mne```
 
+### Install with uv
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then
+choose either an editable installation from a local checkout or a direct
+installation from GitHub. These examples use Python 3.14 and keep the
+environment isolated from Conda and the system Python.
+
+For an editable installation:
+
+```bash
+git clone https://github.com/nih-megcore/nih_to_mne.git
+cd nih_to_mne
+uv venv --python 3.14
+source .venv/bin/activate
+uv pip install -e .
+```
+
+To install directly from GitHub without cloning the repository:
+
+```bash
+mkdir nih2mne-env
+cd nih2mne-env
+uv venv --python 3.14
+source .venv/bin/activate
+uv pip install git+https://github.com/nih-megcore/nih_to_mne
+```
+
+Verify the installation from the activated environment:
+
+```bash
+python -c "import nih2mne; print(nih2mne.__version__)"
+```
+
 PyQt6 is the default Qt binding used by the GUI applications. Managed
 environments that still provide PyQt5 5.15 can select the compatibility path
 before launching a GUI:
