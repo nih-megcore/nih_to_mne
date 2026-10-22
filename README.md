@@ -20,6 +20,20 @@ Set up MNE environment (conda can be substituted for mamba below if it doesn't w
 Install nih_to_mne<br>
 ```pip install git+https://github.com/nih-megcore/nih_to_mne```
 
+### Rocky Linux 8 (including Biowulf 2026)
+
+PyQt6 6.10 and later do not provide wheels compatible with Rocky Linux 8.
+Pin PyQt6 and its Qt runtime below 6.10 to avoid attempting a source build that
+requires `qmake`:
+
+```bash
+conda create -n nihmeg -c conda-forge python=3.14 mne pip -y
+conda activate nihmeg
+git clone https://github.com/nih-megcore/nih_to_mne.git
+cd nih_to_mne
+python -m pip install "PyQt6<6.10" "PyQt6-Qt6<6.10" .
+```
+
 PyQt6 is the default Qt binding used by the GUI applications. Managed
 environments that still provide PyQt5 5.15 can select the compatibility path
 before launching a GUI:
