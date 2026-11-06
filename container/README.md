@@ -3,8 +3,8 @@
 The repository ships one OCI `Containerfile`. Podman builds it directly, and
 SingularityCE or Apptainer converts the locally built Podman image into a SIF.
 Both formats contain PyQt6, its Qt 6 runtime, MNE Qt Browser, pyqtgraph,
-PyVista, Tk, and the Linux libraries needed for X11, Wayland, and OpenGL
-visualization.
+PyVista, PyVistaQt, Tk, and the Linux libraries needed for X11, Wayland, and
+OpenGL visualization.
 
 ## Build
 
@@ -89,9 +89,10 @@ Silicon will not run on an amd64 cluster.
 
 The `Containerfile` fails its build unless all of the following work:
 
-- importing PyQt6, MNE Qt Browser, pyqtgraph, PyVista, and tkinter;
+- importing PyQt6, MNE Qt Browser, pyqtgraph, PyVista, PyVistaQt, and tkinter;
 - creating an offscreen `QApplication`;
 - selecting MNE's Qt browser backend;
+- selecting MNE's PyVistaQt 3D backend;
 - locating both Qt's XCB and Wayland platform plugins.
 
 AFNI, FreeSurfer, cluster schedulers, and other licensed or site-specific

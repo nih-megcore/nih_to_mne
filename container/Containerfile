@@ -67,7 +67,7 @@ RUN python -m pip install --no-cache-dir .
 # Fail the build if the Python bindings, Qt runtime, visualization packages,
 # or either Linux Qt platform plugin are unavailable.
 RUN QT_QPA_PLATFORM=offscreen python -c \
-    "from pathlib import Path; import tkinter; import mne; import mne_qt_browser; import pyqtgraph; import pyvista; from PyQt6.QtCore import QLibraryInfo, PYQT_VERSION_STR, QT_VERSION_STR; from PyQt6.QtWidgets import QApplication; plugins = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)) / 'platforms'; assert (plugins / 'libqxcb.so').is_file(), plugins; assert any(plugins.glob('libqwayland*.so')), plugins; app = QApplication([]); mne.viz.set_browser_backend('qt'); assert mne.viz.get_browser_backend() == 'qt'; tkinter.Tcl(); print(f'PyQt {PYQT_VERSION_STR}; Qt {QT_VERSION_STR}; MNE browser qt; QPA {app.platformName()}')"
+    "from pathlib import Path; import tkinter; import mne; import mne_qt_browser; import pyqtgraph; import pyvista; import pyvistaqt; from PyQt6.QtCore import QLibraryInfo, PYQT_VERSION_STR, QT_VERSION_STR; from PyQt6.QtWidgets import QApplication; plugins = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)) / 'platforms'; assert (plugins / 'libqxcb.so').is_file(), plugins; assert any(plugins.glob('libqwayland*.so')), plugins; app = QApplication([]); mne.viz.set_browser_backend('qt'); assert mne.viz.get_browser_backend() == 'qt'; mne.viz.set_3d_backend('pyvistaqt'); assert mne.viz.get_3d_backend() == 'pyvistaqt'; tkinter.Tcl(); print(f'PyQt {PYQT_VERSION_STR}; Qt {QT_VERSION_STR}; MNE browser qt; MNE 3D pyvistaqt; QPA {app.platformName()}')"
 
 RUN mkdir -p /data
 WORKDIR /data

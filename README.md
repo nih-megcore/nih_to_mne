@@ -50,10 +50,11 @@ uv pip install git+https://github.com/nih-megcore/nih_to_mne
 Verify the installation from the activated environment:
 
 ```bash
-python -c "import nih2mne; print(nih2mne.__version__)"
+QT_QPA_PLATFORM=offscreen python -c "import nih2mne, pyvistaqt; import mne; mne.viz.set_3d_backend('pyvistaqt'); print(nih2mne.__version__)"
 ```
 
-PyQt6 is the default Qt binding used by the GUI applications. Managed
+PyQt6 is the default Qt binding used by the GUI applications, and PyVistaQt
+provides the desktop 3D backend used by the coregistration viewer. Managed
 environments that still provide PyQt5 5.15 can select the compatibility path
 before launching a GUI:
 

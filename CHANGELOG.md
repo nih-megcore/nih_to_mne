@@ -32,6 +32,8 @@ All notable changes for the upcoming merge to `main` are documented here.
 
 ### Fixed
 
+- Added the missing PyVistaQt runtime dependency required by the desktop 3D
+  coregistration viewer.
 - Corrected an extra output dimension in tests and improved GitHub Actions
   installation behavior.
 - Fixed BIDS MRI JSON lookup, git-annex dereferencing, and completion-popup
