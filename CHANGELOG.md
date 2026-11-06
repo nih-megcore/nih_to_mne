@@ -20,6 +20,8 @@ All notable changes for the upcoming merge to `main` are documented here.
 
 ### Changed
 
+- Install MNE-BIDS from the NIH CTF-compatible fork maintained at
+  `jstout211/mne-bids`.
 - Made PyQt6 the default GUI binding and added a PyQt5 compatibility path via
   `QT_API=pyqt5` for supported legacy environments.
 - Added tooling to regenerate checked-in Qt Designer form code with PyQt6.
