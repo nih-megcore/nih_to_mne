@@ -7,6 +7,11 @@ environments that cannot migrate immediately.  ``QT_API`` may be set to
 
 from __future__ import annotations
 
+# Import Matplotlib's bundled FreeType bindings before Qt loads the system
+# FreeType library. On Linux, loading these in the opposite order can cause
+# FT_Render_Glyph ``raster overflow`` errors with Matplotlib 3.11.
+from matplotlib import ft2font as _matplotlib_ft2font
+
 import importlib
 import importlib.util
 import os

@@ -20,11 +20,6 @@ Layout:
 
 """
 
-# Import Matplotlib's bundled FreeType bindings before Qt loads the system
-# FreeType library.  On Linux, loading these in the opposite order can cause
-# FT_Render_Glyph ``raster overflow`` errors with Matplotlib 3.11.
-from matplotlib import ft2font as _matplotlib_ft2font
-
 from nih2mne.GUI.qt_compat import QtCore, QtGui, QtWidgets
 
 QApplication = QtWidgets.QApplication

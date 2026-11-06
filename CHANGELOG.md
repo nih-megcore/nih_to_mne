@@ -32,6 +32,8 @@ All notable changes for the upcoming merge to `main` are documented here.
 
 ### Fixed
 
+- Ensured Matplotlib's bundled FreeType library loads before Qt, preventing
+  PyQt6-triggered raster-overflow errors when saving plots.
 - Added the missing PyVistaQt runtime dependency required by the desktop 3D
   coregistration viewer.
 - Corrected an extra output dimension in tests and improved GitHub Actions

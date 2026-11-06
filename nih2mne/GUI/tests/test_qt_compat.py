@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import subprocess
 import sys
 import types
 from collections import OrderedDict
@@ -79,6 +80,45 @@ def test_pyqtgraph_uses_selected_binding():
     import pyqtgraph
 
     assert pyqtgraph.Qt.QT_LIB == QT_BINDING
+
+
+def test_pyqt6_preloads_matplotlib_freetype_before_rendering(tmp_path):
+    output = tmp_path / "qt6-render.png"
+    script = """
+import sys
+
+assert "PyQt6" not in sys.modules
+from nih2mne.GUI.qt_compat import QtWidgets
+assert "matplotlib.ft2font" in sys.modules
+
+app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+import matplotlib
+matplotlib.use("Agg", force=True)
+import matplotlib.pyplot as plt
+
+figure, axes = plt.subplots()
+axes.plot([0, 1], [0, 1])
+axes.set_title("PyQt6 loaded after Matplotlib FreeType")
+figure.savefig(sys.argv[1])
+plt.close(figure)
+"""
+    env = os.environ.copy()
+    env.update(
+        {
+            "MPLCONFIGDIR": str(tmp_path / "matplotlib"),
+            "QT_API": "pyqt6",
+            "QT_QPA_PLATFORM": "offscreen",
+        }
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script, str(output)],
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert output.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 
 def test_parse_marks_tile_uses_typed_check_states(qapp):
