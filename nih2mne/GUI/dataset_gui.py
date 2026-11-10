@@ -38,7 +38,11 @@ import sys
 import mne
 import glob
 import pandas as pd
-from nih2mne.utilities.calc_hm import get_localizer_dframe, compute_movement
+from nih2mne.utilities.calc_hm import (
+    compute_movement,
+    get_localizer_dframe,
+    get_movement_rows,
+)
 from nih2mne.utilities.data_crop_wrapper import get_term_time
 from nih2mne.utilities.qa_runner import (
     filename_version,
@@ -53,6 +57,37 @@ import numpy as np
 logger = logging.getLogger(__name__)
 DEFAULT_LOG_PATH = '~/megcore/logging/bids_conversion.log'
 LOGGING_CATEGORY = 'meg_dataset_gui'
+
+_MOVEMENT_COORDINATE_COLUMNS = {
+    'lpa': ('lpa_x', 'lpa_y', 'lpa_z'),
+    'rpa': ('rpa_x', 'rpa_y', 'rpa_z'),
+    'nas': ('nas_x', 'nas_y', 'nas_z'),
+}
+
+
+def _format_movement_file(dframe, movement):
+    """Format the movement assessment and localizer coordinates."""
+    hz1_row, hz2_row = get_movement_rows(dframe)
+    lines = [f'movement={float(movement)}']
+    for prefix, row in (('hz1', hz1_row), ('hz2', hz2_row)):
+        for label, columns in _MOVEMENT_COORDINATE_COLUMNS.items():
+            coordinates = [float(row[column]) for column in columns]
+            lines.append(f'{prefix}_{label}={coordinates}')
+    return '\n'.join(lines) + '\n'
+
+
+def _write_movement_file(dataset_path, dframe, movement):
+    """Create movement.txt without replacing an existing assessment."""
+    movement_path = Path(dataset_path) / 'movement.txt'
+    if movement_path.exists():
+        return False
+    contents = _format_movement_file(dframe, movement)
+    try:
+        with movement_path.open('x', encoding='utf-8') as movement_file:
+            movement_file.write(contents)
+    except FileExistsError:
+        return False
+    return True
 
 
 class _ConfigCreationDeclined(Exception):
@@ -841,6 +876,20 @@ class InputDatasetTile(QtWidgets.QWidget):
                 self.head_movement = move_dict['Max']
             except:
                 self.head_movement = 'Mvt - Hz Read Error'
+                return
+            if isinstance(self.head_movement, Number):
+                try:
+                    _write_movement_file(
+                        self.fname,
+                        dframe,
+                        self.head_movement,
+                    )
+                except Exception:
+                    logger.warning(
+                        'Could not write movement assessment for %s',
+                        self.fname,
+                        exc_info=True,
+                    )
         elif not _has_hz:
             self.head_movement = 'No hz.ds'
         elif not _has_hz2:

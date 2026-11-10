@@ -139,6 +139,148 @@ def _make_dataset_tile(tmp_path, monkeypatch, qapp, trig_files):
     )
 
 
+def _movement_dframe():
+    return dataset_gui.pd.DataFrame([
+        {
+            'hz_val': 'hz',
+            'trial': '1',
+            'lpa_x': 100, 'lpa_y': 101, 'lpa_z': 102,
+            'rpa_x': 103, 'rpa_y': 104, 'rpa_z': 105,
+            'nas_x': 106, 'nas_y': 107, 'nas_z': 108,
+        },
+        {
+            'hz_val': 'hz',
+            'trial': '2',
+            'lpa_x': 1, 'lpa_y': 2, 'lpa_z': 3,
+            'rpa_x': 4, 'rpa_y': 5, 'rpa_z': 6,
+            'nas_x': 7, 'nas_y': 8, 'nas_z': 9,
+        },
+        {
+            'hz_val': 'hz2',
+            'trial': '1',
+            'lpa_x': 1.1, 'lpa_y': 2.1, 'lpa_z': 3.1,
+            'rpa_x': 4.1, 'rpa_y': 5.1, 'rpa_z': 6.1,
+            'nas_x': 7.1, 'nas_y': 8.1, 'nas_z': 9.1,
+        },
+    ])
+
+
+def test_write_movement_file_uses_assessment_rows(tmp_path):
+    dataset_path = tmp_path / 'recording.ds'
+    dataset_path.mkdir()
+
+    created = dataset_gui._write_movement_file(
+        dataset_path,
+        _movement_dframe(),
+        0.25,
+    )
+
+    assert created is True
+    assert (dataset_path / 'movement.txt').read_text(encoding='utf-8') == (
+        'movement=0.25\n'
+        'hz1_lpa=[1.0, 2.0, 3.0]\n'
+        'hz1_rpa=[4.0, 5.0, 6.0]\n'
+        'hz1_nas=[7.0, 8.0, 9.0]\n'
+        'hz2_lpa=[1.1, 2.1, 3.1]\n'
+        'hz2_rpa=[4.1, 5.1, 6.1]\n'
+        'hz2_nas=[7.1, 8.1, 9.1]\n'
+    )
+
+
+def test_write_movement_file_preserves_existing_file(tmp_path):
+    dataset_path = tmp_path / 'recording.ds'
+    dataset_path.mkdir()
+    movement_path = dataset_path / 'movement.txt'
+    movement_path.write_text('existing assessment\n', encoding='utf-8')
+
+    created = dataset_gui._write_movement_file(
+        dataset_path,
+        dframe=None,
+        movement=0.25,
+    )
+
+    assert created is False
+    assert movement_path.read_text(encoding='utf-8') == 'existing assessment\n'
+
+
+def test_compute_movement_creates_assessment_file(tmp_path, monkeypatch):
+    dataset_path = tmp_path / 'recording.ds'
+    (dataset_path / 'hz.ds').mkdir(parents=True)
+    (dataset_path / 'hz2.ds').mkdir()
+    tile = SimpleNamespace(fname=str(dataset_path))
+    monkeypatch.setattr(dataset_gui.shutil, 'which', lambda _name: '/ctf/bin')
+    monkeypatch.setattr(
+        dataset_gui,
+        'get_localizer_dframe',
+        lambda _fname: _movement_dframe(),
+    )
+    monkeypatch.setattr(
+        dataset_gui,
+        'compute_movement',
+        lambda _dframe: {'Max': 0.25},
+    )
+
+    dataset_gui.InputDatasetTile._compute_movement(tile)
+
+    assert tile.head_movement == 0.25
+    assert (dataset_path / 'movement.txt').is_file()
+
+
+def test_compute_movement_keeps_value_when_file_write_fails(
+        tmp_path, monkeypatch, caplog):
+    dataset_path = tmp_path / 'recording.ds'
+    (dataset_path / 'hz.ds').mkdir(parents=True)
+    (dataset_path / 'hz2.ds').mkdir()
+    tile = SimpleNamespace(fname=str(dataset_path))
+    monkeypatch.setattr(dataset_gui.shutil, 'which', lambda _name: '/ctf/bin')
+    monkeypatch.setattr(
+        dataset_gui,
+        'get_localizer_dframe',
+        lambda _fname: _movement_dframe(),
+    )
+    monkeypatch.setattr(
+        dataset_gui,
+        'compute_movement',
+        lambda _dframe: {'Max': 0.25},
+    )
+    monkeypatch.setattr(
+        dataset_gui,
+        '_write_movement_file',
+        lambda *_args: (_ for _ in ()).throw(OSError('read-only dataset')),
+    )
+
+    with caplog.at_level(logging.WARNING, logger=dataset_gui.logger.name):
+        dataset_gui.InputDatasetTile._compute_movement(tile)
+
+    assert tile.head_movement == 0.25
+    assert 'Could not write movement assessment' in caplog.text
+
+
+def test_compute_movement_failure_does_not_write_file(tmp_path, monkeypatch):
+    dataset_path = tmp_path / 'recording.ds'
+    (dataset_path / 'hz.ds').mkdir(parents=True)
+    (dataset_path / 'hz2.ds').mkdir()
+    tile = SimpleNamespace(fname=str(dataset_path))
+    writes = []
+    monkeypatch.setattr(dataset_gui.shutil, 'which', lambda _name: '/ctf/bin')
+    monkeypatch.setattr(
+        dataset_gui,
+        'get_localizer_dframe',
+        lambda _fname: (_ for _ in ()).throw(OSError('bad localizer')),
+    )
+    monkeypatch.setattr(
+        dataset_gui,
+        '_write_movement_file',
+        lambda *_args: writes.append(_args),
+    )
+
+    dataset_gui.InputDatasetTile._compute_movement(tile)
+
+    assert tile.head_movement == 'Mvt - Hz Read Error'
+    assert writes == []
+    assert not (dataset_path / 'movement.txt').exists()
+
+
 def test_parser_accepts_config_option():
     args = dataset_gui._get_parser().parse_args(
         [
