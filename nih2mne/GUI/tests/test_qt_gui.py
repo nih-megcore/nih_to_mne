@@ -141,6 +141,12 @@ def qapp():
     return app
 
 
+@pytest.fixture(autouse=True)
+def no_swarm_by_default(monkeypatch):
+    """Keep tests independent of whether they run on NIH Biowulf."""
+    monkeypatch.setattr(qt_gui_module.shutil, "which", lambda _name: None)
+
+
 def test_subject_tile_status_and_task_filter(qapp):
     bids_info = FakeBidsInfo(subject="sub-filter")
     tile = Subject_Tile(bids_info, task_filter="rest")
@@ -415,6 +421,74 @@ def test_build_datproc_command_includes_quoted_mri():
     ]
 
 
+def test_submit_datproc_swarm_writes_commands_and_resources(
+        tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_run(command, **kwargs):
+        swarmfile = Path(command[2])
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        captured["swarmfile"] = swarmfile
+        captured["contents"] = swarmfile.read_text(encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="98765\n", stderr="")
+
+    monkeypatch.setattr(qt_gui_module.subprocess, "run", fake_run)
+
+    result = qt_gui_module.submit_datproc_swarm(
+        ["first command", "second command --flag 'value with spaces'"],
+        log_root=tmp_path,
+        mem=12,
+        threads=4,
+        time_limit="10:30:00",
+        swarm_executable="/usr/local/bin/swarm",
+    )
+
+    assert result == "98765\n"
+    assert captured["command"] == [
+        "/usr/local/bin/swarm",
+        "-f", str(captured["swarmfile"]),
+        "-t", "4",
+        "-g", "12",
+        "--logdir", str(tmp_path / "logdir"),
+        "--time", "10:30:00",
+    ]
+    assert captured["kwargs"] == {
+        "capture_output": True,
+        "text": True,
+        "encoding": "utf-8",
+    }
+    assert captured["contents"] == (
+        "first command\nsecond command --flag 'value with spaces'\n"
+    )
+    assert (tmp_path / "logdir").is_dir()
+    assert not captured["swarmfile"].exists()
+
+
+@pytest.mark.parametrize("failure_mode", ["returncode", "exception"])
+def test_submit_datproc_swarm_removes_temporary_file_on_failure(
+        tmp_path, monkeypatch, failure_mode):
+    captured = {}
+
+    def fake_run(command, **_kwargs):
+        captured["swarmfile"] = Path(command[2])
+        assert captured["swarmfile"].is_file()
+        if failure_mode == "exception":
+            raise OSError("swarm vanished")
+        return SimpleNamespace(returncode=1, stdout="", stderr="bad request")
+
+    monkeypatch.setattr(qt_gui_module.subprocess, "run", fake_run)
+
+    result = qt_gui_module.submit_datproc_swarm(
+        ["failing command"],
+        log_root=tmp_path,
+        swarm_executable="/usr/local/bin/swarm",
+    )
+
+    assert result is None
+    assert not captured["swarmfile"].exists()
+
+
 @pytest.mark.parametrize(
     "mri,mri_qa,error_text",
     [
@@ -548,6 +622,121 @@ def test_batch_datproc_skips_unready_subject_and_reports_mri(
     assert "QA: GOOD" not in summary
     assert "Skipped for MRI readiness: 1 subject(s)" in summary
     assert summary.count("sub-02: multiple MRIs are unresolved") == 1
+
+
+def test_batch_datproc_uses_one_swarm_for_all_runnable_datasets(
+        tmp_path, qapp, monkeypatch):
+    processing_file = tmp_path / "rest_v1.py"
+    processing_file.write_text("")
+    subjects = {}
+    for subject in ("sub-01", "sub-02"):
+        mri = tmp_path / f"{subject}_T1w.nii.gz"
+        mri.touch()
+        subjects[subject] = FakeBidsInfo(
+            subject=subject,
+            mri=str(mri),
+            mri_json_qa="GOOD",
+        )
+    project = FakeProject(subjects)
+    project.bids_root = str(tmp_path / "bids")
+    window = BIDS_Project_Window(
+        bids_project=project, gridsize_row=1, gridsize_col=2)
+    submissions = []
+    messages = []
+
+    monkeypatch.setattr(
+        qt_gui_module.shutil,
+        "which",
+        lambda name: "/usr/local/bin/swarm" if name == "swarm" else None,
+    )
+    monkeypatch.setattr(
+        qt_gui_module,
+        "submit_datproc_swarm",
+        lambda commands, **kwargs: (
+            submissions.append((commands, kwargs)) or "98765\n"
+        ),
+    )
+    monkeypatch.setattr(
+        qt_gui_module,
+        "submit_datproc_job",
+        lambda *_args, **_kwargs: pytest.fail(
+            "individual sbatch fallback must not run when swarm is available"),
+    )
+    monkeypatch.setattr(
+        qt_gui_module.QMessageBox,
+        "information",
+        lambda parent, title, message: messages.append((title, message)),
+    )
+
+    dialog = qt_gui_module.ProjectDatprocSubmissionDialog(window)
+    dialog.b_datproc_dir.setText(str(tmp_path))
+    dialog.b_mem.setText("12")
+    dialog.b_threads.setText("4")
+    dialog.b_time.setText("10:30:00")
+    dialog.refresh_matches()
+    dialog.submit_jobs()
+
+    assert len(submissions) == 1
+    commands, kwargs = submissions[0]
+    assert commands == [
+        build_datproc_command(
+            str(processing_file),
+            subjects[subject].meg_list[0].rel_path,
+            subjects[subject].mri,
+        )
+        for subject in ("sub-01", "sub-02")
+    ]
+    assert kwargs == {
+        "log_root": project.bids_root,
+        "mem": 12,
+        "threads": 4,
+        "time_limit": "10:30:00",
+        "swarm_executable": "/usr/local/bin/swarm",
+    }
+    assert messages[0][0] == "Submitted"
+    assert "Submitted swarm with 2 datproc jobs" in messages[0][1]
+    assert "98765" in messages[0][1]
+
+
+def test_failed_batch_swarm_does_not_fall_back_to_sbatch(
+        tmp_path, qapp, monkeypatch):
+    (tmp_path / "rest_v1.py").write_text("")
+    mri = tmp_path / "sub-01_T1w.nii.gz"
+    mri.touch()
+    bids_info = FakeBidsInfo(
+        subject="sub-01", mri=str(mri), mri_json_qa="GOOD")
+    window = BIDS_Project_Window(
+        bids_project=FakeProject({"sub-01": bids_info}),
+        gridsize_row=1,
+        gridsize_col=1,
+    )
+    warnings = []
+
+    monkeypatch.setattr(
+        qt_gui_module.shutil, "which", lambda _name: "/usr/bin/swarm")
+    monkeypatch.setattr(
+        qt_gui_module, "submit_datproc_swarm", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        qt_gui_module,
+        "submit_datproc_job",
+        lambda *_args, **_kwargs: pytest.fail(
+            "failed swarm submission must not fall back to sbatch"),
+    )
+    monkeypatch.setattr(
+        qt_gui_module.QMessageBox,
+        "warning",
+        lambda parent, title, message: warnings.append((title, message)),
+    )
+
+    dialog = qt_gui_module.ProjectDatprocSubmissionDialog(window)
+    dialog.b_datproc_dir.setText(str(tmp_path))
+    dialog.refresh_matches()
+    dialog.submit_jobs()
+
+    assert warnings == [(
+        "Submission Failed",
+        "No swarm jobs were submitted. Check terminal output for details.",
+    )]
 
 
 def test_batch_datproc_with_no_ready_mri_submits_nothing(

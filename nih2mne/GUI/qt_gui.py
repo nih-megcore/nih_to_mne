@@ -38,6 +38,9 @@ QCheckBox = QtWidgets.QCheckBox
 import csv
 import sys
 import shlex
+import shutil
+import subprocess
+import tempfile
 from nih2mne.dataQA.bids_project_interface import subject_bids_info, bids_project, run_sbatch
 import os, os.path as op
 import numpy as np
@@ -229,6 +232,51 @@ def submit_datproc_job(processing_file, dataset_fname, mri_fname,
                       time=time_limit,
                       logdir=op.join(log_root, 'logdir'),
                       logfile_prefix=logfile_prefix)
+
+
+def submit_datproc_swarm(commands, log_root=None, mem=8, threads=2,
+                         time_limit='24:00:00', swarm_executable='swarm'):
+    """Submit one datproc command per Swarm subjob."""
+    if not commands:
+        return None
+    if log_root is None:
+        log_root = os.getcwd()
+
+    swarmfile_path = None
+    try:
+        logdir = Path(log_root) / 'logdir'
+        logdir.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+                mode='w', encoding='utf-8', prefix='datproc_',
+                suffix='.swarm', delete=False) as swarmfile:
+            swarmfile.write('\n'.join(commands) + '\n')
+            swarmfile_path = Path(swarmfile.name)
+
+        submission = subprocess.run(
+            [
+                os.fspath(swarm_executable),
+                '-f', os.fspath(swarmfile_path),
+                '-t', str(threads),
+                '-g', str(mem),
+                '--logdir', os.fspath(logdir),
+                '--time', str(time_limit),
+            ],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+        )
+    except OSError as error:
+        print(f'swarm error: {error}')
+        return None
+    finally:
+        if swarmfile_path is not None:
+            swarmfile_path.unlink(missing_ok=True)
+
+    if submission.returncode == 0:
+        print(f'swarm job id: {submission.stdout}')
+        return submission.stdout
+    print(f'swarm error: {submission.stderr}')
+    return None
 
 
 _SUBJECT_ID_COLUMN_NAMES = {
@@ -884,6 +932,51 @@ class ProjectDatprocSubmissionDialog(QtWidgets.QDialog):
             return
 
         log_root = getattr(self.bids_project, 'bids_root', os.getcwd())
+        swarm_executable = shutil.which('swarm')
+        if swarm_executable is not None:
+            commands = [
+                build_datproc_command(
+                    processing_path,
+                    dset.rel_path,
+                    mri_path,
+                )
+                for _, _, dset, mri_path in datasets
+            ]
+            outcode = submit_datproc_swarm(
+                commands,
+                log_root=log_root,
+                mem=mem,
+                threads=threads,
+                time_limit=self.b_time.text().strip(),
+                swarm_executable=swarm_executable,
+            )
+            if outcode is not None:
+                summary = [
+                    f'Submitted swarm with {len(commands)} datproc jobs '
+                    f'for task {self.get_selected_task()}',
+                ]
+                job_output = str(outcode).strip()
+                if job_output:
+                    summary.append(job_output)
+                submitted_subjects = list(dict.fromkeys(
+                    subject for subject, _, _, _ in datasets))
+                summary.extend(submitted_subjects[:5])
+                if len(submitted_subjects) > 5:
+                    summary.append('...')
+                summary.extend(self.format_mri_skips(skipped_subjects))
+                QMessageBox.information(
+                    self, 'Submitted', '\n'.join(summary))
+                self.accept()
+            else:
+                summary = [
+                    'No swarm jobs were submitted. '
+                    'Check terminal output for details.',
+                ]
+                summary.extend(self.format_mri_skips(skipped_subjects))
+                QMessageBox.warning(
+                    self, 'Submission Failed', '\n'.join(summary))
+            return
+
         submitted_jobs = []
         failed_jobs = []
         for subject, _, dset, mri_path in datasets:
