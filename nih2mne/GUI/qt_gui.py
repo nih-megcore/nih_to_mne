@@ -1272,13 +1272,22 @@ class ProcReviewDialog(QtWidgets.QDialog):
         self._scan_generation = 0
         self._filter_scan_pending = False
         self._displayed_dataset_keys = set()
+        self._pending_csv_export = None
         self._thread_pool = QtCore.QThreadPool(self)
         self._thread_pool.setMaxThreadCount(1)
         self.setWindowTitle('ProcReview')
         self.resize(900, 650)
 
         main_layout = QVBoxLayout(self)
-        main_layout.addWidget(QLabel(f'Script: {self.processing_script}'))
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(QLabel(f'Script: {self.processing_script}'))
+        header_layout.addStretch(1)
+        self.b_export_csv = QPushButton('Export CSV')
+        self.b_export_csv.setToolTip(
+            'Export ProcReview results for every project subject'
+        )
+        header_layout.addWidget(self.b_export_csv)
+        main_layout.addLayout(header_layout)
         roots = ', '.join(
             op.join(str(self.bids_project.bids_root), 'derivatives', name)
             for name in self.spec.derivative_names
@@ -1368,6 +1377,7 @@ class ProcReviewDialog(QtWidgets.QDialog):
             lambda index: self.refresh()
         )
         self.b_show_all.clicked.connect(self._clear_subject_focus)
+        self.b_export_csv.clicked.connect(self.export_csv)
         self._populate_runs()
 
     def _set_focus_controls_visible(self, visible):
@@ -1624,7 +1634,13 @@ class ProcReviewDialog(QtWidgets.QDialog):
         )
 
     def _update_scan_status(self):
-        if self._filter_scan_pending:
+        if self._pending_csv_export is not None:
+            required = self._pending_csv_export['required_keys']
+            complete = sum(key in self._evaluation_cache for key in required)
+            self.l_scan_status.setText(
+                f'Preparing CSV export: {complete} / {len(required)}'
+            )
+        elif self._filter_scan_pending:
             required = self._required_filter_datasets()
             complete = sum(
                 key in self._evaluation_cache for key in required
@@ -1647,6 +1663,7 @@ class ProcReviewDialog(QtWidgets.QDialog):
             return
         self._pending_evaluations.discard(key)
         self._evaluation_cache[key] = (tuple(evaluated_items), error)
+        self._finish_csv_export_if_ready()
         filter_was_pending = self._filter_scan_pending
         self._update_filter_scan()
         if filter_was_pending and not self._filter_scan_pending:
@@ -1667,6 +1684,181 @@ class ProcReviewDialog(QtWidgets.QDialog):
         self.page = 0
         self.refresh()
 
+    @staticmethod
+    def _csv_absolute_path(path):
+        """Return a lexical absolute path suitable for a CSV cell."""
+        return str(Path(os.path.abspath(Path(path).expanduser())))
+
+    def _csv_mri_path(self, subject_info):
+        mri_path = getattr(subject_info, 'mri', None)
+        if mri_path in (None, 'Multiple'):
+            return 'FAIL'
+        try:
+            return self._csv_absolute_path(os.fspath(mri_path))
+        except (TypeError, ValueError):
+            return 'FAIL'
+
+    @staticmethod
+    def _csv_fids_status(subject_info):
+        return (
+            'PASS'
+            if getattr(subject_info, 'mri_json_qa', None) == 'GOOD'
+            else 'FAIL'
+        )
+
+    @staticmethod
+    def _csv_freesurfer_status(subject_info):
+        fs_recon = getattr(subject_info, 'fs_recon', {})
+        return 'PASS' if fs_recon.get('fs_success') is True else 'FAIL'
+
+    def _csv_step_headers(self):
+        """Return unique column names while preserving processing-step order."""
+        counts = {}
+        headers = []
+        for request in self.spec.outputs:
+            label = request.label
+            counts[label] = counts.get(label, 0) + 1
+            occurrence = counts[label]
+            headers.append(
+                label if occurrence == 1 else f'{label} ({occurrence})'
+            )
+        return headers
+
+    def _csv_export_rows(self, selected_run):
+        """Capture subject/dataset rows without applying display filters."""
+        rows = []
+        subjects = sorted(self.bids_project.subjects, key=_natural_key)
+        for subject in subjects:
+            datasets = self._subject_datasets(subject)
+            if selected_run != 'All':
+                datasets = [
+                    dataset for dataset in datasets
+                    if _dataset_run(dataset) == selected_run
+                ]
+            if datasets:
+                rows.extend(
+                    (subject, dataset, _dataset_run(dataset))
+                    for dataset in datasets
+                )
+            else:
+                run = '' if selected_run == 'All' else selected_run
+                rows.append((subject, None, run))
+        return rows
+
+    def export_csv(self):
+        """Choose a destination and export project-wide ProcReview results."""
+        default_path = Path(self.bids_project.bids_root) / (
+            f'{self.task}_ProcReview.csv'
+        )
+        output_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            'Export ProcReview CSV',
+            str(default_path),
+            'CSV files (*.csv)',
+        )
+        if not output_path:
+            return
+        output_path = Path(output_path).expanduser()
+        if not output_path.suffix:
+            output_path = output_path.with_suffix('.csv')
+
+        selected_run = self.b_run.currentText()
+        rows = self._csv_export_rows(selected_run)
+        required_datasets = {
+            self._dataset_key(dataset): dataset
+            for _, dataset, _ in rows
+            if dataset is not None
+        }
+        self._pending_csv_export = {
+            'path': output_path,
+            'rows': rows,
+            'required_keys': tuple(required_datasets),
+        }
+        self.b_export_csv.setEnabled(False)
+        self.b_refresh.setEnabled(False)
+        self.b_run.setEnabled(False)
+        for dataset in required_datasets.values():
+            self._queue_evaluation(dataset, priority=3)
+        self._update_scan_status()
+        self._finish_csv_export_if_ready()
+
+    def _csv_processing_values(self, dataset):
+        if dataset is None:
+            return ['FAIL'] * len(self.spec.outputs)
+        cached = self._evaluation_cache.get(self._dataset_key(dataset))
+        if cached is None:
+            return ['FAIL'] * len(self.spec.outputs)
+        evaluated_items, error = cached
+        if error is not None:
+            return ['FAIL'] * len(self.spec.outputs)
+        values = []
+        for offset in range(len(self.spec.outputs)):
+            if offset >= len(evaluated_items):
+                values.append('FAIL')
+                continue
+            evaluated = evaluated_items[offset]
+            values.append(
+                artifact_copy_text(evaluated.record)
+                if evaluated.record.exists else 'FAIL'
+            )
+        return values
+
+    def _write_csv_export(self, export):
+        header = [
+            'Subject ID', 'MRI Path', 'FIDS Valid', 'MEG Path',
+            'Freesurfer', 'Run', *self._csv_step_headers(),
+        ]
+        with export['path'].open('w', encoding='utf-8', newline='') as stream:
+            writer = csv.writer(stream)
+            writer.writerow(header)
+            for subject, dataset, run in export['rows']:
+                subject_info = self.bids_project.subjects[subject]
+                meg_path = (
+                    self._csv_absolute_path(dataset.rel_path)
+                    if dataset is not None else 'FAIL'
+                )
+                writer.writerow([
+                    subject,
+                    self._csv_mri_path(subject_info),
+                    self._csv_fids_status(subject_info),
+                    meg_path,
+                    self._csv_freesurfer_status(subject_info),
+                    run,
+                    *self._csv_processing_values(dataset),
+                ])
+
+    def _finish_csv_export_if_ready(self):
+        export = self._pending_csv_export
+        if export is None:
+            return False
+        if any(
+            key not in self._evaluation_cache
+            for key in export['required_keys']
+        ):
+            self._update_scan_status()
+            return False
+
+        self._pending_csv_export = None
+        self.b_export_csv.setEnabled(True)
+        self.b_refresh.setEnabled(True)
+        self.b_run.setEnabled(True)
+        try:
+            self._write_csv_export(export)
+        except (OSError, UnicodeError, csv.Error) as error:
+            QMessageBox.warning(
+                self,
+                'CSV Export Failed',
+                f'Could not write {export["path"]}:\n{error}',
+            )
+        else:
+            QMessageBox.information(
+                self,
+                'CSV Export Complete',
+                f'Wrote ProcReview results to:\n{export["path"]}',
+            )
+        self._update_scan_status()
+        return True
+
     def previous_page(self):
         if self.page > 0:
             self.page -= 1
@@ -1683,6 +1875,7 @@ class ProcReviewDialog(QtWidgets.QDialog):
         return math.ceil(count / self._page_size()) if count else 0
 
     def closeEvent(self, event):
+        self._pending_csv_export = None
         self._scan_generation += 1
         self._thread_pool.clear()
         self._thread_pool.waitForDone(1000)

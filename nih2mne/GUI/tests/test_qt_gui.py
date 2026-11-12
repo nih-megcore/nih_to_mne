@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import csv
 import os
 from pathlib import Path
 import shlex
@@ -1286,6 +1287,197 @@ def test_proc_review_subject_focus_shows_run_paths_and_qa_placeholders(
     dialog.subject_buttons[0].click()
     assert dialog.focused_subject is None
     assert dialog.l_page.text() == "2 / 2"
+
+
+def test_proc_review_exports_all_runs_with_subject_metadata(
+    qapp, tmp_path, monkeypatch
+):
+    script = tmp_path / "task_v1.py"
+    _write_review_script(script)
+    subjects = {
+        "sub-01": FakeBidsInfo(
+            subject="sub-01",
+            mri=str(tmp_path / "sub-01_T1w.nii.gz"),
+            mri_json_qa="GOOD",
+            fs_success=True,
+        ),
+        "sub-02": FakeBidsInfo(
+            subject="sub-02",
+            mri=None,
+            mri_json_qa="No MRIs",
+            fs_success=False,
+        ),
+    }
+    subjects["sub-01"].meg_list = [
+        FakeMegDataset(
+            "task", "run01.ds",
+            str(tmp_path / "sub-01_task-task_run-01_meg.ds"),
+        ),
+        FakeMegDataset(
+            "task", "run02.ds",
+            str(tmp_path / "sub-01_task-task_run-02_meg.ds"),
+        ),
+    ]
+    subjects["sub-02"].meg_list = []
+    project = FakeProject(subjects)
+    project.bids_root = str(tmp_path)
+    window = BIDS_Project_Window(
+        bids_project=project, gridsize_row=1, gridsize_col=2
+    )
+
+    def fake_evaluate(spec, dataset):
+        dataset_name = Path(dataset).name
+        return tuple(
+            SimpleNamespace(
+                request=request,
+                record=SimpleNamespace(
+                    exists=request.key == "epochs",
+                    path=tmp_path / "derivatives" / dataset_name / request.key,
+                    status="present" if request.key == "epochs" else "missing",
+                    component_paths=(),
+                    validation_errors=(),
+                ),
+            )
+            for request in spec.outputs
+        )
+
+    output_without_suffix = tmp_path / "proc-review-export"
+    messages = []
+    monkeypatch.setattr(qt_gui_module, "evaluate_dataset", fake_evaluate)
+    monkeypatch.setattr(
+        qt_gui_module.QtWidgets.QFileDialog,
+        "getSaveFileName",
+        lambda *args, **kwargs: (str(output_without_suffix), "CSV files (*.csv)"),
+    )
+    monkeypatch.setattr(
+        qt_gui_module.QMessageBox,
+        "information",
+        lambda *args: messages.append(args),
+    )
+    dialog = ProcReviewDialog(window, script)
+    _finish_proc_review_scan(dialog, qapp)
+
+    header_layout = dialog.layout().itemAt(0).layout()
+    assert header_layout.itemAt(header_layout.count() - 1).widget() is dialog.b_export_csv
+    assert dialog.b_export_csv.text() == "Export CSV"
+
+    dialog.b_export_csv.click()
+    _finish_proc_review_scan(dialog, qapp)
+
+    output = output_without_suffix.with_suffix(".csv")
+    with output.open(newline="", encoding="utf-8") as stream:
+        rows = list(csv.reader(stream))
+
+    assert rows[0] == [
+        "Subject ID", "MRI Path", "FIDS Valid", "MEG Path",
+        "Freesurfer", "Run", "epochs", "stc: face",
+    ]
+    assert [row[:1] for row in rows[1:]] == [
+        ["sub-01"], ["sub-01"], ["sub-02"],
+    ]
+    assert [row[5] for row in rows[1:]] == ["run-01", "run-02", ""]
+    assert rows[1][1:3] == [
+        str(tmp_path / "sub-01_T1w.nii.gz"), "PASS",
+    ]
+    assert rows[1][3:6] == [
+        str(tmp_path / "sub-01_task-task_run-01_meg.ds"),
+        "PASS",
+        "run-01",
+    ]
+    assert rows[1][6] == str(
+        tmp_path / "derivatives" / "sub-01_task-task_run-01_meg.ds" / "epochs"
+    )
+    assert rows[1][7] == "FAIL"
+    assert rows[3] == [
+        "sub-02", "FAIL", "FAIL", "FAIL", "FAIL", "", "FAIL", "FAIL",
+    ]
+    assert messages
+
+
+def test_proc_review_export_selected_run_keeps_run_column_for_every_subject(
+    qapp, tmp_path, monkeypatch
+):
+    script = tmp_path / "task_v1.py"
+    _write_review_script(script)
+    subjects = {
+        "sub-01": FakeBidsInfo(subject="sub-01"),
+        "sub-02": FakeBidsInfo(subject="sub-02"),
+    }
+    subjects["sub-01"].meg_list = [FakeMegDataset(
+        "task", "run01.ds", str(tmp_path / "sub-01_task-task_run-01_meg.ds")
+    )]
+    subjects["sub-02"].meg_list = [FakeMegDataset(
+        "task", "run02.ds", str(tmp_path / "sub-02_task-task_run-02_meg.ds")
+    )]
+    project = FakeProject(subjects)
+    project.bids_root = str(tmp_path)
+    window = BIDS_Project_Window(
+        bids_project=project, gridsize_row=1, gridsize_col=2
+    )
+
+    def fake_evaluate(spec, dataset):
+        return tuple(
+            SimpleNamespace(
+                request=request,
+                record=SimpleNamespace(
+                    exists=True,
+                    path=tmp_path / "outputs" / Path(dataset).name / request.key,
+                    status="present",
+                    component_paths=(),
+                    validation_errors=(),
+                ),
+            )
+            for request in spec.outputs
+        )
+
+    output = tmp_path / "selected.csv"
+    monkeypatch.setattr(qt_gui_module, "evaluate_dataset", fake_evaluate)
+    monkeypatch.setattr(
+        qt_gui_module.QtWidgets.QFileDialog,
+        "getSaveFileName",
+        lambda *args, **kwargs: (str(output), "CSV files (*.csv)"),
+    )
+    monkeypatch.setattr(
+        qt_gui_module.QMessageBox, "information", lambda *args: None
+    )
+    dialog = ProcReviewDialog(window, script)
+    dialog.b_run.setCurrentText("run-02")
+    _finish_proc_review_scan(dialog, qapp)
+
+    dialog.b_export_csv.click()
+    _finish_proc_review_scan(dialog, qapp)
+
+    with output.open(newline="", encoding="utf-8") as stream:
+        rows = list(csv.reader(stream))
+    assert rows[0][5] == "Run"
+    assert len(rows) == 3
+    assert rows[1][0] == "sub-01"
+    assert rows[1][3:] == ["FAIL", "PASS", "run-02", "FAIL", "FAIL"]
+    assert rows[2][0] == "sub-02"
+    assert rows[2][3] == str(tmp_path / "sub-02_task-task_run-02_meg.ds")
+    assert rows[2][5] == "run-02"
+    assert all(value != "PASS" for value in rows[2][6:])
+
+
+def test_proc_review_export_cancel_does_not_start_scan(qapp, tmp_path, monkeypatch):
+    script = tmp_path / "task_v1.py"
+    _write_review_script(script)
+    window = BIDS_Project_Window(
+        bids_project=FakeProject({"sub-01": FakeBidsInfo(subject="sub-01")}),
+        gridsize_row=1,
+        gridsize_col=1,
+    )
+    monkeypatch.setattr(
+        qt_gui_module.QtWidgets.QFileDialog,
+        "getSaveFileName",
+        lambda *args, **kwargs: ("", "CSV files (*.csv)"),
+    )
+    dialog = ProcReviewDialog(window, script)
+
+    dialog.b_export_csv.click()
+
+    assert dialog._pending_csv_export is None
+    assert dialog.b_export_csv.isEnabled()
 
 
 def test_proc_review_prefetches_three_pages_and_reuses_cached_results(
