@@ -13,6 +13,31 @@
   print_bids_table.py - make a csv file that lists all the contents of your bids tree
 ```
 
+## Find a task logfile
+
+Save a task configuration as `~/megcore/trigproc/MID_logfind.yml`:
+
+```yaml
+log_sources:
+  - name: MIDtask
+    directories:
+      - /data/LOGFILES
+    patterns:
+      - "{subject_hash}/{subject_hash}_MID*.csv"
+    recursive: false
+```
+
+```python
+from nih2mne.utilities import logfinder
+
+logfile = logfinder.logfind(task="MID", subject="ADHCVYAX")
+```
+
+`subject` is the MEG subject hash. The function returns an absolute filename
+string when exactly one file matches. It raises an error for a missing or
+invalid configuration, zero matches, or multiple distinct matches. Set
+`recursive: true` to search below each configured directory at any depth.
+
 ## Install:
 Set up MNE environment (conda can be substituted for mamba below if it doesn't work):<br>
 ```mamba create --override-channels --channel=conda-forge --name=nihmeg mne ``` <br>
