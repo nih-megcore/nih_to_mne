@@ -28,9 +28,9 @@ log_sources:
 ```
 
 ```python
-from nih2mne.utilities import logfinder
+from nih2mne.utilities import log_utilities
 
-logfile = logfinder.logfind(task="MID", subject="ADHCVYAX")
+logfile = log_utilities.logfind(task="MID", subject="ADHCVYAX")
 ```
 
 `subject` is the MEG subject hash. The function returns an absolute filename

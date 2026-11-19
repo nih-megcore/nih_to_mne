@@ -1,4 +1,4 @@
-"""Find task logfiles and align their event times with MEG triggers."""
+"""Find logfiles, align timing to MEG triggers, and convert to standard events."""
 
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
@@ -121,6 +121,59 @@ def _event_code(value):
             return str(int(value))
     code = str(value).strip()
     return code or None
+
+
+def log_to_longform_standard(corrected_log, *, condition_columns=None) -> pd.DataFrame:
+    """Convert corrected logfile timing to standard long-format events.
+
+    The standard event format is ``[trial, onset, condition, channel]``.
+
+    Pass ``find_time_offset(...).corrected_log``. Columns ending in .started
+    or .start supply onsets and their names without that suffix supply default
+    conditions. ``condition_columns`` maps timing columns to columns containing
+    row-specific conditions; it overrides defaults and can add other timing
+    columns. No further timing correction is applied.
+
+    Missing times and missing/blank mapped conditions are omitted. Invalid
+    nonmissing times raise ValueError. Events are sorted by onset, source row,
+    then source column; simultaneous events are retained. The input is unchanged.
+    Output columns are trial (always 0), onset, condition, channel (LOGFILE).
+    """
+    if not corrected_log.columns.is_unique:
+        raise ValueError("Corrected logfile column names must be unique")
+    mapping = {} if condition_columns is None else dict(condition_columns)
+    for timing, condition in mapping.items():
+        for column in (timing, condition):
+            if column not in corrected_log:
+                raise ValueError(f"Missing logfile column: {column}")
+
+    pieces = []
+    for position, column in enumerate(corrected_log.columns):
+        suffix = next((s for s in (".started", ".start")
+                       if isinstance(column, str) and column.endswith(s)), None)
+        if suffix is None and column not in mapping:
+            continue
+        source = corrected_log[column]
+        times = pd.to_numeric(source, errors="coerce").to_numpy(dtype=float, na_value=np.nan)
+        invalid = source.notna().to_numpy() & ~np.isfinite(times)
+        if invalid.any():
+            rows = np.flatnonzero(invalid).tolist()
+            raise ValueError(f"{column!r} must contain finite numeric seconds or missing values; rows {rows}")
+        if column in mapping:
+            conditions = corrected_log[mapping[column]].map(_event_code).to_numpy()
+        else:
+            conditions = np.full(len(source), column[:-len(suffix)], dtype=object)
+        valid = np.isfinite(times) & pd.notna(conditions)
+        pieces.append(pd.DataFrame({
+            "trial": 0, "onset": times[valid], "condition": conditions[valid],
+            "channel": "LOGFILE", "_row": np.flatnonzero(valid), "_column": position,
+        }))
+    columns = ["trial", "onset", "condition", "channel"]
+    if not pieces:
+        return pd.DataFrame({"trial": pd.Series(dtype=int), "onset": pd.Series(dtype=float),
+                             "condition": pd.Series(dtype=object), "channel": pd.Series(dtype=object)})
+    return (pd.concat(pieces, ignore_index=True)
+            .sort_values(["onset", "_row", "_column"])[columns].reset_index(drop=True))
 
 
 def find_time_offset(

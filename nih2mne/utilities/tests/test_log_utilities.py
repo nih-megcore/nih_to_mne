@@ -1,10 +1,10 @@
-"""Tests for task logfile lookup."""
+"""Tests for logfile lookup, timing alignment, and standard event conversion."""
 
 import pytest
 import pandas as pd
 import yaml
 
-from nih2mne.utilities import logfinder
+from nih2mne.utilities import log_utilities
 
 
 def _config(tmp_path, monkeypatch, sources):
@@ -33,7 +33,7 @@ def test_find_one_logfile_and_ignore_duplicate_source_matches(tmp_path, monkeypa
     source = _source(root)
     _config(tmp_path, monkeypatch, [source, source])
 
-    assert logfinder.logfind(task="MID", subject="ADHCVYAX") == str(logfile)
+    assert log_utilities.logfind(task="MID", subject="ADHCVYAX") == str(logfile)
 
 
 def test_recursive_search_and_multiple_patterns(tmp_path, monkeypatch):
@@ -46,7 +46,7 @@ def test_recursive_search_and_multiple_patterns(tmp_path, monkeypatch):
     source["patterns"].append("{subject_hash}/missing*.txt")
     _config(tmp_path, monkeypatch, [source])
 
-    assert logfinder.logfind("MID", "ADHCVYAX") == str(logfile)
+    assert log_utilities.logfind("MID", "ADHCVYAX") == str(logfile)
 
 
 def test_zero_and_multiple_matches_raise(tmp_path, monkeypatch):
@@ -55,36 +55,36 @@ def test_zero_and_multiple_matches_raise(tmp_path, monkeypatch):
     subject_dir.mkdir(parents=True)
     _config(tmp_path, monkeypatch, [_source(root)])
     with pytest.raises(FileNotFoundError, match="No logfile found"):
-        logfinder.logfind("MID", "ADHCVYAX")
+        log_utilities.logfind("MID", "ADHCVYAX")
 
     (subject_dir / "ADHCVYAX_MID_001.csv").touch()
     (subject_dir / "ADHCVYAX_MID_002.csv").touch()
     with pytest.raises(ValueError, match="Multiple logfiles found"):
-        logfinder.logfind("MID", "ADHCVYAX")
+        log_utilities.logfind("MID", "ADHCVYAX")
 
 
 def test_missing_or_invalid_configuration_raises(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     with pytest.raises(FileNotFoundError, match="MID_logfind.yml"):
-        logfinder.logfind("MID", "ADHCVYAX")
+        log_utilities.logfind("MID", "ADHCVYAX")
 
     config = _config(tmp_path, monkeypatch, [])
     with pytest.raises(ValueError, match="log_sources"):
-        logfinder.logfind("MID", "ADHCVYAX")
+        log_utilities.logfind("MID", "ADHCVYAX")
 
     config.write_text(yaml.safe_dump({"log_sources": [{"directories": ["/tmp"]}]}))
     with pytest.raises(ValueError, match="patterns"):
-        logfinder.logfind("MID", "ADHCVYAX")
+        log_utilities.logfind("MID", "ADHCVYAX")
 
     config.write_text("log_sources: [invalid\n")
     with pytest.raises(ValueError, match="Invalid logfile configuration.*MID_logfind.yml"):
-        logfinder.logfind("MID", "ADHCVYAX")
+        log_utilities.logfind("MID", "ADHCVYAX")
 
 
 @pytest.mark.parametrize("task,subject", [("../MID", "ADHCVYAX"), ("MID", "A*"), ("", "A")])
 def test_invalid_identifiers_raise(task, subject):
     with pytest.raises(ValueError, match="identifier"):
-        logfinder.logfind(task, subject)
+        log_utilities.logfind(task, subject)
 
 
 def _trigger_events(monkeypatch, onsets, codes):
@@ -107,7 +107,7 @@ def test_time_offset_and_drift(tmp_path, monkeypatch):
     trigger_times = [time + 2 + 0.003 * time / 60 for time in log_times]
     _trigger_events(monkeypatch, trigger_times, [str(code) for code in codes])
 
-    result = logfinder.find_time_offset(logfile, "recording.ds", "event_code", "event_time")
+    result = log_utilities.find_time_offset(logfile, "recording.ds", "event_code", "event_time")
 
     assert result.offset_seconds == pytest.approx(2.003)
     assert result.drift_ms_per_minute == pytest.approx(3)
@@ -126,7 +126,7 @@ def test_time_offset_allows_gaps_and_repeated_codes(tmp_path, monkeypatch):
     }).to_csv(logfile, index=False)
     _trigger_events(monkeypatch, [10, 11, 12, 13, 14, 15], ["1", "2", "1", "9", "1", "4"])
 
-    result = logfinder.find_time_offset(logfile, "recording.ds", "code", "seconds")
+    result = log_utilities.find_time_offset(logfile, "recording.ds", "code", "seconds")
 
     assert result.offset_seconds == pytest.approx(10)
     assert result.drift_ms_per_minute == pytest.approx(0, abs=1e-9)
@@ -141,9 +141,9 @@ def test_time_offset_rejects_missing_columns_and_too_few_matches(tmp_path, monke
     _trigger_events(monkeypatch, [10, 11], ["1", "2"])
 
     with pytest.raises(ValueError, match="Missing logfile column"):
-        logfinder.find_time_offset(logfile, "recording.ds", "code", "wrong")
+        log_utilities.find_time_offset(logfile, "recording.ds", "code", "wrong")
     with pytest.raises(ValueError, match="At least three"):
-        logfinder.find_time_offset(logfile, "recording.ds", "code", "seconds")
+        log_utilities.find_time_offset(logfile, "recording.ds", "code", "seconds")
 
 
 @pytest.fixture
@@ -167,7 +167,7 @@ def correction_log(tmp_path, monkeypatch):
     ('local', [22.02, 2., 12.01, None]),
 ])
 def test_correction_methods(correction_log, method, expected):
-    result = logfinder.find_time_offset(
+    result = log_utilities.find_time_offset(
         correction_log, 'recording.ds', 'Code', 'time', method=method,
     )
     assert result.corrected_log.time.iloc[:3].tolist() == pytest.approx(expected[:3])
@@ -185,7 +185,7 @@ def test_correction_methods(correction_log, method, expected):
 
 def test_explicit_columns_and_csv(correction_log, tmp_path):
     output = tmp_path / 'corrected.csv'
-    result = logfinder.find_time_offset(
+    result = log_utilities.find_time_offset(
         correction_log, 'recording.ds', 'Code', 'time', time_columns=['cue.started'],
         output_file=output,
     )
@@ -193,9 +193,9 @@ def test_explicit_columns_and_csv(correction_log, tmp_path):
     pd.testing.assert_series_equal(result.corrected_log['cue.stopped'], original['cue.stopped'])
     pd.testing.assert_frame_equal(pd.read_csv(output), result.corrected_log)
     with pytest.raises(FileExistsError):
-        logfinder.find_time_offset(correction_log, 'recording.ds', 'Code', 'time', output_file=output)
+        log_utilities.find_time_offset(correction_log, 'recording.ds', 'Code', 'time', output_file=output)
     with pytest.raises(ValueError, match='source logfile'):
-        logfinder.find_time_offset(correction_log, 'recording.ds', 'Code', 'time', output_file=correction_log)
+        log_utilities.find_time_offset(correction_log, 'recording.ds', 'Code', 'time', output_file=correction_log)
     pd.testing.assert_frame_equal(pd.read_csv(correction_log), original)
 
 
@@ -203,7 +203,7 @@ def test_explicit_columns_and_csv(correction_log, tmp_path):
 def test_offset_limit_lists_all_trials_and_does_not_write(correction_log, tmp_path, method):
     output = tmp_path / 'invalid.csv'
     with pytest.raises(ValueError) as error:
-        logfinder.find_time_offset(
+        log_utilities.find_time_offset(
             correction_log, 'recording.ds', 'Code', 'time', method=method,
             offset_error=.009, output_file=output,
         )
@@ -217,21 +217,21 @@ def test_offset_limit_lists_all_trials_and_does_not_write(correction_log, tmp_pa
 @pytest.mark.parametrize('limit', [.020, .021])
 def test_offset_limit_boundary(correction_log, monkeypatch, limit):
     _trigger_events(monkeypatch, [2., 12.02, 22.04], [1, 2, 3])
-    logfinder.find_time_offset(
+    log_utilities.find_time_offset(
         correction_log, 'recording.ds', 'Code', 'time', method='local', offset_error=limit,
     )
     with pytest.raises(ValueError, match='offset_error'):
-        logfinder.find_time_offset(
+        log_utilities.find_time_offset(
             correction_log, 'recording.ds', 'Code', 'time', method='local', offset_error=.019,
         )
     # Middle always has zero deviation from itself.
-    logfinder.find_time_offset(correction_log, 'recording.ds', 'Code', 'time', offset_error=0)
+    log_utilities.find_time_offset(correction_log, 'recording.ds', 'Code', 'time', offset_error=0)
 
 
 @pytest.mark.parametrize('limit', [-1, float('nan'), float('inf'), None, 'bad'])
 def test_invalid_offset_limit(correction_log, limit):
     with pytest.raises(ValueError, match='offset_error'):
-        logfinder.find_time_offset(correction_log, 'recording.ds', 'Code', 'time', offset_error=limit)
+        log_utilities.find_time_offset(correction_log, 'recording.ds', 'Code', 'time', offset_error=limit)
 
 
 @pytest.mark.parametrize('bad', ['bad', float('inf')])
@@ -241,7 +241,7 @@ def test_invalid_timestamp(correction_log, bad):
     data.loc[0, 'cue.started'] = bad
     data.to_csv(correction_log, index=False)
     with pytest.raises(ValueError, match='finite numeric'):
-        logfinder.find_time_offset(correction_log, 'recording.ds', 'Code', 'time')
+        log_utilities.find_time_offset(correction_log, 'recording.ds', 'Code', 'time')
 
 
 def test_local_gaps(correction_log, monkeypatch):
@@ -250,7 +250,7 @@ def test_local_gaps(correction_log, monkeypatch):
     data.to_csv(correction_log, index=False)
     _trigger_events(monkeypatch, [2., 4., 12.01, 22.02], [1, 8, 2, 3])
     with pytest.warns(UserWarning, match='unmatched'):
-        result = logfinder.find_time_offset(correction_log, 'recording.ds', 'Code', 'time', method='local')
+        result = log_utilities.find_time_offset(correction_log, 'recording.ds', 'Code', 'time', method='local')
     assert result.corrected_log.time.iloc[3] == pytest.approx(7.005)
     assert result.unmatched_log.code.tolist() == ['9']
     assert result.unmatched_trigger.code.tolist() == ['8']
@@ -263,7 +263,70 @@ def test_duplicate_local_anchors(tmp_path, monkeypatch, conflict):
     _trigger_events(monkeypatch, [2., 2.001 if conflict else 2., 12.], [1, 2, 3])
     if conflict:
         with pytest.raises(ValueError, match='Conflicting offsets'):
-            logfinder.find_time_offset(logfile, 'recording.ds', 'code', 'time', method='local')
+            log_utilities.find_time_offset(logfile, 'recording.ds', 'code', 'time', method='local')
     else:
-        result = logfinder.find_time_offset(logfile, 'recording.ds', 'code', 'time', method='local')
+        result = log_utilities.find_time_offset(logfile, 'recording.ds', 'code', 'time', method='local')
         assert result.corrected_log.time.tolist() == pytest.approx([2, 2, 12])
+
+
+def test_corrected_events_defaults_and_order():
+    source = pd.DataFrame({
+        'cue.started': ['2', None, '-1'], 'image.start': [2, 2, None],
+        'cue.stopped': [3, 3, 3], 'response.rt': [.2, .3, .4],
+    }, index=[10, 10, 12])
+    original = source.copy(deep=True)
+    events = log_utilities.log_to_longform_standard(source)
+    assert list(events.columns) == ['trial', 'onset', 'condition', 'channel']
+    assert events.onset.tolist() == [-1, 2, 2, 2]
+    assert events.condition.tolist() == ['cue', 'cue', 'image', 'image']
+    assert events.trial.tolist() == [0] * 4
+    assert events.channel.tolist() == ['LOGFILE'] * 4
+    pd.testing.assert_frame_equal(source, original)
+
+
+def test_corrected_events_mapping_adds_and_overrides():
+    source = pd.DataFrame({
+        'cue.started': [1, 2, 3, 4], 'image.start': [1, 2, 3, 4],
+        'custom_time': [1.5, 2.5, None, 4.5],
+        'label': ['win', None, '  ', 'loss'], 'code': [8., 16., 32., 8.],
+    })
+    events = log_utilities.log_to_longform_standard(source, condition_columns={
+        'cue.started': 'label', 'custom_time': 'code',
+    })
+    assert events.condition.tolist() == ['win', 'image', '8', 'image', '16', 'image', 'loss', 'image', '8']
+    assert events.onset.tolist() == [1, 1, 1.5, 2, 2.5, 3, 4, 4, 4.5]
+
+
+@pytest.mark.parametrize('value', ['bad', float('inf'), float('-inf')])
+def test_corrected_events_invalid_time(value):
+    with pytest.raises(ValueError, match=r"cue.started.*rows \[1\]"):
+        log_utilities.log_to_longform_standard(pd.DataFrame({'cue.started': [1, value]}))
+
+
+@pytest.mark.parametrize('mapping', [{'missing': 'label'}, {'cue.started': 'missing'}])
+def test_corrected_events_missing_mapping_columns(mapping):
+    with pytest.raises(ValueError, match='Missing logfile column: missing'):
+        log_utilities.log_to_longform_standard(
+            pd.DataFrame({'cue.started': [1], 'label': ['a']}), condition_columns=mapping,
+        )
+
+
+@pytest.mark.parametrize('source', [pd.DataFrame(), pd.DataFrame({'rt': [1]}),
+                                  pd.DataFrame({'cue.started': [None]})])
+def test_corrected_events_empty(source):
+    events = log_utilities.log_to_longform_standard(source)
+    assert events.empty
+    assert list(events.columns) == ['trial', 'onset', 'condition', 'channel']
+
+
+def test_corrected_events_offset_workflow(tmp_path, monkeypatch):
+    logfile = tmp_path / 'events.csv'
+    pd.DataFrame({'Code': [8, 16, 32], 'cue.started': [10, 20, 30],
+                  'TrialType': ['win', 'lose', 'neutral']}).to_csv(logfile, index=False)
+    _trigger_events(monkeypatch, [11, 21, 31], ['8', '16', '32'])
+    result = log_utilities.find_time_offset(logfile, 'recording.ds', 'Code', 'cue.started')
+    events = log_utilities.log_to_longform_standard(
+        result.corrected_log, condition_columns={'cue.started': 'TrialType'},
+    )
+    assert events.onset.tolist() == [11, 21, 31]
+    assert events.condition.tolist() == ['win', 'lose', 'neutral']
